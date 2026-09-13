@@ -17,7 +17,7 @@ class VerifySsoSecret
         $secret = $request->header('X-SSO-Secret');
         $expectedSecret = config('services.sso.api_secret');
 
-        if (!$secret || !$expectedSecret || !hash_equals($expectedSecret, $secret)) {
+        if (! $secret || ! $expectedSecret || ! hash_equals($expectedSecret, $secret)) {
             return response()->json([
                 'message' => 'Unauthorized. Invalid SSO secret.',
             ], 401);

@@ -21,8 +21,8 @@ class SystemConfigurationService
             $operator = $this->getLikeOperator();
             $query->where(function ($q) use ($search, $operator) {
                 $q->where('key', $operator, "%{$search}%")
-                  ->orWhere('description', $operator, "%{$search}%")
-                  ->orWhere('value', $operator, "%{$search}%");
+                    ->orWhere('description', $operator, "%{$search}%")
+                    ->orWhere('value', $operator, "%{$search}%");
             });
         }
 
@@ -44,7 +44,7 @@ class SystemConfigurationService
 
     public function toggleActive(SystemConfiguration $config): SystemConfiguration
     {
-        $config->update(['is_active' => !$config->is_active]);
+        $config->update(['is_active' => ! $config->is_active]);
 
         $this->applyRuntimeConfig($config->key, $config->value, $config->is_active);
 

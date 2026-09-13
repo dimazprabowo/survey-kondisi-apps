@@ -12,14 +12,19 @@ use Livewire\WithPagination;
 
 class SendNotification extends Component
 {
-    use AuthorizesRequests, HasNotification, WithPagination, HasDynamicLike;
+    use AuthorizesRequests, HasDynamicLike, HasNotification, WithPagination;
 
     // Form fields
     public string $target = 'all'; // 'all' | 'specific'
+
     public array $selectedUserIds = [];
+
     public string $type = 'info';
+
     public string $title = '';
+
     public string $notifMessage = '';
+
     public string $actionUrl = '';
 
     // User search
@@ -34,25 +39,25 @@ class SendNotification extends Component
     protected function rules(): array
     {
         return [
-            'target'          => ['required', 'in:all,specific'],
+            'target' => ['required', 'in:all,specific'],
             'selectedUserIds' => ['required_if:target,specific', 'array'],
             'selectedUserIds.*' => ['exists:users,id'],
-            'type'            => ['required', 'in:info,success,warning,danger'],
-            'title'           => ['required', 'string', 'max:255'],
-            'notifMessage'    => ['required', 'string', 'max:2000'],
-            'actionUrl'       => ['nullable', 'url', 'max:500'],
+            'type' => ['required', 'in:info,success,warning,danger'],
+            'title' => ['required', 'string', 'max:255'],
+            'notifMessage' => ['required', 'string', 'max:2000'],
+            'actionUrl' => ['nullable', 'url', 'max:500'],
         ];
     }
 
     protected function messages(): array
     {
         return [
-            'title.required'           => 'Judul notifikasi wajib diisi.',
-            'title.max'                => 'Judul maksimal 255 karakter.',
-            'notifMessage.required'    => 'Isi pesan wajib diisi.',
-            'notifMessage.max'         => 'Pesan maksimal 2000 karakter.',
+            'title.required' => 'Judul notifikasi wajib diisi.',
+            'title.max' => 'Judul maksimal 255 karakter.',
+            'notifMessage.required' => 'Isi pesan wajib diisi.',
+            'notifMessage.max' => 'Pesan maksimal 2000 karakter.',
             'selectedUserIds.required_if' => 'Pilih minimal satu penerima.',
-            'actionUrl.url'            => 'URL aksi harus berupa URL yang valid.',
+            'actionUrl.url' => 'URL aksi harus berupa URL yang valid.',
         ];
     }
 
@@ -76,7 +81,7 @@ class SendNotification extends Component
     {
         if (in_array($userId, $this->selectedUserIds)) {
             $this->selectedUserIds = array_values(
-                array_filter($this->selectedUserIds, fn($id) => $id !== $userId)
+                array_filter($this->selectedUserIds, fn ($id) => $id !== $userId)
             );
         } else {
             $this->selectedUserIds[] = $userId;
@@ -86,7 +91,7 @@ class SendNotification extends Component
     public function removeUser(int $userId): void
     {
         $this->selectedUserIds = array_values(
-            array_filter($this->selectedUserIds, fn($id) => $id !== $userId)
+            array_filter($this->selectedUserIds, fn ($id) => $id !== $userId)
         );
     }
 
@@ -153,9 +158,9 @@ class SendNotification extends Component
 
         $operator = $this->getLikeOperator();
         $users = User::active()
-            ->when($this->userSearch, fn($q) => $q->where(function ($q) use ($operator) {
+            ->when($this->userSearch, fn ($q) => $q->where(function ($q) use ($operator) {
                 $q->where('name', $operator, "%{$this->userSearch}%")
-                  ->orWhere('email', $operator, "%{$this->userSearch}%");
+                    ->orWhere('email', $operator, "%{$this->userSearch}%");
             }))
             ->orderBy('name')
             ->paginate(8, pageName: 'usersPage');
@@ -165,9 +170,9 @@ class SendNotification extends Component
             ->get(['id', 'name', 'email']);
 
         $history = \App\Models\Notification::with('user:id,name')
-            ->when($this->historySearch, fn($q) => $q->where(function ($q) use ($operator) {
+            ->when($this->historySearch, fn ($q) => $q->where(function ($q) use ($operator) {
                 $q->where('title', $operator, "%{$this->historySearch}%")
-                  ->orWhere('message', $operator, "%{$this->historySearch}%");
+                    ->orWhere('message', $operator, "%{$this->historySearch}%");
             }))
             ->latest()
             ->paginate(15, pageName: 'historyPage');
@@ -178,15 +183,15 @@ class SendNotification extends Component
             ->toArray();
 
         $historyStats = collect(['info', 'success', 'warning', 'danger'])
-            ->map(fn($t) => ['type' => $t, 'count' => $historyStats[$t] ?? 0])
+            ->map(fn ($t) => ['type' => $t, 'count' => $historyStats[$t] ?? 0])
             ->all();
 
         return view('livewire.notifications.send-notification', [
-            'users'         => $users,
+            'users' => $users,
             'selectedUsers' => $selectedUsers,
-            'totalUsers'    => User::active()->count(),
-            'history'       => $history,
-            'historyStats'  => $historyStats,
+            'totalUsers' => User::active()->count(),
+            'history' => $history,
+            'historyStats' => $historyStats,
         ]);
     }
 }

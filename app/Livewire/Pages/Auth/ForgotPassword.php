@@ -12,7 +12,7 @@ class ForgotPassword extends Component
     use HasNotification;
 
     public string $email = '';
-    
+
     public bool $emailSent = false;
 
     /**
@@ -30,7 +30,7 @@ class ForgotPassword extends Component
                 ->orWhere('pending_email', $this->email)
                 ->first();
 
-            if (!$user) {
+            if (! $user) {
                 throw ValidationException::withMessages([
                     'email' => 'Email tidak ditemukan dalam sistem kami.',
                 ]);
@@ -38,31 +38,30 @@ class ForgotPassword extends Component
 
             // Generate password reset token
             $token = app('auth.password.broker')->createToken($user);
-            
+
             // Send password reset notification
             $user->sendPasswordResetNotification($token);
-            
+
             $this->emailSent = true;
-            
+
             // Show which email received the link
             $sentTo = $user->pending_email ?? $user->email;
-            
-            $this->notifySuccess('Link reset password telah dikirim ke ' . $sentTo);
-            
+
+            $this->notifySuccess('Link reset password telah dikirim ke '.$sentTo);
+
         } catch (ValidationException $e) {
             $this->notifyError($e->validator->errors()->first());
-            
+
             throw $e;
-            
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan. Silakan coba lagi.');
-            
+
             \Log::error('Password reset error', [
                 'error' => $e->getMessage(),
                 'email' => $this->email,
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
-            
+
             throw $e;
         }
     }

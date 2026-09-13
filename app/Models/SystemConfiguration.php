@@ -56,8 +56,9 @@ class SystemConfiguration extends Model
     // Static Methods
     public static function get(string $key, $default = null)
     {
-        return Cache::remember("config.{$key}", 3600, function() use ($key, $default) {
+        return Cache::remember("config.{$key}", 3600, function () use ($key, $default) {
             $config = self::where('key', $key)->where('is_active', true)->first();
+
             return $config ? $config->parsed_value : $default;
         });
     }

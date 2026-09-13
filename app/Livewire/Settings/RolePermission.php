@@ -15,23 +15,32 @@ class RolePermission extends Component
     use AuthorizesRequests, HasNotification;
 
     public $roles;
+
     public $permissions;
+
     public $selectedRole;
+
     public $rolePermissions = [];
+
     public $showModal = false;
+
     public $editMode = false;
-    
+
     // Form fields
     public $roleId;
+
     public $roleName;
+
     public $selectedPermissions = [];
 
     // Permission groups for better organization
     public $permissionGroups = [];
-    
+
     // Delete Modal
     public $showDeleteModal = false;
+
     public $deletingRoleId;
+
     public $deletingRoleName;
 
     public function mount(RolePermissionService $service)
@@ -47,7 +56,7 @@ class RolePermission extends Component
 
         $this->roles = $service->getAllRolesWithPermissions();
         $this->permissions = $service->getAllPermissions();
-        
+
         if ($this->selectedRole) {
             $this->rolePermissions = $service->getRolePermissions($this->selectedRole);
         }
@@ -61,8 +70,9 @@ class RolePermission extends Component
 
     public function togglePermission($permission, RolePermissionService $service)
     {
-        if (!$this->selectedRole) {
+        if (! $this->selectedRole) {
             $this->notifyError('Pilih role terlebih dahulu!');
+
             return;
         }
 
@@ -95,11 +105,11 @@ class RolePermission extends Component
     {
         $role = Role::with('permissions')->findOrFail($id);
         $this->authorize('update', $role);
-        
+
         $this->roleId = $role->id;
         $this->roleName = $role->name;
         $this->selectedPermissions = $role->permissions->pluck('name')->toArray();
-        
+
         $this->editMode = true;
         $this->showModal = true;
     }
@@ -108,7 +118,7 @@ class RolePermission extends Component
     {
         try {
             $this->validate([
-                'roleName' => ['required', 'string', 'max:255', $this->editMode ? 'unique:roles,name,' . $this->roleId : 'unique:roles,name'],
+                'roleName' => ['required', 'string', 'max:255', $this->editMode ? 'unique:roles,name,'.$this->roleId : 'unique:roles,name'],
                 'selectedPermissions' => 'nullable|array',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -156,12 +166,12 @@ class RolePermission extends Component
             $this->authorize('delete', $role);
 
             $service->deleteRole($role);
-            
+
             if ($this->selectedRole == $this->deletingRoleId) {
                 $this->selectedRole = null;
                 $this->rolePermissions = [];
             }
-            
+
             $this->loadData($service);
             $this->notifySuccess('Role berhasil dihapus!');
             $this->showDeleteModal = false;
@@ -191,7 +201,7 @@ class RolePermission extends Component
     {
         $this->authorize('exportExcel', Role::class);
 
-        return (new RolesExport())->download('roles-' . now()->format('Y-m-d-His') . '.xlsx');
+        return (new RolesExport)->download('roles-'.now()->format('Y-m-d-His').'.xlsx');
     }
 
     public function exportPdf()
@@ -204,8 +214,8 @@ class RolePermission extends Component
         $pdf->setPaper('a4', 'landscape');
 
         return response()->streamDownload(
-            fn () => print($pdf->output()),
-            'roles-' . now()->format('Y-m-d-His') . '.pdf'
+            fn () => print ($pdf->output()),
+            'roles-'.now()->format('Y-m-d-His').'.pdf'
         );
     }
 

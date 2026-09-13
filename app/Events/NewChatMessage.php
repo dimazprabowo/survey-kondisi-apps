@@ -27,7 +27,7 @@ class NewChatMessage implements ShouldBroadcastNow
             ->pluck('user_id');
 
         return $participantIds->map(
-            fn ($id) => new PrivateChannel('user.' . $id)
+            fn ($id) => new PrivateChannel('user.'.$id)
         )->all();
     }
 

@@ -8,8 +8,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 class SsoSyncController extends Controller
@@ -102,13 +102,13 @@ class SsoSyncController extends Controller
         try {
             $user = null;
 
-            if (!empty($validated['email'])) {
+            if (! empty($validated['email'])) {
                 $user = User::where('email', $validated['email'])->first();
-            } elseif (!empty($validated['user_id'])) {
+            } elseif (! empty($validated['user_id'])) {
                 $user = User::find($validated['user_id']);
             }
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
@@ -211,7 +211,7 @@ class SsoSyncController extends Controller
         try {
             $user = User::where('email', $validated['email'])->first();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json(['message' => 'User not found.'], 404);
             }
 
@@ -302,7 +302,7 @@ class SsoSyncController extends Controller
         try {
             $role = Role::where('name', $validated['name'])->where('guard_name', 'web')->first();
 
-            if (!$role) {
+            if (! $role) {
                 return response()->json(['message' => 'Role not found.'], 404);
             }
 

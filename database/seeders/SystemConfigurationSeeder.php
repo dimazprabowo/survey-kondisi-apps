@@ -29,7 +29,7 @@ class SystemConfigurationSeeder extends Seeder
                 'is_editable' => true,
                 'is_active' => true,
             ],
-            
+
             // Registration configurations
             [
                 'key' => 'registration.deadline',

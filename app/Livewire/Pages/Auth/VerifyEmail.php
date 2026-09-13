@@ -12,11 +12,12 @@ class VerifyEmail extends Component
     public function sendVerification(): void
     {
         if (Auth::user()->hasVerifiedEmail()) {
-            $this->dispatch('notify', 
-                type: 'info', 
+            $this->dispatch('notify',
+                type: 'info',
                 message: 'Email Anda sudah terverifikasi.'
             );
             $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
+
             return;
         }
 
@@ -24,14 +25,14 @@ class VerifyEmail extends Component
             Auth::user()->sendEmailVerificationNotification();
 
             Session::flash('status', 'verification-link-sent');
-            
-            $this->dispatch('notify', 
-                type: 'success', 
+
+            $this->dispatch('notify',
+                type: 'success',
                 message: 'Link verifikasi berhasil dikirim! Silakan cek email Anda.'
             );
         } catch (\Exception $e) {
-            $this->dispatch('notify', 
-                type: 'error', 
+            $this->dispatch('notify',
+                type: 'error',
                 message: 'Gagal mengirim email verifikasi. Silakan coba lagi.'
             );
         }

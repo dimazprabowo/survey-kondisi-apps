@@ -14,7 +14,9 @@ class UpdatePasswordForm extends Component
     use HasNotification;
 
     public string $current_password = '';
+
     public string $password = '';
+
     public string $password_confirmation = '';
 
     /**

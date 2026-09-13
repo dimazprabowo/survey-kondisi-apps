@@ -13,18 +13,22 @@ use Livewire\Component;
 class Register extends Component
 {
     public string $name = '';
+
     public string $email = '';
+
     public string $password = '';
+
     public string $password_confirmation = '';
 
     public function register(): void
     {
-        if (!ConfigHelper::isRegistrationOpen()) {
-            $this->dispatch('notify', 
-                type: 'error', 
+        if (! ConfigHelper::isRegistrationOpen()) {
+            $this->dispatch('notify',
+                type: 'error',
                 message: ConfigHelper::getRegistrationClosedMessage()
             );
             $this->redirect(route('login'), navigate: true);
+
             return;
         }
 
@@ -44,8 +48,8 @@ class Register extends Component
 
             Auth::login($user);
 
-            $this->dispatch('notify', 
-                type: 'success', 
+            $this->dispatch('notify',
+                type: 'success',
                 message: 'Pendaftaran berhasil! Email verifikasi telah dikirim.'
             );
 
@@ -53,8 +57,8 @@ class Register extends Component
         } catch (\Illuminate\Validation\ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            $this->dispatch('notify', 
-                type: 'error', 
+            $this->dispatch('notify',
+                type: 'error',
                 message: 'Terjadi kesalahan saat mendaftar. Silakan coba lagi.'
             );
         }

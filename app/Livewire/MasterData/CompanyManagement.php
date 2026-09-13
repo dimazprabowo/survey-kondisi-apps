@@ -15,30 +15,46 @@ use Livewire\WithPagination;
 
 class CompanyManagement extends Component
 {
-    use WithPagination, AuthorizesRequests, HasNotification, HasDynamicLike;
+    use AuthorizesRequests, HasDynamicLike, HasNotification, WithPagination;
 
     public $search = '';
+
     public $statusFilter = '';
+
     public bool $filterChanged = false;
+
     public $showModal = false;
+
     public $editMode = false;
 
     // Form fields
     public $companyId;
+
     public $code;
+
     public $name;
+
     public $email;
+
     public $phone;
+
     public $address;
+
     public $pic_name;
+
     public $pic_email;
+
     public $pic_phone;
+
     public $npwp;
+
     public $status = 'active';
-    
+
     // Delete Modal
     public $showDeleteModal = false;
+
     public $deletingCompanyId;
+
     public $deletingCompanyName;
 
     public function mount()
@@ -49,7 +65,7 @@ class CompanyManagement extends Component
     public function rules()
     {
         return [
-            'code' => ['required', 'string', 'max:50', $this->editMode ? 'unique:companies,code,' . $this->companyId : 'unique:companies,code'],
+            'code' => ['required', 'string', 'max:50', $this->editMode ? 'unique:companies,code,'.$this->companyId : 'unique:companies,code'],
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:20',
@@ -61,9 +77,9 @@ class CompanyManagement extends Component
                 'required',
                 'string',
                 'regex:/^[0-9]{15,16}$/',
-                $this->editMode ? 'unique:companies,npwp,' . $this->companyId : 'unique:companies,npwp'
+                $this->editMode ? 'unique:companies,npwp,'.$this->companyId : 'unique:companies,npwp',
             ],
-            'status' => ['required', 'string', 'in:' . implode(',', CompanyStatus::values())],
+            'status' => ['required', 'string', 'in:'.implode(',', CompanyStatus::values())],
         ];
     }
 
@@ -203,6 +219,7 @@ class CompanyManagement extends Component
             if ($company->users()->exists()) {
                 $this->notifyError('Perusahaan tidak dapat dihapus karena masih memiliki user terkait.');
                 $this->showDeleteModal = false;
+
                 return;
             }
 
@@ -264,7 +281,7 @@ class CompanyManagement extends Component
         $this->authorize('exportExcel', Company::class);
 
         return (new CompaniesExport($this->search, $this->statusFilter))
-            ->download('perusahaan-' . now()->format('Y-m-d-His') . '.xlsx');
+            ->download('perusahaan-'.now()->format('Y-m-d-His').'.xlsx');
     }
 
     public function exportPdf(CompanyService $service)
@@ -276,9 +293,9 @@ class CompanyManagement extends Component
             ->when($this->search, function ($q) use ($operator) {
                 $q->where(function ($q) use ($operator) {
                     $q->where('code', $operator, "%{$this->search}%")
-                      ->orWhere('name', $operator, "%{$this->search}%")
-                      ->orWhere('email', $operator, "%{$this->search}%")
-                      ->orWhere('pic_name', $operator, "%{$this->search}%");
+                        ->orWhere('name', $operator, "%{$this->search}%")
+                        ->orWhere('email', $operator, "%{$this->search}%")
+                        ->orWhere('pic_name', $operator, "%{$this->search}%");
                 });
             })
             ->when($this->statusFilter !== null && $this->statusFilter !== '', function ($q) {
@@ -291,8 +308,8 @@ class CompanyManagement extends Component
         $pdf->setPaper('a4', 'landscape');
 
         return response()->streamDownload(
-            fn () => print($pdf->output()),
-            'perusahaan-' . now()->format('Y-m-d-His') . '.pdf'
+            fn () => print ($pdf->output()),
+            'perusahaan-'.now()->format('Y-m-d-His').'.pdf'
         );
     }
 

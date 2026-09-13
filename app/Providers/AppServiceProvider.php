@@ -6,6 +6,9 @@ use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\Company;
 use App\Models\Notification;
+use App\Models\Ship;
+use App\Models\Survey;
+use App\Models\SurveyTemplate;
 use App\Models\SystemConfiguration;
 use App\Models\User;
 use App\Policies\ChatPolicy;
@@ -13,6 +16,9 @@ use App\Policies\CompanyPolicy;
 use App\Policies\DashboardPolicy;
 use App\Policies\NotificationPolicy;
 use App\Policies\RolePolicy;
+use App\Policies\ShipPolicy;
+use App\Policies\SurveyPolicy;
+use App\Policies\SurveyTemplatePolicy;
 use App\Policies\SystemConfigurationPolicy;
 use App\Policies\UserPolicy;
 use Illuminate\Support\Facades\Gate;
@@ -43,6 +49,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Notification::class, NotificationPolicy::class);
         Gate::policy(Chat::class, ChatPolicy::class);
         Gate::policy(ChatMessage::class, ChatPolicy::class);
+        Gate::policy(Ship::class, ShipPolicy::class);
+        Gate::policy(Survey::class, SurveyPolicy::class);
+        Gate::policy(SurveyTemplate::class, SurveyTemplatePolicy::class);
 
         // Dashboard policy — bound to a string key (no Eloquent model)
         Gate::define('viewStats', [DashboardPolicy::class, 'viewStats']);
@@ -62,7 +71,7 @@ class AppServiceProvider extends ServiceProvider
     private function applySystemConfigurations(): void
     {
         try {
-            if (!Schema::hasTable('system_configurations')) {
+            if (! Schema::hasTable('system_configurations')) {
                 return;
             }
 

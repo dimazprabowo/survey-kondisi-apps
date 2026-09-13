@@ -16,7 +16,7 @@ class ForceHttps
     public function handle(Request $request, Closure $next): Response
     {
         // Force HTTPS if enabled in config
-        if (config('app.force_https') && !$request->secure()) {
+        if (config('app.force_https') && ! $request->secure()) {
             return redirect()->secure($request->getRequestUri(), 301);
         }
 

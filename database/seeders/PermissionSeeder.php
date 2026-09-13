@@ -71,6 +71,31 @@ class PermissionSeeder extends Seeder
 
             // Profile - Company Management
             'manage_own_company',
+
+            // Master Data — Kapal
+            'ships_view',
+            'ships_create',
+            'ships_update',
+            'ships_delete',
+            'ships_export_excel',
+            'ships_export_pdf',
+
+            // Survey Kondisi
+            'surveys_view',
+            'surveys_create',
+            'surveys_update',
+            'surveys_delete',
+            'surveys_export_excel',
+            'surveys_export_pdf',
+
+            // Template Form (manajemen template survey)
+            'survey_templates_view',
+            'survey_templates_create',
+            'survey_templates_update',
+            'survey_templates_delete',
+            'survey_templates_duplicate',
+            'survey_templates_export_excel',
+            'survey_templates_export_pdf',
         ];
 
         foreach ($permissions as $permission) {

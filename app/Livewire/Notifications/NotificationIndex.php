@@ -11,13 +11,15 @@ use Livewire\WithPagination;
 
 class NotificationIndex extends Component
 {
-    use WithPagination, AuthorizesRequests, HasNotification;
+    use AuthorizesRequests, HasNotification, WithPagination;
 
     public string $filter = 'all'; // all, unread, read
 
     // Delete Modal
     public bool $showDeleteModal = false;
+
     public ?int $deletingNotificationId = null;
+
     public ?string $deletingNotificationTitle = null;
 
     // Delete All Read Modal

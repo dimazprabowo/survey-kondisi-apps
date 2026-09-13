@@ -19,31 +19,34 @@ trait HasMenuItems
 
         // Cache per request — Sidebar and Navigation both call this, avoid double DB hit
         static $cache = [];
-        $cacheKey = 'menu_' . $user->id;
+        $cacheKey = 'menu_'.$user->id;
         if (isset($cache[$cacheKey])) {
             return $cache[$cacheKey];
         }
 
         // All checks go through Gate → policies (respects Gate::before super-admin bypass)
         $perms = [
-            'dashboard_view'     => Gate::allows('viewStats'),
-            'companies_view'     => Gate::allows('viewAny', Company::class),
+            'dashboard_view' => Gate::allows('viewStats'),
+            'companies_view' => Gate::allows('viewAny', Company::class),
+            'ships_view' => Gate::allows('viewAny', \App\Models\Ship::class),
+            'surveys_view' => Gate::allows('viewAny', \App\Models\Survey::class),
+            'survey_templates_view' => Gate::allows('viewAny', \App\Models\SurveyTemplate::class),
             'notifications_view' => Gate::allows('viewAny', Notification::class),
             'notifications_send' => Gate::allows('send', Notification::class),
-            'chat_view'          => Gate::allows('viewAny', Chat::class),
+            'chat_view' => Gate::allows('viewAny', Chat::class),
             'configuration_view' => Gate::allows('viewAny', SystemConfiguration::class),
-            'users_view'         => Gate::allows('viewAny', User::class),
-            'roles_view'         => Gate::allows('viewAny', Role::class),
+            'users_view' => Gate::allows('viewAny', User::class),
+            'roles_view' => Gate::allows('viewAny', Role::class),
         ];
 
-        $req   = request();
+        $req = request();
         $items = [];
 
         // Dashboard — all roles
         $items[] = [
-            'name'   => 'Dashboard',
-            'route'  => 'dashboard',
-            'icon'   => 'home',
+            'name' => 'Dashboard',
+            'route' => 'dashboard',
+            'icon' => 'home',
             'active' => $req->routeIs('dashboard'),
         ];
 
@@ -51,17 +54,41 @@ trait HasMenuItems
         $masterDataChildren = [];
         if ($perms['companies_view']) {
             $masterDataChildren[] = [
-                'name'   => 'Perusahaan',
-                'route'  => 'master-data.companies',
+                'name' => 'Perusahaan',
+                'route' => 'master-data.companies',
                 'active' => $req->routeIs('master-data.companies'),
             ];
         }
-        if (!empty($masterDataChildren)) {
+        if ($perms['ships_view']) {
+            $masterDataChildren[] = [
+                'name' => 'Kapal',
+                'route' => 'master-data.ships',
+                'active' => $req->routeIs('master-data.ships'),
+            ];
+        }
+        if ($perms['survey_templates_view']) {
+            $masterDataChildren[] = [
+                'name' => 'Template Form',
+                'route' => 'master-data.survey-templates.index',
+                'active' => $req->routeIs('master-data.survey-templates.*'),
+            ];
+        }
+        if (! empty($masterDataChildren)) {
             $items[] = [
-                'name'     => 'Master Data',
-                'icon'     => 'database',
-                'active'   => $req->routeIs('master-data.*'),
+                'name' => 'Master Data',
+                'icon' => 'database',
+                'active' => $req->routeIs('master-data.*'),
                 'children' => $masterDataChildren,
+            ];
+        }
+
+        // Survey Kondisi
+        if ($perms['surveys_view']) {
+            $items[] = [
+                'name' => 'Survey Kondisi',
+                'route' => 'surveys.index',
+                'icon' => 'clipboard-check',
+                'active' => $req->routeIs('surveys.*'),
             ];
         }
 
@@ -73,31 +100,31 @@ trait HasMenuItems
             $notifChildren = [];
             if ($canView) {
                 $notifChildren[] = [
-                    'name'   => 'Kotak Masuk',
-                    'route'  => 'notifications.index',
+                    'name' => 'Kotak Masuk',
+                    'route' => 'notifications.index',
                     'active' => $req->routeIs('notifications.index'),
                 ];
             }
             if ($canSend) {
                 $notifChildren[] = [
-                    'name'   => 'Kirim Notifikasi',
-                    'route'  => 'notifications.send',
+                    'name' => 'Kirim Notifikasi',
+                    'route' => 'notifications.send',
                     'active' => $req->routeIs('notifications.send'),
                 ];
             }
 
             if ($canView && $canSend) {
                 $items[] = [
-                    'name'     => 'Notifikasi',
-                    'icon'     => 'bell',
-                    'active'   => $req->routeIs('notifications.*'),
+                    'name' => 'Notifikasi',
+                    'icon' => 'bell',
+                    'active' => $req->routeIs('notifications.*'),
                     'children' => $notifChildren,
                 ];
             } else {
                 $items[] = [
-                    'name'   => 'Notifikasi',
-                    'route'  => $canView ? 'notifications.index' : 'notifications.send',
-                    'icon'   => 'bell',
+                    'name' => 'Notifikasi',
+                    'route' => $canView ? 'notifications.index' : 'notifications.send',
+                    'icon' => 'bell',
                     'active' => $req->routeIs('notifications.*'),
                 ];
             }
@@ -106,9 +133,9 @@ trait HasMenuItems
         // Chat
         if ($perms['chat_view']) {
             $items[] = [
-                'name'   => 'Chat',
-                'route'  => 'chat.index',
-                'icon'   => 'chat',
+                'name' => 'Chat',
+                'route' => 'chat.index',
+                'icon' => 'chat',
                 'active' => $req->routeIs('chat.*'),
             ];
         }
@@ -117,30 +144,30 @@ trait HasMenuItems
         $settingsChildren = [];
         if ($perms['configuration_view']) {
             $settingsChildren[] = [
-                'name'   => 'Konfigurasi System',
-                'route'  => 'settings.system',
+                'name' => 'Konfigurasi System',
+                'route' => 'settings.system',
                 'active' => $req->routeIs('settings.system'),
             ];
         }
         if ($perms['users_view']) {
             $settingsChildren[] = [
-                'name'   => 'Manajemen User',
-                'route'  => 'settings.users',
+                'name' => 'Manajemen User',
+                'route' => 'settings.users',
                 'active' => $req->routeIs('settings.users'),
             ];
         }
         if ($perms['roles_view']) {
             $settingsChildren[] = [
-                'name'   => 'Roles & Permissions',
-                'route'  => 'settings.roles',
+                'name' => 'Roles & Permissions',
+                'route' => 'settings.roles',
                 'active' => $req->routeIs('settings.roles'),
             ];
         }
-        if (!empty($settingsChildren)) {
+        if (! empty($settingsChildren)) {
             $items[] = [
-                'name'     => 'Pengaturan',
-                'icon'     => 'cog',
-                'active'   => $req->routeIs('settings.*'),
+                'name' => 'Pengaturan',
+                'icon' => 'cog',
+                'active' => $req->routeIs('settings.*'),
                 'children' => $settingsChildren,
             ];
         }

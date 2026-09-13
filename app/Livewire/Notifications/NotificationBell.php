@@ -9,7 +9,9 @@ use Livewire\Component;
 class NotificationBell extends Component
 {
     public int $unreadCount = 0;
+
     public ?int $loadingNotifId = null;
+
     public bool $isOpen = false;
 
     public function mount(): void
@@ -30,7 +32,7 @@ class NotificationBell extends Component
 
     public function toggleOpen(): void
     {
-        $this->isOpen = !$this->isOpen;
+        $this->isOpen = ! $this->isOpen;
     }
 
     public function closeDropdown(): void
@@ -64,6 +66,7 @@ class NotificationBell extends Component
 
             if ($notification->action_url) {
                 $this->redirect($notification->action_url, navigate: true);
+
                 return;
             }
         }

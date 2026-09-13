@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Notifications\CustomVerifyEmail;
 use App\Notifications\CustomResetPassword;
+use App\Notifications\CustomVerifyEmail;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +15,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
-    use HasFactory, Notifiable, HasRoles;
+    use HasFactory, HasRoles, Notifiable;
 
     protected $fillable = [
         'name',
@@ -85,7 +85,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function getFullNameAttribute(): string
     {
-        return $this->name . ($this->position ? " ({$this->position})" : '');
+        return $this->name.($this->position ? " ({$this->position})" : '');
     }
 
     /**
@@ -104,7 +104,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         // Determine which email to send to
         $emailTo = $this->pending_email ?? $this->email;
-        
+
         // Send notification directly to the specific email
         \Illuminate\Support\Facades\Notification::route('mail', $emailTo)
             ->notify(new CustomVerifyEmail($this));
@@ -117,7 +117,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         // Determine which email to send to
         $emailTo = $this->pending_email ?? $this->email;
-        
+
         // Send notification directly to the specific email
         \Illuminate\Support\Facades\Notification::route('mail', $emailTo)
             ->notify(new CustomResetPassword($token, $this));

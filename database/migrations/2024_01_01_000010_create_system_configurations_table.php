@@ -21,7 +21,7 @@ return new class extends Migration
             $table->boolean('is_editable')->default(true);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
-            
+
             $table->index('key');
             $table->index('category');
             $table->index('is_active');

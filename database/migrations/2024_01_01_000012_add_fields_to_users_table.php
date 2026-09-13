@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('phone', 20)->nullable()->after('email');
             $table->string('position')->nullable()->after('phone');
             $table->boolean('is_active')->default(true)->after('position');
-            
+
             $table->index('company_id');
             $table->index('is_active');
         });

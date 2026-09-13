@@ -12,6 +12,7 @@ class Login extends Component
     use HasNotification;
 
     public LoginForm $form;
+
     public bool $showPassword = false;
 
     /**
@@ -19,7 +20,7 @@ class Login extends Component
      */
     public function togglePasswordVisibility(): void
     {
-        $this->showPassword = !$this->showPassword;
+        $this->showPassword = ! $this->showPassword;
     }
 
     /**
@@ -29,7 +30,7 @@ class Login extends Component
     public function login(): void
     {
         // Token is already in $this->form->recaptcha_token via wire:model
-        
+
         try {
             // Step 1: Validate form fields
             $this->validate();
@@ -46,28 +47,27 @@ class Login extends Component
 
             // Step 5: Redirect
             $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
-            
+
         } catch (\Illuminate\Validation\ValidationException $e) {
             // Get first error message
             $errors = $e->validator->errors();
             $firstError = $errors->first();
-            
+
             // Dispatch error notification for validation failures (including reCAPTCHA)
             $this->notifyError($firstError);
-            
+
             // Re-throw to show field errors
             throw $e;
-            
         } catch (\Exception $e) {
             // Dispatch generic error for unexpected errors
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
-            
+
             // Log the error for debugging
             \Log::error('Login error', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
-            
+
             throw $e;
         }
     }

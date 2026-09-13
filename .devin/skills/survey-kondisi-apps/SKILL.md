@@ -1,6 +1,6 @@
 ---
-name: client-app
-description: Panduan membangun fitur/aplikasi baru di atas template client-app (Laravel 12 + Livewire 4) secara konsisten, clean, permission-first, dan UI elegan.
+name: survey-kondisi-apps
+description: Panduan membangun fitur/aplikasi baru di atas template survey-kondisi-apps (Laravel 12 + Livewire 4) secara konsisten, clean, permission-first, dan UI elegan.
 triggers:
   - user
   - model
@@ -12,7 +12,7 @@ triggers:
 3. System Analyst yang teliti & berorientasi maintainability
 
 # Konteks Aplikasi
-- Ini APLIKASI BARU yang dibangun di atas TEMPLATE "client-app".
+- Ini APLIKASI BARU yang dibangun di atas TEMPLATE "survey-kondisi-apps".
 - Database boleh di-reset total. Untuk perubahan schema, LANGSUNG UBAH migration create utama (jangan bikin migration `add_*` baru untuk tabel yang sama), lalu jalankan:
   `php artisan migrate:fresh --seed`
 - WAJIB analisis menyeluruh SEBELUM memberi solusi. Tidak ada duplicate logic, tidak ada field mati, tidak menghapus yang masih dipakai, dan hapus yang sudah tidak dipakai agar codebase CLEAN.
@@ -99,6 +99,22 @@ Jika butuh variant baru (mis. warna/size berbeda), EXTEND komponen yang ada via 
   Tanpa wire:key, saat item dihapus dari loop, Livewire DOM-diff bisa mencocokkan button item A dengan item B → loading spinner muter di button salah.
   Contoh: `wire:click="edit({{ $item->id }})"` + `wire:target="edit({{ $item->id }})"` + `wire:key="btn-edit-{{ $item->id }}"`.
   Konvensi naming wire:key: `btn-{action}-{id}` (button), `toggle-{action}-{id}` (toggle switch).
+- SEMUA action button WAJIB pakai `<x-loading-button>` dengan loading state, TERMASUK navigasi:
+  - "Tambah {Entity}" -> `wire:click="createEntity"` + redirect method di Livewire component.
+  - "View/Detail" (icon) -> `wire:click="viewEntity({{ $item->id }})"` + redirect method.
+  - "Edit" (icon/filled) -> `wire:click="editEntity({{ $item->id }})"` + redirect method.
+  - Redirect method: `return $this->redirect(route('entity.show', $model), navigate: true);`
+  - DILARANG raw `<a href="...">` dengan styling button untuk action/navigasi (kecuali breadcrumb text link).
+  - Hanya breadcrumb dan pure text link yang boleh pakai raw `<a href>`.
+  - Contoh redirect method di Livewire:
+    ```php
+    public function viewEntity($id)
+    {
+        $model = Model::findOrFail($id);
+        $this->authorize('view', $model);
+        return $this->redirect(route('entity.show', $model), navigate: true);
+    }
+    ```
 - `<x-loading-button>` variants:
   - Filled: `primary`, `success`, `danger`, `warning`, `secondary` (background berwarna).
   - Icon-only: `icon-blue`, `icon-red`, `icon-green`, `icon-amber`, `icon-gray` (text berwarna + subtle hover bg, padding p-1.5).
@@ -112,6 +128,12 @@ Jika butuh variant baru (mis. warna/size berbeda), EXTEND komponen yang ada via 
 - Batal: `<x-cancel-button>`. Hapus: `<x-delete-modal>`. Konfirmasi: `<x-confirm-modal>`.
 - Select: `<x-searchable-select>` / `<x-multi-searchable-select>`. Filter: `<x-filter-popover>`.
 - Form field: `<x-input-label>`, `<x-text-input>`, `<x-input-error>`.
+  - WAJIB beri `placeholder` di SETIAP `<x-text-input>` (kecuali `type="date"`/`type="hidden"` yang punya native picker).
+  - Placeholder berbahasa Indonesia, deskriptif, contoh: `placeholder="Nama kapal"`, `placeholder="Nama surveyor"`.
+  - Untuk `<x-searchable-select>` WAJIB pakai prop `placeholder` dan `searchPlaceholder`.
+  - Field yang WAJIB diisi (required di `rules()`) HARUS pakai `:required="true"` di `<x-input-label>` agar muncul tanda bintang merah `*`.
+    Contoh: `<x-input-label for="ship_id" value="Kapal" :required="true" />`.
+    Jangan tambahkan `*` manual di value — gunakan prop `:required` agar konsisten (render `<span class="text-red-500 ml-0.5">*</span>`).
 - WAJIB dukung dark mode (kelas `dark:...`), spacing/typography konsisten dengan menu sejenis.
 - String UI berbahasa Indonesia (boleh hardcode, template belum pakai lang files).
 - Breadcrumb WAJIB di full-page form (mis. Master Data > Modul > Edit).
@@ -294,8 +316,11 @@ JANGAN bocorkan pesan exception mentah ke user.
 - Membuat migration `add_*` baru untuk tabel yang schema-nya masih boleh diubah
 - Menggunakan ID mentah (angka) di URL untuk model yang punya HasEncryptedRouteKey
 - Membuat action button tanpa wire:key dan loading state
+- Membuat action/navigasi button dengan raw `<a href>` (kecuali breadcrumb text link) -- WAJIB pakai `<x-loading-button>` dengan redirect method
 - Memakai modal untuk form kompleks (nested/repeater/upload file) -- gunakan full-page form
 - Membuat komponen Blade baru jika fungsi sudah ada di inventaris komponen
 - Hardcode spacing/warna/typography yang inkonsisten dengan design system template
 - Membuat tabel tanpa overflow-x-auto (horizontal scroll di mobile)
 - Membuat form grid tanpa breakpoint responsif (harus adaptif 1/2/3 kolom)
+- Membuat `<x-text-input>` tanpa `placeholder` (kecuali type="date"/"hidden") -- WAJIB placeholder deskriptif bahasa Indonesia
+- Membuat field required tanpa `:required="true"` di `<x-input-label>` -- WAJIB tanda bintang merah `*` untuk field wajib

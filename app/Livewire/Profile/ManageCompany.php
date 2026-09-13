@@ -4,24 +4,34 @@ namespace App\Livewire\Profile;
 
 use App\Livewire\Traits\HasNotification;
 use App\Models\Company;
-use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Component;
 
 class ManageCompany extends Component
 {
     use HasNotification;
+
     public $showModal = false;
+
     public $isEditMode = false;
 
     // Form fields
     public $code;
+
     public $name;
+
     public $email;
+
     public $phone;
+
     public $address;
+
     public $pic_name;
+
     public $pic_email;
+
     public $pic_phone;
+
     public $npwp;
 
     protected function rules()
@@ -31,10 +41,10 @@ class ManageCompany extends Component
 
         return [
             'code' => [
-                'required', 
-                'string', 
-                'max:50', 
-                $this->isEditMode ? 'unique:companies,code,' . $companyId : 'unique:companies,code'
+                'required',
+                'string',
+                'max:50',
+                $this->isEditMode ? 'unique:companies,code,'.$companyId : 'unique:companies,code',
             ],
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
@@ -47,7 +57,7 @@ class ManageCompany extends Component
                 'required',
                 'string',
                 'regex:/^[0-9]{15,16}$/',
-                $this->isEditMode ? 'unique:companies,npwp,' . $companyId : 'unique:companies,npwp'
+                $this->isEditMode ? 'unique:companies,npwp,'.$companyId : 'unique:companies,npwp',
             ],
         ];
     }
@@ -67,16 +77,17 @@ class ManageCompany extends Component
     {
         $user = Auth::user();
 
-        if (!$user->can('manage_own_company')) {
+        if (! $user->can('manage_own_company')) {
             $this->notifyError('Anda tidak memiliki izin untuk mengelola perusahaan');
+
             return;
         }
-        
+
         if ($user->company_id && $user->company) {
             // Edit mode - load existing company data
             $this->isEditMode = true;
             $company = $user->company;
-            
+
             $this->code = $company->code;
             $this->name = $company->name;
             $this->email = $company->email;
@@ -91,7 +102,7 @@ class ManageCompany extends Component
             $this->isEditMode = false;
             $this->resetForm();
         }
-        
+
         $this->showModal = true;
     }
 
@@ -104,8 +115,9 @@ class ManageCompany extends Component
 
     public function save()
     {
-        if (!Auth::user()->can('manage_own_company')) {
+        if (! Auth::user()->can('manage_own_company')) {
             $this->notifyError('Anda tidak memiliki izin untuk mengelola perusahaan');
+
             return;
         }
 
@@ -133,7 +145,7 @@ class ManageCompany extends Component
                     'pic_phone' => $this->pic_phone,
                     'npwp' => $this->npwp,
                 ]);
-                
+
                 $message = 'Informasi perusahaan berhasil diperbarui!';
             } else {
                 // Create new company and assign to user
@@ -153,14 +165,14 @@ class ManageCompany extends Component
                 // Assign company to user
                 $user->company_id = $company->id;
                 $user->save();
-                
+
                 $message = 'Perusahaan berhasil dibuat dan dihubungkan ke akun Anda!';
             }
 
             $this->notifySuccess($message);
 
             $this->closeModal();
-            
+
             // Refresh the page to show updated company info
             return $this->redirect(route('profile'), navigate: true);
 

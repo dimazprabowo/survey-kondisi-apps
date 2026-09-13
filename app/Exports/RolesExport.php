@@ -2,16 +2,16 @@
 
 namespace App\Exports;
 
-use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\Exportable;
+use Maatwebsite\Excel\Concerns\FromQuery;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Spatie\Permission\Models\Role;
 
-class RolesExport implements FromQuery, WithHeadings, WithMapping, WithStyles, ShouldAutoSize
+class RolesExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapping, WithStyles
 {
     use Exportable;
 
@@ -40,7 +40,7 @@ class RolesExport implements FromQuery, WithHeadings, WithMapping, WithStyles, S
             $no,
             ucfirst($role->name),
             $role->permissions->count(),
-            $role->permissions->pluck('name')->map(fn($p) => str_replace('_', ' ', ucfirst($p)))->implode(', '),
+            $role->permissions->pluck('name')->map(fn ($p) => str_replace('_', ' ', ucfirst($p)))->implode(', '),
             $role->users()->count(),
         ];
     }

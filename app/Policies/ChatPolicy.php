@@ -40,7 +40,7 @@ class ChatPolicy
      */
     public function editMessage(User $user, ChatMessage $message): bool
     {
-        return $user->can('chat_view') && $message->user_id === $user->id && !$message->is_deleted;
+        return $user->can('chat_view') && $message->user_id === $user->id && ! $message->is_deleted;
     }
 
     /**
@@ -49,6 +49,6 @@ class ChatPolicy
      */
     public function deleteMessage(User $user, ChatMessage $message): bool
     {
-        return $user->can('chat_view') && $message->user_id === $user->id && !$message->is_deleted;
+        return $user->can('chat_view') && $message->user_id === $user->id && ! $message->is_deleted;
     }
 }

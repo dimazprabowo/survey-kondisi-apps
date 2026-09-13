@@ -22,7 +22,7 @@ class UserSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
-        if (!$superAdmin->hasRole('super admin')) {
+        if (! $superAdmin->hasRole('super admin')) {
             $superAdmin->assignRole('super admin');
         }
 
@@ -38,7 +38,7 @@ class UserSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
-        if (!$admin->hasRole('admin')) {
+        if (! $admin->hasRole('admin')) {
             $admin->assignRole('admin');
         }
 
@@ -54,7 +54,7 @@ class UserSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
-        if (!$user->hasRole('user')) {
+        if (! $user->hasRole('user')) {
             $user->assignRole('user');
         }
     }

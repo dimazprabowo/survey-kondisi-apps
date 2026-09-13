@@ -7,28 +7,38 @@ use App\Events\UserTyping;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\User;
+use App\Traits\HasDynamicLike;
+use Carbon\Carbon;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Throwable;
-use Carbon\Carbon;
-use App\Traits\HasDynamicLike;
 
 class ChatIndex extends Component
 {
     use AuthorizesRequests, HasDynamicLike;
 
     public ?int $activeChatId = null;
+
     public string $messageBody = '';
+
     public string $searchUser = '';
+
     public string $searchChat = '';
+
     public bool $showDeleteModal = false;
+
     public ?int $deleteChatId = null;
+
     public ?int $replyToId = null;
+
     public ?int $editingMessageId = null;
+
     public string $editMessageBody = '';
+
     public bool $showDeleteMessageModal = false;
+
     public ?int $deleteMessageId = null;
 
     /** @var array Cached chat IDs for current user — avoids repeated whereHas queries */
@@ -46,7 +56,7 @@ class ChatIndex extends Component
 
     public function selectChat(int $chatId): void
     {
-        if (!$this->isUserChat($chatId)) {
+        if (! $this->isUserChat($chatId)) {
             return;
         }
 
@@ -70,7 +80,7 @@ class ChatIndex extends Component
     {
         $message = ChatMessage::find($messageId);
 
-        if (!$message || $message->is_deleted) {
+        if (! $message || $message->is_deleted) {
             return;
         }
 
@@ -90,14 +100,15 @@ class ChatIndex extends Component
     {
         $body = trim($this->editMessageBody);
 
-        if (empty($body) || !$this->editingMessageId) {
+        if (empty($body) || ! $this->editingMessageId) {
             return;
         }
 
         $message = ChatMessage::find($this->editingMessageId);
 
-        if (!$message || $message->is_deleted) {
+        if (! $message || $message->is_deleted) {
             $this->cancelEdit();
+
             return;
         }
 
@@ -122,15 +133,16 @@ class ChatIndex extends Component
 
     public function deleteMessage(): void
     {
-        if (!$this->deleteMessageId) {
+        if (! $this->deleteMessageId) {
             return;
         }
 
         $message = ChatMessage::find($this->deleteMessageId);
 
-        if (!$message) {
+        if (! $message) {
             $this->showDeleteMessageModal = false;
             $this->deleteMessageId = null;
+
             return;
         }
 
@@ -157,7 +169,7 @@ class ChatIndex extends Component
 
         $chat = Chat::findDirectChat($me, $userId);
 
-        if (!$chat) {
+        if (! $chat) {
             $chat = Chat::create([
                 'is_group' => false,
                 'created_by' => $me,
@@ -184,11 +196,11 @@ class ChatIndex extends Component
     {
         $body = trim($this->messageBody);
 
-        if (empty($body) || !$this->activeChatId) {
+        if (empty($body) || ! $this->activeChatId) {
             return;
         }
 
-        if (!$this->isUserChat($this->activeChatId)) {
+        if (! $this->isUserChat($this->activeChatId)) {
             return;
         }
 
@@ -218,7 +230,7 @@ class ChatIndex extends Component
 
     public function sendTyping(bool $isTyping = true): void
     {
-        if (!$this->activeChatId) {
+        if (! $this->activeChatId) {
             return;
         }
 
@@ -236,7 +248,7 @@ class ChatIndex extends Component
 
     public function markChatAsRead(): void
     {
-        if (!$this->activeChatId) {
+        if (! $this->activeChatId) {
             return;
         }
 
@@ -255,13 +267,14 @@ class ChatIndex extends Component
 
     public function deleteChat(): void
     {
-        if (!$this->deleteChatId) {
+        if (! $this->deleteChatId) {
             return;
         }
 
-        if (!$this->isUserChat($this->deleteChatId)) {
+        if (! $this->isUserChat($this->deleteChatId)) {
             $this->showDeleteModal = false;
             $this->deleteChatId = null;
+
             return;
         }
 
@@ -342,9 +355,10 @@ class ChatIndex extends Component
             ->get()
             ->filter(function ($chat) use ($deletedAtMap) {
                 $deletedAt = $deletedAtMap[$chat->id] ?? null;
-                if (!$deletedAt) {
+                if (! $deletedAt) {
                     return true;
                 }
+
                 // Show chat only if there are messages after deletion
                 return $chat->latestMessage && $chat->latestMessage->created_at > Carbon::parse($deletedAt);
             })
@@ -400,7 +414,7 @@ class ChatIndex extends Component
                 $activeChat = $chats->firstWhere('id', $this->activeChatId);
 
                 // If not in filtered list (e.g., just re-opened a deleted chat), load directly
-                if (!$activeChat) {
+                if (! $activeChat) {
                     $activeChat = Chat::with(['participants', 'latestMessage.user'])
                         ->find($this->activeChatId);
                 }
@@ -423,7 +437,7 @@ class ChatIndex extends Component
                 ->where('id', '!=', $userId)
                 ->where(function ($q) use ($operator) {
                     $q->where('name', $operator, "%{$this->searchUser}%")
-                      ->orWhere('email', $operator, "%{$this->searchUser}%");
+                        ->orWhere('email', $operator, "%{$this->searchUser}%");
                 })
                 ->limit(10)
                 ->get();

@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\Models\Permission;
 use Illuminate\Database\Eloquent\Collection;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class RolePermissionService
 {
@@ -118,6 +118,31 @@ class RolePermissionService
                 ['name' => 'chat_create', 'label' => 'Buat Chat'],
                 ['name' => 'chat_delete', 'label' => 'Hapus Chat'],
             ],
+            'Kapal' => [
+                ['name' => 'ships_view',         'label' => 'Lihat Kapal'],
+                ['name' => 'ships_create',       'label' => 'Tambah Kapal'],
+                ['name' => 'ships_update',       'label' => 'Edit Kapal'],
+                ['name' => 'ships_delete',       'label' => 'Hapus Kapal'],
+                ['name' => 'ships_export_excel', 'label' => 'Export Excel Kapal'],
+                ['name' => 'ships_export_pdf',   'label' => 'Export PDF Kapal'],
+            ],
+            'Survey Kondisi' => [
+                ['name' => 'surveys_view',         'label' => 'Lihat Survey'],
+                ['name' => 'surveys_create',       'label' => 'Tambah Survey'],
+                ['name' => 'surveys_update',       'label' => 'Edit Survey'],
+                ['name' => 'surveys_delete',       'label' => 'Hapus Survey'],
+                ['name' => 'surveys_export_excel', 'label' => 'Export Excel Survey'],
+                ['name' => 'surveys_export_pdf',   'label' => 'Export PDF Survey'],
+            ],
+            'Template Form' => [
+                ['name' => 'survey_templates_view',         'label' => 'Lihat Template'],
+                ['name' => 'survey_templates_create',       'label' => 'Tambah Template'],
+                ['name' => 'survey_templates_update',       'label' => 'Edit Template'],
+                ['name' => 'survey_templates_delete',       'label' => 'Hapus Template'],
+                ['name' => 'survey_templates_duplicate',    'label' => 'Duplikasi Template'],
+                ['name' => 'survey_templates_export_excel', 'label' => 'Export Excel Template'],
+                ['name' => 'survey_templates_export_pdf',   'label' => 'Export PDF Template'],
+            ],
         ];
 
         $allPermissions = Permission::pluck('name')->toArray();
@@ -126,9 +151,9 @@ class RolePermissionService
 
         $groups = $groupMapping;
 
-        if (!empty($unmapped)) {
+        if (! empty($unmapped)) {
             $groups['Lainnya'] = array_values(array_map(
-                fn($p) => ['name' => $p, 'label' => ucwords(str_replace('_', ' ', $p))],
+                fn ($p) => ['name' => $p, 'label' => ucwords(str_replace('_', ' ', $p))],
                 $unmapped
             ));
         }

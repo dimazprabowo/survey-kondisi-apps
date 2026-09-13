@@ -27,10 +27,10 @@ trait HasNotification
     protected function notifyValidationError(\Illuminate\Validation\ValidationException $e): void
     {
         $errors = $e->validator->errors()->all();
-        $message = count($errors) > 1 
-            ? 'Terdapat ' . count($errors) . ' kesalahan validasi' 
+        $message = count($errors) > 1
+            ? 'Terdapat '.count($errors).' kesalahan validasi'
             : $errors[0];
-        
+
         $this->dispatch('notify', type: 'error', message: $message);
     }
 }

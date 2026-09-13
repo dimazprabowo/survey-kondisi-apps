@@ -13,12 +13,14 @@ use Spatie\Permission\Models\Role;
 
 class ImpersonateUser extends Component
 {
-    use WithPagination, AuthorizesRequests, HasNotification, HasDynamicLike;
+    use AuthorizesRequests, HasDynamicLike, HasNotification, WithPagination;
 
     protected $paginationTheme = 'tailwind';
 
     public string $search = '';
+
     public string $roleFilter = '';
+
     public bool $filterChanged = false;
 
     public function updatingSearch(): void
@@ -61,9 +63,9 @@ class ImpersonateUser extends Component
 
         $operator = $this->getLikeOperator();
         $query = User::query()
-            ->when($this->search, fn($q) => $q->where('name', $operator, "%{$this->search}%")
+            ->when($this->search, fn ($q) => $q->where('name', $operator, "%{$this->search}%")
                 ->orWhere('email', $operator, "%{$this->search}%"))
-            ->when($this->roleFilter, fn($q) => $q->role($this->roleFilter))
+            ->when($this->roleFilter, fn ($q) => $q->role($this->roleFilter))
             ->where('id', '!=', auth()->id())
             ->orderBy('name');
 

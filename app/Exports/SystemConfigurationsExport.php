@@ -4,19 +4,20 @@ namespace App\Exports;
 
 use App\Models\SystemConfiguration;
 use App\Traits\HasDynamicLike;
-use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\Exportable;
+use Maatwebsite\Excel\Concerns\FromQuery;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class SystemConfigurationsExport implements FromQuery, WithHeadings, WithMapping, WithStyles, ShouldAutoSize
+class SystemConfigurationsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapping, WithStyles
 {
     use Exportable, HasDynamicLike;
 
     protected ?string $search;
+
     protected ?string $isActive;
 
     public function __construct(?string $search = null, ?string $isActive = null)
@@ -33,8 +34,8 @@ class SystemConfigurationsExport implements FromQuery, WithHeadings, WithMapping
             $operator = $this->getLikeOperator();
             $query->where(function ($q) use ($operator) {
                 $q->where('key', $operator, "%{$this->search}%")
-                  ->orWhere('description', $operator, "%{$this->search}%")
-                  ->orWhere('value', $operator, "%{$this->search}%");
+                    ->orWhere('description', $operator, "%{$this->search}%")
+                    ->orWhere('value', $operator, "%{$this->search}%");
             });
         }
 

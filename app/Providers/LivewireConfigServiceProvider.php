@@ -23,13 +23,13 @@ class LivewireConfigServiceProvider extends ServiceProvider
         // Use maximum values from all field configurations since temp upload is a global endpoint
         $maxSize = $this->getMaxUploadSizeFromAllFields();
         $allMimes = $this->getAllowedMimesFromAllFields();
-        
+
         config([
             'livewire.temporary_file_upload.rules' => [
                 'required',
                 'file',
-                'max:' . $maxSize,
-                'mimes:' . $allMimes,
+                'max:'.$maxSize,
+                'mimes:'.$allMimes,
             ],
         ]);
     }
@@ -41,15 +41,15 @@ class LivewireConfigServiceProvider extends ServiceProvider
     {
         $fields = config('file_upload.fields', []);
         $default = config('file_upload.default.max_size', 2048);
-        
+
         $maxSize = $default;
-        
+
         foreach ($fields as $fieldConfig) {
             if (isset($fieldConfig['max_size'])) {
                 $maxSize = max($maxSize, $fieldConfig['max_size']);
             }
         }
-        
+
         return $maxSize;
     }
 
@@ -60,15 +60,15 @@ class LivewireConfigServiceProvider extends ServiceProvider
     {
         $fields = config('file_upload.fields', []);
         $default = config('file_upload.default.mimes', []);
-        
+
         $allMimes = $default;
-        
+
         foreach ($fields as $fieldConfig) {
             if (isset($fieldConfig['mimes'])) {
                 $allMimes = array_merge($allMimes, $fieldConfig['mimes']);
             }
         }
-        
+
         // Remove duplicates and return as comma-separated string
         return implode(',', array_unique($allMimes));
     }

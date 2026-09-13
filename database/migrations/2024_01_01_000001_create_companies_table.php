@@ -22,7 +22,7 @@ return new class extends Migration
             $table->enum('status', ['active', 'inactive', 'suspended'])->default('active');
             $table->timestamps();
             $table->softDeletes();
-            
+
             $table->index('status');
             $table->index('created_at');
         });

@@ -21,10 +21,10 @@ class CompanyService
             $operator = $this->getLikeOperator();
             $query->where(function ($q) use ($search, $operator) {
                 $q->where('code', $operator, "%{$search}%")
-                  ->orWhere('name', $operator, "%{$search}%")
-                  ->orWhere('email', $operator, "%{$search}%")
-                  ->orWhere('phone', $operator, "%{$search}%")
-                  ->orWhere('pic_name', $operator, "%{$search}%");
+                    ->orWhere('name', $operator, "%{$search}%")
+                    ->orWhere('email', $operator, "%{$search}%")
+                    ->orWhere('phone', $operator, "%{$search}%")
+                    ->orWhere('pic_name', $operator, "%{$search}%");
             });
         }
 
@@ -43,6 +43,7 @@ class CompanyService
     public function update(Company $company, array $data): Company
     {
         $company->update($data);
+
         return $company;
     }
 
@@ -55,6 +56,7 @@ class CompanyService
     {
         $newStatus = $company->status->value === 'active' ? 'inactive' : 'active';
         $company->update(['status' => $newStatus]);
+
         return $company;
     }
 }
