@@ -134,7 +134,7 @@
                         <tr>
                             <td colspan="8" class="px-6 py-12 text-center">
                                 <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                                 </svg>
                                 <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Tidak ada survey ditemukan</p>
                             </td>
@@ -177,7 +177,12 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto">
                         @foreach($this->templateOptions as $template)
                             <button type="button" wire:click="proceedWithTemplate({{ $template['id'] }})" wire:target="proceedWithTemplate({{ $template['id'] }})" wire:key="tpl-{{ $template['id'] }}"
-                                class="text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                                wire:loading.attr="disabled" wire:loading.class="opacity-60 cursor-wait" wire:loading.class.remove="hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                class="relative text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:cursor-wait">
+                                <div wire:target="proceedWithTemplate({{ $template['id'] }})" wire:loading.class="flex" wire:loading.class.remove="hidden"
+                                    class="hidden absolute inset-0 items-center justify-center bg-white/80 dark:bg-gray-800/80 rounded-lg z-10">
+                                    <x-loading-spinner size="sm" />
+                                </div>
                                 <div class="flex items-start justify-between mb-1">
                                     <span class="text-xs font-mono font-semibold text-gray-500 dark:text-gray-400">{{ $template['code'] }}</span>
                                     @if($template['is_default'])

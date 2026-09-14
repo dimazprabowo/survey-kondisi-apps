@@ -14,6 +14,8 @@ class SurveyResponse extends Model
         'avg_score',
         'date_issued',
         'date_expired',
+        'qty',
+        'specification',
         'note',
     ];
 

@@ -81,9 +81,9 @@
                                 </div>
                                 <div class="sm:col-span-10">
                                     <x-text-input wire:model="categories.{{ $catIndex }}.label" type="text" class="block w-full" placeholder="Nama kategori (mis. Hull & Construction)" />
+                                    <x-input-error :messages="$errors->get('categories.'.$catIndex.'.label')" class="mt-1" />
                                 </div>
                             </div>
-                            <x-input-error :messages="$errors->get('categories.'.$catIndex.'.label')" class="absolute" />
                             <x-loading-button wire:click="removeCategory({{ $catIndex }})" target="removeCategory({{ $catIndex }})" variant="icon-red" icon="delete" wire:key="cat-del-{{ $catIndex }}" title="Hapus Kategori" />
                         </div>
 
@@ -164,20 +164,39 @@
                                                                     <label class="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Kode</label>
                                                                     <x-text-input wire:model="categories.{{ $catIndex }}.sub_categories.{{ $subIndex }}.item_groups.{{ $igIndex }}.items.{{ $itemIndex }}.code" type="text" class="block w-full" placeholder="Kode item" />
                                                                 </div>
-                                                                <div class="sm:col-span-7">
+                                                                <div class="sm:col-span-5">
                                                                     <label class="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Nama Item</label>
                                                                     <x-text-input wire:model="categories.{{ $catIndex }}.sub_categories.{{ $subIndex }}.item_groups.{{ $igIndex }}.items.{{ $itemIndex }}.name" type="text" class="block w-full" placeholder="Nama item survey" />
                                                                 </div>
+                                                                <div class="sm:col-span-2">
+                                                                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Tipe Item</label>
+                                                                    <select wire:change="updateItemType({{ $catIndex }}, {{ $subIndex }}, {{ $igIndex }}, {{ $itemIndex }}, $event.target.value)" class="block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-blue-500 dark:focus:border-blue-600 focus:ring-blue-500 dark:focus:ring-blue-600">
+                                                                        @foreach(\App\Enums\SurveyItemType::cases() as $type)
+                                                                            <option value="{{ $type->value }}" @selected(($item['item_type'] ?? 'score') === $type->value)>{{ $type->label() }}</option>
+                                                                        @endforeach
+                                                                    </select>
+                                                                </div>
                                                                 <div class="sm:col-span-3">
-                                                                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Score Labels (pisah koma)</label>
-                                                                    <x-text-input wire:model.lazy="categories.{{ $catIndex }}.sub_categories.{{ $subIndex }}.item_groups.{{ $igIndex }}.items.{{ $itemIndex }}.score_labels" type="text" class="block w-full" placeholder="C, V" />
+                                                                    @if(($item['item_type'] ?? 'score') === 'score')
+                                                                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Score Labels (pisah koma)</label>
+                                                                        <x-text-input
+                                                                            value="{{ implode(', ', $item['score_labels'] ?? ['C', 'V']) }}"
+                                                                            wire:blur="updateScoreLabels({{ $catIndex }}, {{ $subIndex }}, {{ $igIndex }}, {{ $itemIndex }}, $event.target.value)"
+                                                                            type="text" class="block w-full" placeholder="C, V" />
+                                                                    @endif
                                                                 </div>
-                                                                <div class="sm:col-span-12 flex items-center gap-4 mt-1">
-                                                                    <label class="flex items-center gap-2 cursor-pointer">
-                                                                        <input type="checkbox" wire:model="categories.{{ $catIndex }}.sub_categories.{{ $subIndex }}.item_groups.{{ $igIndex }}.items.{{ $itemIndex }}.has_date_fields" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700">
-                                                                        <span class="text-xs text-gray-600 dark:text-gray-400">Punya field tanggal (issued/expired)</span>
-                                                                    </label>
-                                                                </div>
+                                                                @if(($item['item_type'] ?? 'score') === 'score')
+                                                                    <div class="sm:col-span-12 flex items-center gap-4 mt-1">
+                                                                        <label class="flex items-center gap-2 cursor-pointer">
+                                                                            <input type="checkbox" wire:model="categories.{{ $catIndex }}.sub_categories.{{ $subIndex }}.item_groups.{{ $igIndex }}.items.{{ $itemIndex }}.has_date_fields" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700">
+                                                                            <span class="text-xs text-gray-600 dark:text-gray-400">Punya field tanggal (issued/expired)</span>
+                                                                        </label>
+                                                                    </div>
+                                                                @else
+                                                                    <div class="sm:col-span-12 mt-1">
+                                                                        <p class="text-xs text-gray-400 dark:text-gray-500 italic">Item inventaris: diisi dengan Qty &amp; Spesifikasi saat survey (tanpa skor).</p>
+                                                                    </div>
+                                                                @endif
                                                             </div>
                                                         </div>
                                                     @endforeach
@@ -207,13 +226,11 @@
             </div>
         </div>
 
-        <!-- Action Bar (Sticky) -->
-        <div class="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 -mx-4 px-4 py-3 sm:rounded-lg sm:shadow-lg z-10">
+        <!-- Action Bar (Sticky, width matches cards above) -->
+        <div class="sticky bottom-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-3 px-4 sm:px-6 z-10">
             <div class="flex flex-col sm:flex-row gap-3 sm:justify-end">
-                <x-cancel-button wire:click="cancel" target="cancel" class="w-full sm:w-auto">
-                    Batal
-                </x-cancel-button>
-                <x-loading-button wire:click="save" target="save" variant="primary" size="md" loadingText="Menyimpan..." icon="check" class="w-full sm:w-auto">
+                <x-cancel-button wire:click="cancel" target="cancel" class="w-full sm:w-auto sm:min-w-[160px]" />
+                <x-loading-button wire:click="save" target="save" variant="primary" size="lg" loadingText="Menyimpan..." class="w-full sm:w-auto sm:min-w-[160px]">
                     {{ $editMode ? 'Update Template' : 'Simpan Template' }}
                 </x-loading-button>
             </div>

@@ -91,6 +91,7 @@
                             @foreach($subCat->itemGroups as $itemGroup)
                                 @php
                                     $firstItem = $itemGroup->items->first();
+                                    $isInventoryGroup = $firstItem && $firstItem->item_type === \App\Enums\SurveyItemType::Inventory;
                                     $scoreLabels = $firstItem ? $firstItem->score_labels : ['C', 'V'];
                                 @endphp
                                 <div class="mb-4 border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
@@ -104,10 +105,15 @@
                                                 <tr>
                                                     <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">No</th>
                                                     <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Item</th>
-                                                    @foreach($scoreLabels as $label)
-                                                        <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-16">{{ $label }}</th>
-                                                    @endforeach
-                                                    <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-16">Avg</th>
+                                                    @if($isInventoryGroup)
+                                                        <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-20">Qty</th>
+                                                        <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Spesifikasi</th>
+                                                    @else
+                                                        @foreach($scoreLabels as $label)
+                                                            <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-16">{{ $label }}</th>
+                                                        @endforeach
+                                                        <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-16">Avg</th>
+                                                    @endif
                                                     <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Note</th>
                                                 </tr>
                                             </thead>
@@ -129,23 +135,28 @@
                                                                 </div>
                                                             @endif
                                                         </td>
-                                                        @foreach($item->score_labels as $label)
-                                                            <td class="px-3 py-2 text-center text-sm text-gray-900 dark:text-white">
-                                                                {{ $scores[$label] ?? '-' }}
+                                                        @if($item->item_type === \App\Enums\SurveyItemType::Inventory)
+                                                            <td class="px-3 py-2 text-center text-sm text-gray-900 dark:text-white">{{ $response?->qty ?? '-' }}</td>
+                                                            <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ $response?->specification ?? '-' }}</td>
+                                                        @else
+                                                            @foreach($item->score_labels as $label)
+                                                                <td class="px-3 py-2 text-center text-sm text-gray-900 dark:text-white">
+                                                                    {{ $scores[$label] ?? '-' }}
+                                                                </td>
+                                                            @endforeach
+                                                            <td class="px-3 py-2 text-center">
+                                                                @if($avg !== null)
+                                                                    @php
+                                                                        $avgVal = (float) $avg;
+                                                                    @endphp
+                                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ survey_score_badge_class($avgVal) }}">
+                                                                        {{ number_format($avgVal, 2) }}
+                                                                    </span>
+                                                                @else
+                                                                    <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
+                                                                @endif
                                                             </td>
-                                                        @endforeach
-                                                        <td class="px-3 py-2 text-center">
-                                                            @if($avg !== null)
-                                                                @php
-                                                                    $avgVal = (float) $avg;
-                                                                @endphp
-                                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ survey_score_badge_class($avgVal) }}">
-                                                                    {{ number_format($avgVal, 2) }}
-                                                                </span>
-                                                            @else
-                                                                <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
-                                                            @endif
-                                                        </td>
+                                                        @endif
                                                         <td class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                                                             {{ $response?->note ?? '-' }}
                                                         </td>

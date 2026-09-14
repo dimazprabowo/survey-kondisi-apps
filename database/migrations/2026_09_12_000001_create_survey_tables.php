@@ -82,7 +82,8 @@ return new class extends Migration
             $table->foreignId('survey_item_group_id')->constrained()->cascadeOnDelete();
             $table->string('code')->nullable();
             $table->string('name');
-            $table->json('score_labels');
+            $table->enum('item_type', ['score', 'inventory'])->default('score');
+            $table->json('score_labels')->nullable();
             $table->boolean('has_date_fields')->default(false);
             $table->unsignedInteger('order_num')->default(0);
             $table->timestamps();
@@ -121,6 +122,8 @@ return new class extends Migration
             $table->decimal('avg_score', 5, 2)->nullable();
             $table->date('date_issued')->nullable();
             $table->date('date_expired')->nullable();
+            $table->unsignedInteger('qty')->nullable();
+            $table->string('specification')->nullable();
             $table->text('note')->nullable();
             $table->timestamps();
 

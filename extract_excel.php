@@ -13,6 +13,10 @@ $path = 'storage/app/private/templates/FORM - CHARTER - SURVEY CONDITION.xlsx';
 $reader = IOFactory::createReaderForFile($path);
 $spreadsheet = $reader->load($path);
 
+// NOTE: Sheet 'PUMP&PIPE - xx' (kategori VI di Excel asli) SENGAJA TIDAK dimasukkan
+// karena berisi data duplikat dari sub-kategori "5. Pump" & "6. Pipe" yang sudah ada
+// di sheet 'ER&MAchinery-2' (bagian dari kategori V - ENGINE ROOM & MACHINERY).
+// Memasukkannya akan menghitung skor Pump/Pipe dua kali dalam rata-rata Overall CAP.
 $sheetConfigs = [
     ['sheet' => 'Hull & Cons',                  'code' => 'I',   'label' => 'HULL & CONSTRUCTION'],
     ['sheet' => 'Ramp',                         'code' => 'II',  'label' => 'RAMP'],
@@ -20,9 +24,16 @@ $sheetConfigs = [
     ['sheet' => 'Deck Machinery & Outfitting',  'code' => 'IV',  'label' => 'DECK MACHINERY & OUTFITTING'],
     ['sheet' => 'ER&Machinery-1',               'code' => 'V',   'label' => 'ENGINE ROOM & MACHINERY'],
     ['sheet' => 'ER&MAchinery-2',               'code' => 'V',   'label' => 'ENGINE ROOM & MACHINERY', 'is_continuation' => true],
-    ['sheet' => 'PUMP&PIPE - xx',               'code' => 'VI',  'label' => 'PUMP & PIPE'],
-    ['sheet' => 'BRIDGE & NAVIGATION',          'code' => 'VII', 'label' => 'BRIDGE & NAVIGATION'],
-    ['sheet' => 'SHIP SAFETY OPERATION',        'code' => 'VIII', 'label' => 'SHIP SAFETY OPERATION'],
+    ['sheet' => 'BRIDGE & NAVIGATION',          'code' => 'VI', 'label' => 'BRIDGE & NAVIGATION'],
+    ['sheet' => 'SHIP SAFETY OPERATION',        'code' => 'VII', 'label' => 'SHIP SAFETY OPERATION'],
+];
+
+// Inventory sheets: checklist alat (No/Item/Qty/Specification), TANPA skor.
+// Setiap sheet dipetakan sebagai sub-kategori baru ("Inventaris ...") di kategori terkait,
+// dengan tiap blok header (baris tanpa nomor) menjadi item_group, dan barisnya menjadi item bertipe 'inventory'.
+$inventoryConfigs = [
+    ['sheet' => 'NAV - Inventroy', 'attach_to_code' => 'VI', 'sub_category_name' => 'Inventaris Alat Navigasi & Komunikasi'],
+    ['sheet' => 'LSA FFA - Inventory', 'attach_to_code' => 'VII', 'sub_category_name' => 'Inventaris LSA & FFA'],
 ];
 
 // Known score label values (compared uppercase)
@@ -150,7 +161,7 @@ foreach ($sheetConfigs as $cfg) {
                 $itemGroupIdx = count($result[$catIdx]['sub_categories'][$subCatIdx]['item_groups']) - 1;
             }
 
-            $item = ['code' => $c, 'name' => $d, 'score_labels' => $currentScoreLabels, 'has_date_fields' => false];
+            $item = ['code' => $c, 'name' => $d, 'item_type' => 'score', 'score_labels' => $currentScoreLabels, 'has_date_fields' => false];
             $nextD = trim((string) ($rows[$r + 1]['D'] ?? ''));
             if (str_contains($nextD, 'Date issued') || str_contains($nextD, 'Exp')) {
                 $item['has_date_fields'] = true;
@@ -190,7 +201,7 @@ foreach ($sheetConfigs as $cfg) {
                     if (! empty($lastGroup['items'])) {
                         $lastItem = end($lastGroup['items']);
                         if (! ctype_alpha($lastItem['code']) && $lastItem['code'] !== '') {
-                            $lastGroup['items'][] = ['code' => $b, 'name' => $d, 'score_labels' => $currentScoreLabels, 'has_date_fields' => false];
+                            $lastGroup['items'][] = ['code' => $b, 'name' => $d, 'item_type' => 'score', 'score_labels' => $currentScoreLabels, 'has_date_fields' => false];
                             $appended = true;
                         }
                     }
@@ -198,7 +209,7 @@ foreach ($sheetConfigs as $cfg) {
                 if (! $appended) {
                     $result[$catIdx]['sub_categories'][$subCatIdx]['item_groups'][] = ['code' => $b, 'name' => $d, 'items' => []];
                     $itemGroupIdx = count($result[$catIdx]['sub_categories'][$subCatIdx]['item_groups']) - 1;
-                    $result[$catIdx]['sub_categories'][$subCatIdx]['item_groups'][$itemGroupIdx]['items'][] = ['code' => $b, 'name' => $d, 'score_labels' => $currentScoreLabels, 'has_date_fields' => false];
+                    $result[$catIdx]['sub_categories'][$subCatIdx]['item_groups'][$itemGroupIdx]['items'][] = ['code' => $b, 'name' => $d, 'item_type' => 'score', 'score_labels' => $currentScoreLabels, 'has_date_fields' => false];
                 }
                 $inSubItems = false;
 
@@ -209,12 +220,69 @@ foreach ($sheetConfigs as $cfg) {
         // Continuation direct item: D=name, no B/C, has scores
         if ($d !== '' && $b === '' && $c === '' && ($e !== '' || $f !== '' || $g !== '')) {
             if ($itemGroupIdx >= 0) {
-                $result[$catIdx]['sub_categories'][$subCatIdx]['item_groups'][$itemGroupIdx]['items'][] = ['code' => '', 'name' => $d, 'score_labels' => $currentScoreLabels, 'has_date_fields' => false];
+                $result[$catIdx]['sub_categories'][$subCatIdx]['item_groups'][$itemGroupIdx]['items'][] = ['code' => '', 'name' => $d, 'item_type' => 'score', 'score_labels' => $currentScoreLabels, 'has_date_fields' => false];
             }
 
             continue;
         }
     }
+}
+
+// Inventory sheets (checklist alat: No/Item/Qty/Specification, TANPA skor)
+foreach ($inventoryConfigs as $invCfg) {
+    $sheet = $spreadsheet->getSheetByName($invCfg['sheet']);
+    if (! $sheet) {
+        continue;
+    }
+
+    $catIdx = -1;
+    foreach ($result as $idx => $c) {
+        if ($c['category_code'] === $invCfg['attach_to_code']) {
+            $catIdx = $idx;
+            break;
+        }
+    }
+    if ($catIdx < 0) {
+        continue;
+    }
+
+    $maxRow = $sheet->getHighestRow();
+    $itemGroups = [];
+    $igIdx = -1;
+
+    for ($r = 3; $r <= $maxRow; $r++) {
+        $a = trim((string) $sheet->getCell('A'.$r)->getValue());
+        $b = trim((string) $sheet->getCell('B'.$r)->getValue());
+
+        if ($a === '' && $b === '') {
+            continue;
+        }
+
+        // Group header: A empty, B has text (e.g. "Navigation Equipment")
+        if ($a === '' && $b !== '') {
+            $itemGroups[] = ['code' => '', 'name' => $b, 'items' => []];
+            $igIdx = count($itemGroups) - 1;
+
+            continue;
+        }
+
+        // Item row: A=No (numeric), B=Item name
+        if ($a !== '' && is_numeric($a) && $b !== '' && $igIdx >= 0) {
+            $itemGroups[$igIdx]['items'][] = [
+                'code' => (string) $a,
+                'name' => $b,
+                'item_type' => 'inventory',
+                'score_labels' => [],
+                'has_date_fields' => false,
+            ];
+        }
+    }
+
+    $result[$catIdx]['sub_categories'][] = [
+        'order_num' => count($result[$catIdx]['sub_categories']) + 1,
+        'name' => $invCfg['sub_category_name'],
+        'item_groups' => $itemGroups,
+    ];
 }
 
 // Benchmark data

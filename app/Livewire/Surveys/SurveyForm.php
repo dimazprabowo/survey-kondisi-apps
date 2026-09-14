@@ -109,6 +109,17 @@ class SurveyForm extends Component
         $items = $this->getTemplateItems();
         foreach ($items as $item) {
             $response = $existing->get($item->id);
+
+            if ($item->item_type === \App\Enums\SurveyItemType::Inventory) {
+                $this->responses[$item->id] = [
+                    'qty' => $response?->qty ?? '',
+                    'specification' => $response?->specification ?? '',
+                    'note' => $response?->note ?? '',
+                ];
+
+                continue;
+            }
+
             $this->responses[$item->id] = [
                 'scores' => $response?->scores ?? [],
                 'note' => $response?->note ?? '',
@@ -129,6 +140,16 @@ class SurveyForm extends Component
         $this->responses = [];
         $items = $this->getTemplateItems();
         foreach ($items as $item) {
+            if ($item->item_type === \App\Enums\SurveyItemType::Inventory) {
+                $this->responses[$item->id] = [
+                    'qty' => '',
+                    'specification' => '',
+                    'note' => '',
+                ];
+
+                continue;
+            }
+
             $scores = [];
             foreach ($item->score_labels as $label) {
                 $scores[$label] = '';

@@ -143,6 +143,7 @@ class SurveyTemplateService
                                 'survey_item_group_id' => $newIg->id,
                                 'code' => $item->code,
                                 'name' => $item->name,
+                                'item_type' => $item->item_type,
                                 'score_labels' => $item->score_labels,
                                 'has_date_fields' => $item->has_date_fields,
                                 'order_num' => $item->order_num,
@@ -253,12 +254,14 @@ class SurveyTemplateService
                         $itemOrder = 0;
                         foreach ($igData['items'] ?? [] as $itemData) {
                             $itemOrder++;
+                            $itemType = $itemData['item_type'] ?? 'score';
                             $itemAttrs = [
                                 'survey_item_group_id' => $ig->id,
                                 'code' => $itemData['code'] ?? '',
                                 'name' => $itemData['name'] ?? '',
-                                'score_labels' => $itemData['score_labels'] ?? ['C', 'V'],
-                                'has_date_fields' => (bool) ($itemData['has_date_fields'] ?? false),
+                                'item_type' => $itemType,
+                                'score_labels' => $itemType === 'inventory' ? [] : ($itemData['score_labels'] ?? ['C', 'V']),
+                                'has_date_fields' => $itemType === 'inventory' ? false : (bool) ($itemData['has_date_fields'] ?? false),
                                 'order_num' => $itemData['order_num'] ?? $itemOrder,
                             ];
 

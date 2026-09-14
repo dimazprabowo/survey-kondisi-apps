@@ -88,6 +88,7 @@ class TemplateForm extends Component
                             'id' => $item->id,
                             'code' => $item->code ?? '',
                             'name' => $item->name,
+                            'item_type' => $item->item_type?->value ?? 'score',
                             'score_labels' => $item->score_labels ?? ['C', 'V'],
                             'has_date_fields' => (bool) $item->has_date_fields,
                             'order_num' => $item->order_num,
@@ -139,6 +140,7 @@ class TemplateForm extends Component
             'id' => null,
             'code' => '',
             'name' => '',
+            'item_type' => 'score',
             'score_labels' => ['C', 'V'],
             'has_date_fields' => false,
             'order_num' => 1,
@@ -164,6 +166,7 @@ class TemplateForm extends Component
             'categories.*.sub_categories.*.item_groups.*.items' => ['nullable', 'array'],
             'categories.*.sub_categories.*.item_groups.*.items.*.code' => ['nullable', 'string', 'max:50'],
             'categories.*.sub_categories.*.item_groups.*.items.*.name' => ['required', 'string', 'max:500'],
+            'categories.*.sub_categories.*.item_groups.*.items.*.item_type' => ['required', 'in:'.implode(',', \App\Enums\SurveyItemType::values())],
             'categories.*.sub_categories.*.item_groups.*.items.*.score_labels' => ['nullable', 'array'],
             'categories.*.sub_categories.*.item_groups.*.items.*.has_date_fields' => ['boolean'],
         ];
@@ -369,6 +372,21 @@ class TemplateForm extends Component
     {
         $labels = array_filter(array_map('trim', explode(',', $value)));
         $this->categories[$catIndex]['sub_categories'][$subIndex]['item_groups'][$igIndex]['items'][$itemIndex]['score_labels'] = $labels ?: ['C', 'V'];
+    }
+
+    /**
+     * Switch item type between 'score' and 'inventory'.
+     * Inventory items don't have score_labels/has_date_fields (filled with qty & specification at survey time).
+     */
+    public function updateItemType($catIndex, $subIndex, $igIndex, $itemIndex, $value)
+    {
+        $this->categories[$catIndex]['sub_categories'][$subIndex]['item_groups'][$igIndex]['items'][$itemIndex]['item_type'] = $value;
+        if ($value === 'inventory') {
+            $this->categories[$catIndex]['sub_categories'][$subIndex]['item_groups'][$igIndex]['items'][$itemIndex]['score_labels'] = [];
+            $this->categories[$catIndex]['sub_categories'][$subIndex]['item_groups'][$igIndex]['items'][$itemIndex]['has_date_fields'] = false;
+        } elseif (empty($this->categories[$catIndex]['sub_categories'][$subIndex]['item_groups'][$igIndex]['items'][$itemIndex]['score_labels'])) {
+            $this->categories[$catIndex]['sub_categories'][$subIndex]['item_groups'][$igIndex]['items'][$itemIndex]['score_labels'] = ['C', 'V'];
+        }
     }
 
     public function save(SurveyTemplateService $service)

@@ -158,6 +158,7 @@
                                     @php
                                         $igAvg = $this->calculateItemGroupAvg($itemGroup->id);
                                         $firstItem = $itemGroup->items->first();
+                                        $isInventoryGroup = $firstItem && $firstItem->item_type === \App\Enums\SurveyItemType::Inventory;
                                         $scoreLabels = $firstItem ? $firstItem->score_labels : ['C', 'V'];
                                     @endphp
                                     <!-- Item Group -->
@@ -166,82 +167,110 @@
                                             <div class="text-sm font-medium text-gray-900 dark:text-white">
                                                 @if($itemGroup->code){{ $itemGroup->code }}. @endif{{ $itemGroup->name }}
                                             </div>
-                                            <div class="flex items-center gap-2">
-                                                <span class="text-xs text-gray-500 dark:text-gray-400">Avg:</span>
-                                                @if($igAvg !== null)
-                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ survey_score_badge_class($igAvg) }}">
-                                                        {{ number_format($igAvg, 2) }}
-                                                    </span>
-                                                @else
-                                                    <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
-                                                @endif
-                                            </div>
+                                            @unless($isInventoryGroup)
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs text-gray-500 dark:text-gray-400">Avg:</span>
+                                                    @if($igAvg !== null)
+                                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ survey_score_badge_class($igAvg) }}">
+                                                            {{ number_format($igAvg, 2) }}
+                                                        </span>
+                                                    @else
+                                                        <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
+                                                    @endif
+                                                </div>
+                                            @endunless
                                         </div>
 
-                                        <!-- Score header row -->
                                         <div class="overflow-x-auto custom-scrollbar">
                                             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                                                     <tr>
                                                         <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">No</th>
                                                         <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Item</th>
-                                                        @foreach($scoreLabels as $label)
-                                                            <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-20">{{ $label }}</th>
-                                                        @endforeach
-                                                        <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-20">Avg</th>
+                                                        @if($isInventoryGroup)
+                                                            <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-24">Qty</th>
+                                                            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Spesifikasi</th>
+                                                        @else
+                                                            @foreach($scoreLabels as $label)
+                                                                <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-20">{{ $label }}</th>
+                                                            @endforeach
+                                                            <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-20">Avg</th>
+                                                        @endif
                                                         <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Note</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                                     @foreach($itemGroup->items as $item)
-                                                        @php
-                                                            $itemAvg = $this->calculateItemAvg($item->id);
-                                                            $response = $this->responses[$item->id] ?? ['scores' => [], 'note' => ''];
-                                                        @endphp
-                                                        <tr wire:key="item-{{ $item->id }}" class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                                                            <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{{ $item->code }}</td>
-                                                            <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
-                                                                {{ $item->name }}
-                                                                @if($item->has_date_fields)
-                                                                    <div class="mt-1 flex flex-col gap-1">
-                                                                        <div class="flex items-center gap-1">
-                                                                            <span class="text-xs text-gray-400 w-14">Issued:</span>
-                                                                            <input type="date" wire:model="responses.{{ $item->id }}.date_issued" class="text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white" />
-                                                                        </div>
-                                                                        <div class="flex items-center gap-1">
-                                                                            <span class="text-xs text-gray-400 w-14">Exp:</span>
-                                                                            <input type="date" wire:model="responses.{{ $item->id }}.date_expired" class="text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white" />
-                                                                        </div>
-                                                                    </div>
-                                                                @endif
-                                                            </td>
-                                                            @foreach($item->score_labels as $label)
+                                                        @if($item->item_type === \App\Enums\SurveyItemType::Inventory)
+                                                            <tr wire:key="item-{{ $item->id }}" class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                                                <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{{ $item->code }}</td>
+                                                                <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ $item->name }}</td>
                                                                 <td class="px-3 py-2 text-center">
-                                                                    <select wire:model.live="responses.{{ $item->id }}.scores.{{ $label }}"
-                                                                        class="w-16 text-sm border border-gray-300 dark:border-gray-600 rounded px-1 py-1 dark:bg-gray-700 dark:text-white text-center focus:ring-2 focus:ring-blue-500">
-                                                                        <option value="">-</option>
-                                                                        <option value="1">1</option>
-                                                                        <option value="2">2</option>
-                                                                        <option value="3">3</option>
-                                                                        <option value="4">4</option>
-                                                                    </select>
+                                                                    <input type="number" min="0" wire:model="responses.{{ $item->id }}.qty"
+                                                                        placeholder="0"
+                                                                        class="w-20 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white text-center focus:ring-2 focus:ring-blue-500" />
                                                                 </td>
-                                                            @endforeach
-                                                            <td class="px-3 py-2 text-center">
-                                                                @if($itemAvg !== null)
-                                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ survey_score_badge_class($itemAvg) }}">
-                                                                        {{ number_format($itemAvg, 2) }}
-                                                                    </span>
-                                                                @else
-                                                                    <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
-                                                                @endif
-                                                            </td>
-                                                            <td class="px-3 py-2">
-                                                                <input type="text" wire:model="responses.{{ $item->id }}.note"
-                                                                    placeholder="Lokasi temuan+kondisi kerusakan"
-                                                                    class="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500" />
-                                                            </td>
-                                                        </tr>
+                                                                <td class="px-3 py-2">
+                                                                    <input type="text" wire:model="responses.{{ $item->id }}.specification"
+                                                                        placeholder="Spesifikasi alat"
+                                                                        class="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500" />
+                                                                </td>
+                                                                <td class="px-3 py-2">
+                                                                    <input type="text" wire:model="responses.{{ $item->id }}.note"
+                                                                        placeholder="Catatan"
+                                                                        class="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500" />
+                                                                </td>
+                                                            </tr>
+                                                        @else
+                                                            @php
+                                                                $itemAvg = $this->calculateItemAvg($item->id);
+                                                                $response = $this->responses[$item->id] ?? ['scores' => [], 'note' => ''];
+                                                            @endphp
+                                                            <tr wire:key="item-{{ $item->id }}" class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                                                <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{{ $item->code }}</td>
+                                                                <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
+                                                                    {{ $item->name }}
+                                                                    @if($item->has_date_fields)
+                                                                        <div class="mt-1 flex flex-col gap-1">
+                                                                            <div class="flex items-center gap-1">
+                                                                                <span class="text-xs text-gray-400 w-14">Issued:</span>
+                                                                                <input type="date" wire:model="responses.{{ $item->id }}.date_issued" class="text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white" />
+                                                                            </div>
+                                                                            <div class="flex items-center gap-1">
+                                                                                <span class="text-xs text-gray-400 w-14">Exp:</span>
+                                                                                <input type="date" wire:model="responses.{{ $item->id }}.date_expired" class="text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white" />
+                                                                            </div>
+                                                                        </div>
+                                                                    @endif
+                                                                </td>
+                                                                @foreach($item->score_labels as $label)
+                                                                    <td class="px-3 py-2 text-center">
+                                                                        <select wire:model.live="responses.{{ $item->id }}.scores.{{ $label }}"
+                                                                            class="w-16 text-sm border border-gray-300 dark:border-gray-600 rounded px-1 py-1 dark:bg-gray-700 dark:text-white text-center focus:ring-2 focus:ring-blue-500">
+                                                                            <option value="">-</option>
+                                                                            <option value="1">1</option>
+                                                                            <option value="2">2</option>
+                                                                            <option value="3">3</option>
+                                                                            <option value="4">4</option>
+                                                                        </select>
+                                                                    </td>
+                                                                @endforeach
+                                                                <td class="px-3 py-2 text-center">
+                                                                    @if($itemAvg !== null)
+                                                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ survey_score_badge_class($itemAvg) }}">
+                                                                            {{ number_format($itemAvg, 2) }}
+                                                                        </span>
+                                                                    @else
+                                                                        <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
+                                                                    @endif
+                                                                </td>
+                                                                <td class="px-3 py-2">
+                                                                    <input type="text" wire:model="responses.{{ $item->id }}.note"
+                                                                        placeholder="Lokasi temuan+kondisi kerusakan"
+                                                                        class="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500" />
+                                                                </td>
+                                                            </tr>
+                                                        @endif
                                                     @endforeach
                                                 </tbody>
                                             </table>
@@ -255,21 +284,23 @@
             </div>
         </div>
 
-        <!-- Action Bar -->
-        <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-end">
-            <!-- Draft auto-save indicator (create mode only) -->
-            @if(! $editMode)
-                <div class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mr-auto" x-show="lastSaved" x-cloak>
-                    <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                    </svg>
-                    <span>Draft tersimpan <span x-text="lastSaved"></span></span>
-                </div>
-            @endif
-            <x-cancel-button wire:click="cancel" target="cancel" class="w-full sm:w-auto" />
-            <x-loading-button type="submit" target="save" variant="primary" size="lg" loadingText="Menyimpan..." class="w-full sm:w-auto">
-                {{ $editMode ? 'Update Survey' : 'Simpan Survey' }}
-            </x-loading-button>
+        <!-- Action Bar (Sticky, width matches cards above) -->
+        <div class="sticky bottom-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-3 px-4 sm:px-6 z-10">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-end">
+                <!-- Draft auto-save indicator (create mode only) -->
+                @if(! $editMode)
+                    <div class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mr-auto" x-show="lastSaved" x-cloak>
+                        <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span>Draft tersimpan <span x-text="lastSaved"></span></span>
+                    </div>
+                @endif
+                <x-cancel-button wire:click="cancel" target="cancel" class="w-full sm:w-auto sm:min-w-[160px]" />
+                <x-loading-button type="submit" target="save" variant="primary" size="lg" loadingText="Menyimpan..." class="w-full sm:w-auto sm:min-w-[160px]">
+                    {{ $editMode ? 'Update Survey' : 'Simpan Survey' }}
+                </x-loading-button>
+            </div>
         </div>
     </form>
 </div>

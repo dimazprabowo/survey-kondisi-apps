@@ -12,6 +12,7 @@ class SurveyItem extends Model
         'survey_item_group_id',
         'code',
         'name',
+        'item_type',
         'score_labels',
         'has_date_fields',
         'order_num',
@@ -19,6 +20,7 @@ class SurveyItem extends Model
 
     protected $casts = [
         'survey_item_group_id' => 'integer',
+        'item_type' => \App\Enums\SurveyItemType::class,
         'score_labels' => 'array',
         'has_date_fields' => 'boolean',
         'order_num' => 'integer',

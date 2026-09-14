@@ -118,9 +118,14 @@ Jika butuh variant baru (mis. warna/size berbeda), EXTEND komponen yang ada via 
 - `<x-loading-button>` variants:
   - Filled: `primary`, `success`, `danger`, `warning`, `secondary` (background berwarna).
   - Icon-only: `icon-blue`, `icon-red`, `icon-green`, `icon-amber`, `icon-gray` (text berwarna + subtle hover bg, padding p-1.5).
-  - Built-in `icon` prop (string, pakai outline Heroicons): `edit`, `delete`, `view`, `reset`, `check`, `close`, `external`, `plus`, `send`, `download`, `pdf`, `excel`.
+  - Built-in `icon` prop (string, pakai outline Heroicons): `edit`, `delete`, `view`, `reset`, `check`, `close`, `external`, `plus`, `send`, `download`, `pdf`, `excel`, `copy`, `arrow-up`, `arrow-down`.
     Contoh: `<x-loading-button wire:click="edit({{ $item->id }})" target="edit({{ $item->id }})" variant="icon-blue" icon="edit" wire:key="btn-edit-{{ $item->id }}" title="Edit" />`.
-  - Custom icon via slot `<x-slot:icon>` masih didukung untuk ikon non-builtin.
+  - KONVENSI ICON EXPORT (WAJIB konsisten di SEMUA halaman export):
+    - Tombol Export Excel -> SELALU pakai `icon="excel"` (document-download style). DILARANG inline `<x-slot:icon>` SVG untuk excel.
+    - Tombol Export PDF -> SELALU pakai `icon="pdf"` (document style). DILARANG inline `<x-slot:icon>` SVG untuk pdf.
+    - Contoh: `<x-loading-button wire:click="exportExcel" target="exportExcel" variant="success" size="md" loadingText="Exporting..." title="Export Excel" icon="excel">Excel</x-loading-button>`.
+    - Single source of truth icon ada di `components/loading-button.blade.php` (`$builtinIcons`). Jangan duplikasi SVG path di view.
+  - Custom icon via slot `<x-slot:icon>` HANYA untuk ikon non-builtin (tidak ada di daftar di atas). JANGAN pakai slot untuk icon yang sudah ada built-in prop-nya.
   - Prop `iconClass` untuk override ukuran ikon (default `w-5 h-5` icon-only, `w-4 h-4` filled).
 - Toggle switch: `<x-toggle-switch>` (WAJIB untuk status active/inactive toggle).
   Props: `active` (bool), `target` (wire target untuk loading), `disabled` (bool), `title`, `activeColor` (blue/green/red/amber, default blue).

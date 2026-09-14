@@ -52,19 +52,19 @@ class SurveyTemplateSeeder extends Seeder
             array_values($ringkasCats)
         );
 
-        // 3. Template Machinery — hanya kategori IV, V, VI (Deck Machinery, Engine Room, Pump & Pipe)
-        $machineryCats = array_filter($data['categories'], fn ($c) => in_array($c['category_code'], ['IV', 'V', 'VI']));
+        // 3. Template Machinery — hanya kategori IV, V (Deck Machinery, Engine Room & Machinery termasuk Pump/Pipe)
+        $machineryCats = array_filter($data['categories'], fn ($c) => in_array($c['category_code'], ['IV', 'V']));
         $this->createTemplate(
             'Survey Kondisi Kapal (Machinery)',
             'SK-MACHINERY',
-            'Template khusus machinery berisi 3 kategori: Deck Machinery & Outfitting, Engine Room & Machinery, dan Pump & Pipe.',
+            'Template khusus machinery berisi 2 kategori: Deck Machinery & Outfitting dan Engine Room & Machinery (termasuk Pump & Pipe).',
             true,
             false,
             array_values($machineryCats)
         );
 
-        // 4. Template Safety & Navigation — hanya kategori VII, VIII (Bridge & Navigation, Ship Safety Operation)
-        $safetyCats = array_filter($data['categories'], fn ($c) => in_array($c['category_code'], ['VII', 'VIII']));
+        // 4. Template Safety & Navigation — hanya kategori VI, VII (Bridge & Navigation, Ship Safety Operation)
+        $safetyCats = array_filter($data['categories'], fn ($c) => in_array($c['category_code'], ['VI', 'VII']));
         $this->createTemplate(
             'Survey Kondisi Kapal (Safety & Navigation)',
             'SK-SAFETY',
@@ -134,6 +134,7 @@ class SurveyTemplateSeeder extends Seeder
                             'survey_item_group_id' => $itemGroup->id,
                             'code' => $itemData['code'] ?? '',
                             'name' => $itemData['name'],
+                            'item_type' => $itemData['item_type'] ?? 'score',
                             'score_labels' => $itemData['score_labels'] ?? ['C', 'V'],
                             'has_date_fields' => $itemData['has_date_fields'] ?? false,
                             'order_num' => $itemOrder,

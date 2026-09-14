@@ -114,16 +114,18 @@ class SurveyService
     public function saveResponse(int $surveyId, int $itemId, array $data): void
     {
         $scores = $data['scores'] ?? [];
-        $avgScore = $this->calculateItemAvg($scores);
+        $avgScore = $scores ? $this->calculateItemAvg($scores) : null;
 
         SurveyResponse::updateOrCreate(
             ['survey_id' => $surveyId, 'survey_item_id' => $itemId],
             [
                 'scores' => $scores ?: null,
                 'avg_score' => $avgScore,
-                'date_issued' => $data['date_issued'] ?? null,
-                'date_expired' => $data['date_expired'] ?? null,
-                'note' => $data['note'] ?? null,
+                'date_issued' => ($data['date_issued'] ?? null) ?: null,
+                'date_expired' => ($data['date_expired'] ?? null) ?: null,
+                'qty' => isset($data['qty']) && $data['qty'] !== '' ? (int) $data['qty'] : null,
+                'specification' => ($data['specification'] ?? null) ?: null,
+                'note' => ($data['note'] ?? null) ?: null,
             ]
         );
     }
