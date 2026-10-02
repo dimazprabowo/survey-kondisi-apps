@@ -2,26 +2,138 @@
     x-data="{
         autoSaveTimer: null,
         lastSaved: null,
+        dirty: false,
         init() {
-            // Auto-save to Livewire session (debounced 2s) on any input change
-            this.$wire.$watch('responses', () => this.scheduleSave());
-            this.$wire.$watch('groupNotes', () => this.scheduleSave());
-            this.$wire.$watch('ship_id', () => this.scheduleSave());
-            this.$wire.$watch('survey_date', () => this.scheduleSave());
-            this.$wire.$watch('surveyor', () => this.scheduleSave());
-            this.$wire.$watch('location', () => this.scheduleSave());
-            this.$wire.$watch('notes', () => this.scheduleSave());
-            this.$wire.$watch('status', () => this.scheduleSave());
+            // Draft yang ter-restore = form sudah punya perubahan
+            this.dirty = !! this.$wire.hasDraft;
+            // Watch top-level scalars (covers programmatic changes like searchable-select)
+            this.$wire.$watch('ship_id', () => this.onFieldChange('ship_id'));
+            this.$wire.$watch('survey_date', () => this.onFieldChange());
+            this.$wire.$watch('surveyor', () => this.onFieldChange());
+            this.$wire.$watch('location', () => this.onFieldChange());
+            this.$wire.$watch('notes', () => this.onFieldChange());
+            this.$wire.$watch('status', () => this.onFieldChange('status'));
+            // Nested arrays (responses/groupNotes) are covered by delegated
+            // input/change listeners on the root — root-level $watch cannot
+            // detect deferred nested mutations.
+        },
+        flashField(el) {
+            el.classList.remove('autosave-glow');
+            void el.offsetWidth; // restart animasi
+            el.classList.add('autosave-glow');
+        },
+        flashByModel(model) {
+            const el = this.$root.querySelector('.autosave-field[data-model=' + model + ']');
+            if (el) this.flashField(el);
+        },
+        markDirty() {
+            this.dirty = true;
+        },
+        onFieldChange(model = null) {
+            this.dirty = true;
+            if (model && this.$wire.autoSave) this.flashByModel(model);
+            this.scheduleSave();
+        },
+        handleInput(e) {
+            this.dirty = true;
+            if (! this.$wire.autoSave) return;
+            const el = e.target;
+            // Flash hijau langsung saat field diubah (sekali saja)
+            if (el.classList.contains('autosave-field')) {
+                this.flashField(el);
+            }
+            this.scheduleSave();
         },
         scheduleSave() {
-            if (this.$wire.editMode) return;
+            if (! this.$wire.autoSave) return;
             clearTimeout(this.autoSaveTimer);
             this.autoSaveTimer = setTimeout(async () => {
                 await this.$wire.saveDraft();
                 this.lastSaved = new Date().toLocaleTimeString('id-ID');
-            }, 2000);
+            }, 1200);
+        },
+        handleKeydown(e) {
+            const key = e.key;
+            if (key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'ArrowLeft' && key !== 'ArrowRight') return;
+            const el = e.target;
+            if (! el.classList || ! el.classList.contains('autosave-field')) return;
+
+            // Input teks/angka/textarea: panah kiri/kanan tetap untuk caret,
+            // hijack hanya saat caret sudah di ujung teks
+            const isText = el.type === 'text' || el.type === 'number' || el.tagName === 'TEXTAREA';
+            if (isText) {
+                const val = el.value || '';
+                const start = el.selectionStart;
+                const end = el.selectionEnd;
+                if (key === 'ArrowLeft' && start !== null && start !== 0) return;
+                if (key === 'ArrowRight' && end !== null && end !== val.length) return;
+                if (el.tagName === 'TEXTAREA') {
+                    const firstNl = val.indexOf('\n');
+                    const lastNl = val.lastIndexOf('\n');
+                    if (key === 'ArrowUp' && firstNl !== -1 && start > firstNl) return;
+                    if (key === 'ArrowDown' && lastNl !== -1 && ! (start > lastNl)) return;
+                }
+            }
+
+            const target = this.nextField(el, key);
+            if (target) {
+                e.preventDefault();
+                target.focus();
+                if (typeof target.select === 'function') target.select();
+            }
+        },
+        nextField(el, key) {
+            const fields = Array.from(this.$root.querySelectorAll('.autosave-field'))
+                .filter((f) => ! f.disabled && f.offsetParent !== null);
+            const idx = fields.indexOf(el);
+            if (idx === -1) return null;
+
+            // Kiri/kanan = field sebelumnya/berikutnya (DOM order = visual order)
+            if (key === 'ArrowLeft') return fields[idx - 1] || null;
+            if (key === 'ArrowRight') return fields[idx + 1] || null;
+
+            // Atas/bawah = field terdekat di kolom yang sama (seperti sel Excel)
+            const cur = el.getBoundingClientRect();
+            const cx = cur.left + cur.width / 2;
+            const cy = cur.top + cur.height / 2;
+            let best = null;
+            let bestScore = Infinity;
+
+            fields.forEach((f) => {
+                if (f === el) return;
+                const r = f.getBoundingClientRect();
+                const fy = r.top + r.height / 2;
+                const dy = key === 'ArrowDown' ? fy - cy : cy - fy;
+                if (! (dy > 4)) return;
+                const dx = Math.abs(r.left + r.width / 2 - cx);
+                const score = dy + dx * 3;
+                if (bestScore - score > 0) {
+                    bestScore = score;
+                    best = f;
+                }
+            });
+
+            return best;
+        },
+        requestCancel() {
+            if (! this.dirty) {
+                this.$wire.cancel();
+                return;
+            }
+            this.$dispatch('confirm-cancel-survey', {
+                title: 'Buang Perubahan?',
+                message: 'Ada perubahan yang belum disimpan. Jika dibatalkan, semua isian form akan dibuang.',
+                confirmText: 'Ya, Buang',
+                cancelText: 'Kembali',
+                type: 'warning',
+                action: 'cancel',
+            });
         }
     }"
+    x-on:input="handleInput($event)"
+    x-on:change="handleInput($event)"
+    x-on:keydown="handleKeydown($event)"
+    x-on:group-note-removed.window="onFieldChange()"
 >
     <!-- Breadcrumb -->
     <nav class="mb-6 flex" aria-label="Breadcrumb">
@@ -38,43 +150,49 @@
         <!-- Header Section -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
             <div class="px-4 py-5 sm:p-6">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
-                    Informasi Survey
-                </h3>
+                <div class="flex items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        Informasi Survey
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Auto Save</span>
+                        <x-toggle-switch wire:click="toggleAutoSave" :active="$autoSave" target="toggleAutoSave" activeColor="green" title="Aktifkan/nonaktifkan penyimpanan draft otomatis" />
+                    </div>
+                </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <x-input-label for="ship_id" value="Kapal" :required="true" />
-                        <x-searchable-select wire:model="ship_id" :options="$this->shipOptions" placeholder="Pilih kapal" searchPlaceholder="Cari kapal..." />
+                        <x-searchable-select wire:model="ship_id" :options="$this->shipOptions" placeholder="Pilih kapal" searchPlaceholder="Cari kapal..." class="autosave-field" data-model="ship_id" />
                         <x-input-error :messages="$errors->get('ship_id')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="survey_date" value="Tanggal Survey" :required="true" />
-                        <x-text-input wire:model="survey_date" id="survey_date" type="date" class="mt-1 block w-full" />
+                        <x-text-input wire:model="survey_date" id="survey_date" type="date" class="mt-1 block w-full autosave-field" />
                         <x-input-error :messages="$errors->get('survey_date')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="status" value="Status" :required="true" />
-                        <x-searchable-select wire:model="status" :options="$this->statusOptions" placeholder="Pilih status" />
+                        <x-searchable-select wire:model="status" :options="$this->statusOptions" placeholder="Pilih status" class="autosave-field" data-model="status" />
                         <x-input-error :messages="$errors->get('status')" class="mt-2" />
                     </div>
                     <div class="sm:col-span-2 lg:col-span-3">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <x-input-label for="surveyor" value="Surveyor" />
-                                <x-text-input wire:model="surveyor" id="surveyor" type="text" class="mt-1 block w-full" placeholder="Nama surveyor" />
+                                <x-text-input wire:model="surveyor" id="surveyor" type="text" class="mt-1 block w-full autosave-field" placeholder="Nama surveyor" />
                                 <x-input-error :messages="$errors->get('surveyor')" class="mt-2" />
                             </div>
                             <div>
                                 <x-input-label for="location" value="Lokasi" />
-                                <x-text-input wire:model="location" id="location" type="text" class="mt-1 block w-full" placeholder="Lokasi survey" />
+                                <x-text-input wire:model="location" id="location" type="text" class="mt-1 block w-full autosave-field" placeholder="Lokasi survey" />
                                 <x-input-error :messages="$errors->get('location')" class="mt-2" />
                             </div>
                         </div>
                     </div>
                     <div class="sm:col-span-2 lg:col-span-3" x-data="{ notesLength: @js(strlen($this->notes ?? '')) }">
                         <x-input-label for="notes" value="Catatan" />
-                        <textarea wire:model="notes" id="notes" rows="3" maxlength="5000" x-on:input="notesLength = $event.target.value.length" placeholder="Catatan tambahan" class="mt-1 block w-full rounded-md shadow-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-blue-500 focus:ring-blue-500 resize-y"></textarea>
+                        <textarea wire:model="notes" id="notes" rows="3" maxlength="5000" x-on:input="notesLength = $event.target.value.length" placeholder="Catatan tambahan" class="mt-1 block w-full rounded-md shadow-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-blue-500 focus:ring-blue-500 resize-y autosave-field"></textarea>
                         <div class="flex justify-between items-center mt-1">
                             <x-input-error :messages="$errors->get('notes')" />
                             <span class="text-xs ml-auto" :class="notesLength > 4500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'" x-text="notesLength + '/5000'"></span>
@@ -222,12 +340,12 @@
                                                                 <td class="px-3 py-2 text-center">
                                                                     <input type="number" min="0" wire:model="responses.{{ $item->id }}.qty"
                                                                         placeholder="0"
-                                                                        class="w-20 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white text-center focus:ring-2 focus:ring-blue-500" />
+                                                                        class="autosave-field w-20 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white text-center focus:ring-2 focus:ring-blue-500" />
                                                                 </td>
                                                                 <td class="px-3 py-2">
                                                                     <input type="text" wire:model="responses.{{ $item->id }}.specification"
                                                                         placeholder="Spesifikasi alat"
-                                                                        class="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500" />
+                                                                        class="autosave-field w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500" />
                                                                 </td>
                                                             </tr>
                                                         @else
@@ -242,11 +360,11 @@
                                                                         <div class="mt-1 flex flex-col gap-1">
                                                                             <div class="flex items-center gap-1">
                                                                                 <span class="text-xs text-gray-400 w-14">Issued:</span>
-                                                                                <input type="date" wire:model="responses.{{ $item->id }}.date_issued" class="text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white" />
+                                                                                <input type="date" wire:model="responses.{{ $item->id }}.date_issued" class="autosave-field text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white" />
                                                                             </div>
                                                                             <div class="flex items-center gap-1">
                                                                                 <span class="text-xs text-gray-400 w-14">Exp:</span>
-                                                                                <input type="date" wire:model="responses.{{ $item->id }}.date_expired" class="text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white" />
+                                                                                <input type="date" wire:model="responses.{{ $item->id }}.date_expired" class="autosave-field text-xs border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 dark:bg-gray-700 dark:text-white" />
                                                                             </div>
                                                                         </div>
                                                                     @endif
@@ -254,7 +372,7 @@
                                                                 @foreach($item->score_labels as $label)
                                                                     <td class="px-3 py-2 text-center">
                                                                         <select wire:model.live="responses.{{ $item->id }}.scores.{{ $label }}"
-                                                                            class="w-16 text-sm border border-gray-300 dark:border-gray-600 rounded px-1 py-1 dark:bg-gray-700 dark:text-white text-center focus:ring-2 focus:ring-blue-500">
+                                                                            class="autosave-field w-16 text-sm border border-gray-300 dark:border-gray-600 rounded px-1 py-1 dark:bg-gray-700 dark:text-white text-center focus:ring-2 focus:ring-blue-500">
                                                                             <option value="">-</option>
                                                                             <option value="1">1</option>
                                                                             <option value="2">2</option>
@@ -288,9 +406,9 @@
                                                         <div class="flex items-center gap-2">
                                                             <input type="text" wire:model="groupNotes.{{ $itemGroup->id }}.{{ $noteIndex }}" maxlength="500"
                                                                 placeholder="Catatan {{ $noteIndex + 1 }} untuk grup ini"
-                                                                class="flex-1 min-w-0 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500" />
-                                                            <x-loading-button wire:click="removeGroupNote({{ $itemGroup->id }}, {{ $noteIndex }})"
-                                                                target="removeGroupNote({{ $itemGroup->id }}, {{ $noteIndex }})"
+                                                                class="autosave-field flex-1 min-w-0 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500" />
+                                                            <x-loading-button wire:click="confirmRemoveGroupNote({{ $itemGroup->id }}, {{ $noteIndex }})"
+                                                                target="confirmRemoveGroupNote({{ $itemGroup->id }}, {{ $noteIndex }})"
                                                                 variant="icon-red" icon="delete" wire:key="gn-del-{{ $itemGroup->id }}-{{ $noteIndex }}" title="Hapus catatan" />
                                                         </div>
                                                         <x-input-error :messages="$errors->get('groupNotes.'.$itemGroup->id.'.'.$noteIndex)" class="mt-1" />
@@ -298,6 +416,7 @@
                                                 @endforeach
                                                 <div>
                                                     <x-loading-button wire:click="addGroupNote({{ $itemGroup->id }})" target="addGroupNote({{ $itemGroup->id }})"
+                                                        x-on:click="markDirty()"
                                                         variant="secondary" size="sm" icon="plus" wire:key="gn-add-{{ $itemGroup->id }}" loadingText="" title="Tambah catatan">
                                                         Tambah Catatan
                                                     </x-loading-button>
@@ -321,20 +440,22 @@
         <!-- Action Bar (Sticky, width matches cards above) -->
         <div class="sticky bottom-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-3 px-4 sm:px-6 z-10">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-end">
-                <!-- Draft auto-save indicator (create mode only) -->
-                @if(! $editMode)
-                    <div class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mr-auto" x-show="lastSaved" x-cloak>
-                        <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                        </svg>
-                        <span>Draft tersimpan <span x-text="lastSaved"></span></span>
-                    </div>
-                @endif
-                <x-cancel-button wire:click="cancel" target="cancel" class="w-full sm:w-auto sm:min-w-[160px]" />
+                <!-- Draft auto-save indicator -->
+                <div class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mr-auto" x-show="lastSaved" x-cloak>
+                    <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span>Draft tersimpan <span x-text="lastSaved"></span></span>
+                </div>
+                <x-cancel-button x-on:click="requestCancel()" target="cancel" class="w-full sm:w-auto sm:min-w-[160px]" />
                 <x-loading-button type="submit" target="save" variant="primary" size="lg" loadingText="Menyimpan..." class="w-full sm:w-auto sm:min-w-[160px]">
                     {{ $editMode ? 'Update Survey' : 'Simpan Survey' }}
                 </x-loading-button>
             </div>
         </div>
     </form>
+
+    <!-- Modal konfirmasi buang perubahan saat Batal -->
+    <x-confirm-modal eventName="confirm-cancel-survey" />
+    <x-confirm-modal eventName="confirm-remove-note" />
 </div>

@@ -128,11 +128,16 @@ class SurveyTemplateSeeder extends Seeder
                     $itemOrder = 0;
                     foreach ($igData['items'] as $itemData) {
                         $itemOrder++;
+                        // Sanitasi: buang label formula Excel yang bocor (mis. '=AVERAGE(G63:G65)')
+                        $scoreLabels = array_values(array_filter(
+                            $itemData['score_labels'] ?? ['C', 'V'],
+                            fn ($l) => is_string($l) && $l !== '' && ! str_starts_with(trim($l), '=')
+                        ));
                         SurveyItem::create([
                             'survey_item_group_id' => $itemGroup->id,
                             'name' => $itemData['name'],
                             'item_type' => $itemData['item_type'] ?? 'score',
-                            'score_labels' => $itemData['score_labels'] ?? ['C', 'V'],
+                            'score_labels' => $scoreLabels,
                             'has_date_fields' => $itemData['has_date_fields'] ?? false,
                             'order_num' => $itemOrder,
                         ]);

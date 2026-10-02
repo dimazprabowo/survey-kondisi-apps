@@ -13,6 +13,7 @@ use App\Services\SurveyService;
 use App\Services\SurveyTemplateService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class SurveyForm extends Component
@@ -52,11 +53,16 @@ class SurveyForm extends Component
     // Active sub-category tab (within active category)
     public $activeSubCategory;
 
-    // Draft auto-save indicator (for UI feedback)
-    public bool $draftSaved = false;
+    // Preferensi auto-save draft (persist di session)
+    public bool $autoSave = true;
+
+    // True jika ada draft yang ter-restore saat mount (form punya perubahan tersimpan)
+    public bool $hasDraft = false;
 
     public function mount(?Survey $survey = null)
     {
+        $this->autoSave = session()->get('survey_autosave', true);
+
         if ($survey && $survey->exists) {
             $this->authorize('update', $survey);
             $this->survey = $survey;
@@ -76,6 +82,9 @@ class SurveyForm extends Component
             $firstCat = $this->categories->first();
             $this->activeCategory = $firstCat?->id ?? 1;
             $this->activeSubCategory = $firstCat?->subCategories->first()?->id;
+
+            // Restore draft if exists (auto-recovery after reload)
+            $this->hasDraft = $this->loadDraft();
         } else {
             $this->authorize('create', Survey::class);
             $this->survey_date = now()->format('Y-m-d');
@@ -107,7 +116,7 @@ class SurveyForm extends Component
             $this->activeSubCategory = $firstCat?->subCategories->first()?->id;
 
             // Restore draft if exists (auto-recovery after reload)
-            $this->loadDraft();
+            $this->hasDraft = $this->loadDraft();
         }
     }
 
@@ -406,6 +415,26 @@ class SurveyForm extends Component
         $this->groupNotes[$itemGroupId][] = '';
     }
 
+    public function confirmRemoveGroupNote($itemGroupId, $index): void
+    {
+        if (! isset($this->groupNotes[$itemGroupId][$index])) {
+            return;
+        }
+
+        $note = trim($this->groupNotes[$itemGroupId][$index] ?? '');
+        $preview = $note !== '' ? '"'.Str::limit($note, 60).'"' : '(catatan kosong)';
+
+        $this->dispatch('confirm-remove-note',
+            action: 'removeGroupNote',
+            actionParams: [$itemGroupId, $index],
+            title: 'Hapus Catatan',
+            message: "Catatan {$preview} akan dihapus dari grup ini.",
+            confirmText: 'Ya, Hapus',
+            cancelText: 'Batal',
+            type: 'danger',
+        );
+    }
+
     public function removeGroupNote($itemGroupId, $index): void
     {
         if (! isset($this->groupNotes[$itemGroupId][$index])) {
@@ -414,6 +443,10 @@ class SurveyForm extends Component
 
         unset($this->groupNotes[$itemGroupId][$index]);
         $this->groupNotes[$itemGroupId] = array_values($this->groupNotes[$itemGroupId]);
+
+        $this->dispatch('confirm-remove-note-close');
+        $this->dispatch('group-note-removed');
+        $this->notifyInfo('Catatan berhasil dihapus.');
     }
 
     public function save(SurveyService $service)
@@ -441,6 +474,7 @@ class SurveyForm extends Component
                 $this->authorize('update', $survey);
                 $service->update($survey, $data);
                 $service->saveResponses($survey->id, $this->responses, $this->groupNotes);
+                $this->clearDraft();
                 $this->notifySuccess('Survey berhasil diupdate!');
             } else {
                 $this->authorize('create', Survey::class);
@@ -461,24 +495,41 @@ class SurveyForm extends Component
     public function cancel()
     {
         // Clear draft when user intentionally leaves the form
-        if (! $this->editMode) {
-            $this->clearDraft();
-        }
+        $this->clearDraft();
 
         return $this->redirect(route('surveys.index'), navigate: true);
     }
 
     /**
+     * Toggle auto-save draft on/off (preferensi disimpan di session).
+     */
+    public function toggleAutoSave()
+    {
+        $this->autoSave = ! $this->autoSave;
+        session()->put('survey_autosave', $this->autoSave);
+    }
+
+    /**
+     * Session key untuk draft — terpisah per mode agar draft create
+     * tidak tabrakan dengan draft edit survey lain.
+     */
+    protected function draftKey(): string
+    {
+        return $this->editMode
+            ? 'survey_draft_edit_'.$this->surveyId
+            : 'survey_draft_create_'.$this->survey_template_id;
+    }
+
+    /**
      * Save draft to Livewire session (called from Alpine auto-save).
-     * Only works in create mode (edit mode data is already in DB).
      */
     public function saveDraft()
     {
-        if ($this->editMode) {
+        if (! $this->autoSave) {
             return;
         }
 
-        session()->put('survey_draft_'.$this->survey_template_id, [
+        session()->put($this->draftKey(), [
             'ship_id' => $this->ship_id,
             'survey_date' => $this->survey_date,
             'surveyor' => $this->surveyor,
@@ -491,17 +542,14 @@ class SurveyForm extends Component
             'activeSubCategory' => $this->activeSubCategory,
             'saved_at' => now()->toIso8601String(),
         ]);
-
-        $this->draftSaved = true;
     }
 
     /**
-     * Restore draft from session (called in mount, create mode only).
+     * Restore draft from session (called in mount).
      */
     protected function loadDraft(): bool
     {
-        $key = 'survey_draft_'.$this->survey_template_id;
-        $draft = session()->get($key);
+        $draft = session()->get($this->draftKey());
 
         if (! $draft || empty($draft['responses'])) {
             return false;
@@ -545,7 +593,7 @@ class SurveyForm extends Component
      */
     protected function clearDraft(): void
     {
-        session()->forget('survey_draft_'.$this->survey_template_id);
+        session()->forget($this->draftKey());
     }
 
     public function render()

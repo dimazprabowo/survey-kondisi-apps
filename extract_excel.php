@@ -141,7 +141,9 @@ foreach ($sheetConfigs as $cfg) {
             $currentScoreLabels = [];
             foreach (['E', 'F', 'G', 'H'] as $col) {
                 $val = trim((string) ($row[$col] ?? ''));
-                if ($val !== '' && strtoupper($val) !== 'AVG') {
+                // Skip empty, literal AVG header, dan formula cell (mis. =AVERAGE(G63:G65)
+                // pada kolom Avg di sheet SHIP SAFETY OPERATION)
+                if ($val !== '' && strtoupper($val) !== 'AVG' && ! str_starts_with($val, '=')) {
                     $currentScoreLabels[] = strtoupper($val);
                 }
             }
