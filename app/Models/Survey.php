@@ -58,6 +58,11 @@ class Survey extends Model
         return $this->hasMany(SurveyResponse::class);
     }
 
+    public function groupNotes(): HasMany
+    {
+        return $this->hasMany(SurveyGroupNote::class);
+    }
+
     public function scopeDraft($query)
     {
         return $query->where('status', SurveyStatus::Draft);

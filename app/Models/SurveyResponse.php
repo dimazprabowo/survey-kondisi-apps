@@ -16,7 +16,6 @@ class SurveyResponse extends Model
         'date_expired',
         'qty',
         'specification',
-        'note',
     ];
 
     protected $casts = [

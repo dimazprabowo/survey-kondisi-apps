@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\SurveyStatus;
 use App\Models\Survey;
+use App\Models\SurveyGroupNote;
 use App\Models\SurveyItem;
 use App\Models\SurveyResponse;
 use App\Traits\HasDynamicLike;
@@ -87,7 +88,6 @@ class SurveyService
             'avg_score' => null,
             'date_issued' => null,
             'date_expired' => null,
-            'note' => null,
         ])->toArray();
 
         // Chunk to avoid huge inserts
@@ -124,19 +124,50 @@ class SurveyService
                 'date_expired' => ($data['date_expired'] ?? null) ?: null,
                 'qty' => isset($data['qty']) && $data['qty'] !== '' ? (int) $data['qty'] : null,
                 'specification' => ($data['specification'] ?? null) ?: null,
-                'note' => ($data['note'] ?? null) ?: null,
             ]
         );
     }
 
-    public function saveResponses(int $surveyId, array $responses): void
+    public function saveResponses(int $surveyId, array $responses, array $groupNotes = []): void
     {
-        DB::transaction(function () use ($surveyId, $responses) {
+        DB::transaction(function () use ($surveyId, $responses, $groupNotes) {
             foreach ($responses as $itemId => $data) {
                 $this->saveResponse($surveyId, (int) $itemId, $data);
             }
+            $this->saveGroupNotes($surveyId, $groupNotes);
             $this->recalculateOverall($surveyId);
         });
+    }
+
+    /**
+     * Save notes attached to item groups (dynamic list per item group).
+     * Rows are anonymous — delete + re-insert keeps order_num consistent.
+     * Empty notes are skipped so no dead rows remain.
+     */
+    public function saveGroupNotes(int $surveyId, array $groupNotes): void
+    {
+        foreach ($groupNotes as $itemGroupId => $notes) {
+            $itemGroupId = (int) $itemGroupId;
+
+            SurveyGroupNote::where('survey_id', $surveyId)
+                ->where('survey_item_group_id', $itemGroupId)
+                ->delete();
+
+            $orderNum = 0;
+            foreach ((array) $notes as $note) {
+                $note = trim((string) $note);
+                if ($note === '') {
+                    continue;
+                }
+
+                SurveyGroupNote::create([
+                    'survey_id' => $surveyId,
+                    'survey_item_group_id' => $itemGroupId,
+                    'note' => $note,
+                    'order_num' => $orderNum++,
+                ]);
+            }
+        }
     }
 
     /**

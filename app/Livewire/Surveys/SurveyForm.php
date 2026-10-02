@@ -40,11 +40,17 @@ class SurveyForm extends Component
 
     public $notes;
 
-    // Dynamic responses: [item_id => ['scores' => [label => value], 'note' => '', 'date_issued' => '', 'date_expired' => '']]
+    // Dynamic responses: [item_id => ['scores' => [label => value], 'qty' => '', 'specification' => '', 'date_issued' => '', 'date_expired' => '']]
     public $responses = [];
+
+    // Group-level notes: [item_group_id => ['catatan 1', 'catatan 2', ...]] — list dinamis per grup item
+    public $groupNotes = [];
 
     // Active tab (category)
     public $activeCategory = 1;
+
+    // Active sub-category tab (within active category)
+    public $activeSubCategory;
 
     // Draft auto-save indicator (for UI feedback)
     public bool $draftSaved = false;
@@ -66,6 +72,10 @@ class SurveyForm extends Component
 
             // Load existing responses
             $this->loadResponses();
+
+            $firstCat = $this->categories->first();
+            $this->activeCategory = $firstCat?->id ?? 1;
+            $this->activeSubCategory = $firstCat?->subCategories->first()?->id;
         } else {
             $this->authorize('create', Survey::class);
             $this->survey_date = now()->format('Y-m-d');
@@ -92,7 +102,9 @@ class SurveyForm extends Component
             }
 
             $this->initEmptyResponses();
-            $this->activeCategory = $this->categories->first()?->id ?? 1;
+            $firstCat = $this->categories->first();
+            $this->activeCategory = $firstCat?->id ?? 1;
+            $this->activeSubCategory = $firstCat?->subCategories->first()?->id;
 
             // Restore draft if exists (auto-recovery after reload)
             $this->loadDraft();
@@ -114,7 +126,6 @@ class SurveyForm extends Component
                 $this->responses[$item->id] = [
                     'qty' => $response?->qty ?? '',
                     'specification' => $response?->specification ?? '',
-                    'note' => $response?->note ?? '',
                 ];
 
                 continue;
@@ -122,7 +133,6 @@ class SurveyForm extends Component
 
             $this->responses[$item->id] = [
                 'scores' => $response?->scores ?? [],
-                'note' => $response?->note ?? '',
                 'date_issued' => $response?->date_issued?->format('Y-m-d') ?? '',
                 'date_expired' => $response?->date_expired?->format('Y-m-d') ?? '',
             ];
@@ -133,6 +143,15 @@ class SurveyForm extends Component
                 }
             }
         }
+
+        $this->groupNotes = $this->initGroupNotes(
+            \App\Models\SurveyGroupNote::where('survey_id', $this->surveyId)
+                ->orderBy('order_num')
+                ->get()
+                ->groupBy('survey_item_group_id')
+                ->map(fn ($rows) => $rows->pluck('note')->all())
+                ->all()
+        );
     }
 
     protected function initEmptyResponses(): void
@@ -144,7 +163,6 @@ class SurveyForm extends Component
                 $this->responses[$item->id] = [
                     'qty' => '',
                     'specification' => '',
-                    'note' => '',
                 ];
 
                 continue;
@@ -156,11 +174,40 @@ class SurveyForm extends Component
             }
             $this->responses[$item->id] = [
                 'scores' => $scores,
-                'note' => '',
                 'date_issued' => '',
                 'date_expired' => '',
             ];
         }
+
+        $this->groupNotes = $this->initGroupNotes();
+    }
+
+    /**
+     * Build groupNotes map keyed by item group id (stable across reorder).
+     * Each entry is a list of notes: [groupId => [note, note, ...]].
+     */
+    protected function initGroupNotes(array $existing = []): array
+    {
+        $notes = [];
+        foreach ($this->getTemplateItemGroupIds() as $groupId) {
+            $notes[$groupId] = isset($existing[$groupId]) ? (array) $existing[$groupId] : [];
+        }
+
+        return $notes;
+    }
+
+    /**
+     * Get item group ids for the selected template.
+     */
+    protected function getTemplateItemGroupIds(): array
+    {
+        if (! $this->survey_template_id) {
+            return [];
+        }
+
+        return \App\Models\SurveyItemGroup::whereHas('subCategory.category', function ($q) {
+            $q->where('survey_template_id', $this->survey_template_id);
+        })->pluck('id')->all();
     }
 
     /**
@@ -190,6 +237,7 @@ class SurveyForm extends Component
             'location' => ['nullable', 'string', 'max:255'],
             'status' => ['required', 'string', 'in:'.implode(',', SurveyStatus::values())],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'groupNotes.*.*' => ['nullable', 'string', 'max:500'],
         ];
     }
 
@@ -203,6 +251,7 @@ class SurveyForm extends Component
             'location' => 'lokasi',
             'status' => 'status',
             'notes' => 'catatan',
+            'groupNotes.*.*' => 'catatan grup item',
         ];
     }
 
@@ -341,6 +390,30 @@ class SurveyForm extends Component
     public function setCategory($categoryId): void
     {
         $this->activeCategory = $categoryId;
+        $this->activeSubCategory = $this->categories
+            ->firstWhere('id', $categoryId)
+            ?->subCategories->first()?->id;
+    }
+
+    public function setSubCategory($subCategoryId): void
+    {
+        $this->activeSubCategory = $subCategoryId;
+    }
+
+    public function addGroupNote($itemGroupId): void
+    {
+        $this->groupNotes[$itemGroupId] = $this->groupNotes[$itemGroupId] ?? [];
+        $this->groupNotes[$itemGroupId][] = '';
+    }
+
+    public function removeGroupNote($itemGroupId, $index): void
+    {
+        if (! isset($this->groupNotes[$itemGroupId][$index])) {
+            return;
+        }
+
+        unset($this->groupNotes[$itemGroupId][$index]);
+        $this->groupNotes[$itemGroupId] = array_values($this->groupNotes[$itemGroupId]);
     }
 
     public function save(SurveyService $service)
@@ -367,12 +440,12 @@ class SurveyForm extends Component
                 $survey = Survey::findOrFail($this->surveyId);
                 $this->authorize('update', $survey);
                 $service->update($survey, $data);
-                $service->saveResponses($survey->id, $this->responses);
+                $service->saveResponses($survey->id, $this->responses, $this->groupNotes);
                 $this->notifySuccess('Survey berhasil diupdate!');
             } else {
                 $this->authorize('create', Survey::class);
                 $survey = $service->create($data);
-                $service->saveResponses($survey->id, $this->responses);
+                $service->saveResponses($survey->id, $this->responses, $this->groupNotes);
                 $this->clearDraft();
                 $this->notifySuccess('Survey berhasil dibuat!');
             }
@@ -413,7 +486,9 @@ class SurveyForm extends Component
             'status' => $this->status,
             'notes' => $this->notes,
             'responses' => $this->responses,
+            'groupNotes' => $this->groupNotes,
             'activeCategory' => $this->activeCategory,
+            'activeSubCategory' => $this->activeSubCategory,
             'saved_at' => now()->toIso8601String(),
         ]);
 
@@ -446,7 +521,21 @@ class SurveyForm extends Component
             }
         }
 
+        // Merge draft group notes (strip obsolete per-item 'note' keys if any)
+        foreach ($this->groupNotes as $groupId => $empty) {
+            if (isset($draft['groupNotes'][$groupId])) {
+                $this->groupNotes[$groupId] = $draft['groupNotes'][$groupId];
+            }
+        }
+
         $this->activeCategory = $draft['activeCategory'] ?? $this->activeCategory;
+
+        // Restore sub-category tab, fall back ke sub pertama dari kategori aktif
+        $activeCat = $this->categories->firstWhere('id', $this->activeCategory);
+        $draftSubId = $draft['activeSubCategory'] ?? null;
+        $this->activeSubCategory = $activeCat?->subCategories->contains('id', $draftSubId)
+            ? $draftSubId
+            : $activeCat?->subCategories->first()?->id;
 
         return true;
     }

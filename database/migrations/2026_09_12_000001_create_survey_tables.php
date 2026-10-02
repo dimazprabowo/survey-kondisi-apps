@@ -110,7 +110,7 @@ return new class extends Migration
             $table->index('survey_number');
         });
 
-        // 4. Survey responses (per item, simpan scores + notes + dates)
+        // 5. Survey responses (per item, simpan scores + qty + dates)
         Schema::create('survey_responses', function (Blueprint $table) {
             $table->id();
             $table->foreignId('survey_id')->constrained()->cascadeOnDelete();
@@ -121,16 +121,28 @@ return new class extends Migration
             $table->date('date_expired')->nullable();
             $table->unsignedInteger('qty')->nullable();
             $table->string('specification')->nullable();
-            $table->text('note')->nullable();
             $table->timestamps();
 
             $table->unique(['survey_id', 'survey_item_id']);
             $table->index('survey_id');
         });
+
+        // 6. Group-level notes (per survey, per item group, list dinamis berurutan)
+        Schema::create('survey_group_notes', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('survey_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('survey_item_group_id')->constrained()->cascadeOnDelete();
+            $table->string('note', 500);
+            $table->unsignedInteger('order_num')->default(0);
+            $table->timestamps();
+
+            $table->index(['survey_id', 'survey_item_group_id']);
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('survey_group_notes');
         Schema::dropIfExists('survey_responses');
         Schema::dropIfExists('surveys');
         Schema::dropIfExists('survey_items');
