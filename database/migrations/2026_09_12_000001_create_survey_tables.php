@@ -48,7 +48,6 @@ return new class extends Migration
         Schema::create('survey_categories', function (Blueprint $table) {
             $table->id();
             $table->foreignId('survey_template_id')->constrained()->cascadeOnDelete();
-            $table->string('code', 10);
             $table->string('label');
             $table->unsignedInteger('order_num')->default(0);
             $table->timestamps();
@@ -69,7 +68,6 @@ return new class extends Migration
         Schema::create('survey_item_groups', function (Blueprint $table) {
             $table->id();
             $table->foreignId('survey_sub_category_id')->constrained()->cascadeOnDelete();
-            $table->string('code')->nullable();
             $table->string('name');
             $table->unsignedInteger('order_num')->default(0);
             $table->timestamps();
@@ -80,7 +78,6 @@ return new class extends Migration
         Schema::create('survey_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('survey_item_group_id')->constrained()->cascadeOnDelete();
-            $table->string('code')->nullable();
             $table->string('name');
             $table->enum('item_type', ['score', 'inventory'])->default('score');
             $table->json('score_labels')->nullable();

@@ -118,7 +118,6 @@ class SurveyTemplateService
             foreach ($source->categories as $cat) {
                 $newCat = SurveyCategory::create([
                     'survey_template_id' => $newTemplate->id,
-                    'code' => $cat->code,
                     'label' => $cat->label,
                     'order_num' => $cat->order_num,
                 ]);
@@ -133,7 +132,6 @@ class SurveyTemplateService
                     foreach ($sub->itemGroups as $ig) {
                         $newIg = SurveyItemGroup::create([
                             'survey_sub_category_id' => $newSub->id,
-                            'code' => $ig->code,
                             'name' => $ig->name,
                             'order_num' => $ig->order_num,
                         ]);
@@ -141,7 +139,6 @@ class SurveyTemplateService
                         foreach ($ig->items as $item) {
                             SurveyItem::create([
                                 'survey_item_group_id' => $newIg->id,
-                                'code' => $item->code,
                                 'name' => $item->name,
                                 'item_type' => $item->item_type,
                                 'score_labels' => $item->score_labels,
@@ -185,7 +182,6 @@ class SurveyTemplateService
                 $catOrder++;
                 $catAttrs = [
                     'survey_template_id' => $template->id,
-                    'code' => $catData['code'] ?? '',
                     'label' => $catData['label'] ?? '',
                     'order_num' => $catData['order_num'] ?? $catOrder,
                 ];
@@ -232,7 +228,6 @@ class SurveyTemplateService
                         $igOrder++;
                         $igAttrs = [
                             'survey_sub_category_id' => $sub->id,
-                            'code' => $igData['code'] ?? '',
                             'name' => $igData['name'] ?? '',
                             'order_num' => $igData['order_num'] ?? $igOrder,
                         ];
@@ -257,7 +252,6 @@ class SurveyTemplateService
                             $itemType = $itemData['item_type'] ?? 'score';
                             $itemAttrs = [
                                 'survey_item_group_id' => $ig->id,
-                                'code' => $itemData['code'] ?? '',
                                 'name' => $itemData['name'] ?? '',
                                 'item_type' => $itemType,
                                 'score_labels' => $itemType === 'inventory' ? [] : ($itemData['score_labels'] ?? ['C', 'V']),

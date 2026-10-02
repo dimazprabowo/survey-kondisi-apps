@@ -10,7 +10,6 @@ class SurveyCategory extends Model
 {
     protected $fillable = [
         'survey_template_id',
-        'code',
         'label',
         'order_num',
     ];

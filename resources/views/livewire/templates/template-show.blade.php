@@ -64,20 +64,20 @@
                     @foreach($template->categories as $cat)
                         <div wire:key="cat-{{ $cat->id }}" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                             <div class="bg-gray-50 dark:bg-gray-700/50 px-4 py-2">
-                                <span class="text-sm font-bold text-gray-700 dark:text-gray-300">{{ $cat->code }}. {{ $cat->label }}</span>
+                                <span class="text-sm font-bold text-gray-700 dark:text-gray-300">{{ to_roman($loop->iteration) }}. {{ $cat->label }}</span>
                             </div>
                             <div class="px-4 py-3 space-y-3">
                                 @foreach($cat->subCategories as $sub)
                                     <div wire:key="sub-{{ $sub->id }}" class="border-l-2 border-blue-300 dark:border-blue-700 pl-3">
-                                        <div class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ $sub->name }}</div>
+                                        <div class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ $sub->order_num }}. {{ $sub->name }}</div>
                                         <div class="mt-2 space-y-2">
                                             @foreach($sub->itemGroups as $ig)
                                                 <div wire:key="ig-{{ $ig->id }}" class="bg-gray-50 dark:bg-gray-700/30 rounded p-2">
-                                                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300">{{ $ig->code }} {{ $ig->name }}</div>
+                                                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300">{{ $sub->order_num }}.{{ $ig->order_num }} {{ $ig->name }}</div>
                                                     <div class="mt-1 ml-3 space-y-1">
                                                         @foreach($ig->items as $item)
                                                             <div wire:key="item-{{ $item->id }}" class="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                                                                <span class="font-mono text-gray-400 dark:text-gray-500">{{ $item->code }}</span>
+                                                                <span class="font-mono text-gray-400 dark:text-gray-500">{{ to_letter($loop->iteration) }}.</span>
                                                                 <span>{{ $item->name }}</span>
                                                                 <span class="text-gray-400 dark:text-gray-600">[{{ implode(', ', $item->score_labels ?? []) }}]</span>
                                                                 @if($item->has_date_fields)

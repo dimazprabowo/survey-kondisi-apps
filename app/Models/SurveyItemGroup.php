@@ -10,7 +10,6 @@ class SurveyItemGroup extends Model
 {
     protected $fillable = [
         'survey_sub_category_id',
-        'code',
         'name',
         'order_num',
     ];

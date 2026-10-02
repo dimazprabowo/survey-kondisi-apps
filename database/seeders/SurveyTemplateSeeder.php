@@ -103,7 +103,6 @@ class SurveyTemplateSeeder extends Seeder
             $catOrder++;
             $category = SurveyCategory::create([
                 'survey_template_id' => $template->id,
-                'code' => $catData['category_code'],
                 'label' => $catData['category_label'],
                 'order_num' => $catOrder,
             ]);
@@ -122,7 +121,6 @@ class SurveyTemplateSeeder extends Seeder
                     $igOrder++;
                     $itemGroup = SurveyItemGroup::create([
                         'survey_sub_category_id' => $subCategory->id,
-                        'code' => $igData['code'] ?? '',
                         'name' => $igData['name'],
                         'order_num' => $igOrder,
                     ]);
@@ -132,7 +130,6 @@ class SurveyTemplateSeeder extends Seeder
                         $itemOrder++;
                         SurveyItem::create([
                             'survey_item_group_id' => $itemGroup->id,
-                            'code' => $itemData['code'] ?? '',
                             'name' => $itemData['name'],
                             'item_type' => $itemData['item_type'] ?? 'score',
                             'score_labels' => $itemData['score_labels'] ?? ['C', 'V'],

@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Enums\SurveyStatus;
 use App\Models\Survey;
-use App\Models\SurveyCategory;
 use App\Models\SurveyItem;
 use App\Models\SurveyResponse;
 use App\Traits\HasDynamicLike;
@@ -230,85 +229,6 @@ class SurveyService
         Survey::where('id', $surveyId)->update(['overall_cap_score' => $overall]);
 
         return $overall;
-    }
-
-    /**
-     * Get survey with full hierarchy for display (eager loaded).
-     */
-    public function getSurveyWithHierarchy(int $surveyId): ?Survey
-    {
-        return Survey::with([
-            'ship',
-            'creator',
-            'template',
-            'responses.item.itemGroup.subCategory.category',
-        ])->find($surveyId);
-    }
-
-    /**
-     * Get template structure with responses mapped for a survey.
-     */
-    public function getTemplateWithResponses(int $surveyId): array
-    {
-        $survey = $this->getSurveyWithHierarchy($surveyId);
-        if (! $survey) {
-            return [];
-        }
-
-        $responseMap = $survey->responses->keyBy('survey_item_id');
-
-        $categories = SurveyCategory::with([
-            'subCategories.itemGroups.items',
-        ])
-            ->where('survey_template_id', $survey->survey_template_id)
-            ->orderBy('order_num')
-            ->get();
-
-        $result = [];
-        foreach ($categories as $cat) {
-            $catData = [
-                'id' => $cat->id,
-                'code' => $cat->code,
-                'label' => $cat->label,
-                'sub_categories' => [],
-            ];
-            foreach ($cat->subCategories as $sc) {
-                $scData = [
-                    'id' => $sc->id,
-                    'order_num' => $sc->order_num,
-                    'name' => $sc->name,
-                    'item_groups' => [],
-                ];
-                foreach ($sc->itemGroups as $ig) {
-                    $igData = [
-                        'id' => $ig->id,
-                        'code' => $ig->code,
-                        'name' => $ig->name,
-                        'items' => [],
-                    ];
-                    foreach ($ig->items as $item) {
-                        $response = $responseMap->get($item->id);
-                        $igData['items'][] = [
-                            'id' => $item->id,
-                            'code' => $item->code,
-                            'name' => $item->name,
-                            'score_labels' => $item->score_labels,
-                            'has_date_fields' => $item->has_date_fields,
-                            'scores' => $response?->scores ?? [],
-                            'avg_score' => $response?->avg_score,
-                            'date_issued' => $response?->date_issued,
-                            'date_expired' => $response?->date_expired,
-                            'note' => $response?->note,
-                        ];
-                    }
-                    $scData['item_groups'][] = $igData;
-                }
-                $catData['sub_categories'][] = $scData;
-            }
-            $result[] = $catData;
-        }
-
-        return $result;
     }
 
     /**

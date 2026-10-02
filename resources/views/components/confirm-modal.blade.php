@@ -38,7 +38,8 @@
         this.confirmLoading = true;
         if (this.action) {
             if (this.actionParams !== null) {
-                $wire.call(this.action, this.actionParams);
+                const params = Array.isArray(this.actionParams) ? this.actionParams : [this.actionParams];
+                $wire.call(this.action, ...params);
             } else {
                 $wire.call(this.action);
             }

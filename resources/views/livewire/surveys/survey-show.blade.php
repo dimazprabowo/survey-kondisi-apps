@@ -69,7 +69,7 @@
                     @php $isActive = $this->activeCategory == $cat->id; @endphp
                     <button type="button" wire:click="setCategory({{ $cat->id }})"
                         class="px-3 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors {{ $isActive ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30' }}">
-                        {{ $cat->code }}. {{ $cat->label }}
+                        {{ to_roman($loop->iteration) }}. {{ $cat->label }}
                     </button>
                 @endforeach
             </nav>
@@ -79,7 +79,7 @@
             @foreach($categories as $cat)
                 @if($this->activeCategory == $cat->id)
                     <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
-                        {{ $cat->code }}. {{ $cat->label }}
+                        {{ to_roman($loop->iteration) }}. {{ $cat->label }}
                     </h4>
 
                     @foreach($cat->subCategories as $subCat)
@@ -96,7 +96,7 @@
                                 @endphp
                                 <div class="mb-4 border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
                                     <div class="bg-gray-50 dark:bg-gray-700/20 px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">
-                                        @if($itemGroup->code){{ $itemGroup->code }}. @endif{{ $itemGroup->name }}
+                                        {{ $subCat->order_num }}.{{ $itemGroup->order_num }} {{ $itemGroup->name }}
                                     </div>
 
                                     <div class="overflow-x-auto">
@@ -125,7 +125,7 @@
                                                         $avg = $response?->avg_score;
                                                     @endphp
                                                     <tr wire:key="item-{{ $item->id }}">
-                                                        <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{{ $item->code }}</td>
+                                                        <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{{ to_letter($loop->iteration) }}</td>
                                                         <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">
                                                             {{ $item->name }}
                                                             @if($item->has_date_fields && $response)

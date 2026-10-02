@@ -172,6 +172,17 @@ Jika butuh variant baru (mis. warna/size berbeda), EXTEND komponen yang ada via 
    - Konvensi: `wire:key="btn-{action}-{id}"` (button), `wire:key="toggle-{action}-{id}"` (toggle switch).
    - Parent loop (`<tr>`, `<div>`) juga WAJIB punya `wire:key="row-{id}"` / `wire:key="item-{id}"`.
    - Button di luar loop (header action: export, create, save) TIDAK perlu `wire:key` (hanya 1 instance, tidak ada risk mismatch).
+7. **Stale input value antar-entitas pada nested/tab form (morph carryover)**:
+   - `<input wire:model="...">` TIDAK punya `value` attribute di HTML hasil render — nilai di-set client-side. Saat morph, jika node input dipakai ulang (`wire:key` sama) tapi path `wire:model` berubah ke entitas lain (mis. pindah tab), Livewire **mempertahankan nilai DOM lama** → nilai entitas A "bocor" tampil di input entitas B.
+   - SOLUSI: tambahkan `row_key` stabil per baris di data array — `uuid` untuk baris baru (`(string) Str::uuid()`), `'{prefix}-{id}'` untuk persisted (mis. `'cat-'.$cat->id`). Pakai di `wire:key` semua wrapper (`tab-{row_key}`, `sub-{row_key}`, dst).
+   - Untuk layout tab (hanya tab aktif di-render), WAJIB bungkus panel konten dengan `wire:key="cat-panel-{row_key}"` agar saat ganti tab seluruh subtree di-replace (node input dibuat ulang fresh), bukan di-morph dengan nilai DOM lama.
+   - Extra key `row_key` di array aman — `saveStructure`/service hanya membaca key eksplisit.
+8. **Stale `wire:model` binding saat baris di-REORDER (arrow up/down/left/right)**:
+   - Di Livewire 4, `wire:model` diimplementasikan sebagai closure `x-model` yang meng-capture **expression string** (mis. `items.0.name`) saat directive init — BUKAN dievaluasi ulang dari atribut.
+   - Saat keyed row dipindah (swap posisi), morph memindahkan node & update atribut `wire:model` ke index baru, TAPI directive tidak re-init → input tetap terikat path index LAMA → menampilkan & menulis data item yang salah (terlihat "nama terduplikasi"/tidak berpindah).
+   - SOLUSI: sertakan **index posisi** di `wire:key` wrapper yang berisi input `wire:model`, mis. `wire:key="item-{row_key}-{itemIndex}"`, `cat-panel-{row_key}-{catIndex}`, `sub-panel-{row_key}-{subIndex}`, `ig-{row_key}-{igIndex}`. Saat posisi berubah, key berubah → node di-render ulang fresh → directive init dengan expression baru yang benar.
+   - Key gabungan `{row_key}-{index}` (bukan hanya `{index}`) tetap mempertahankan identitas entitas untuk baris yang TIDAK berpindah (pending value aman).
+   - Alternatif pola aman: input tanpa `wire:model` — pakai `value="{{ ... }}"` + `wire:blur="updateX(...idx, $event.target.value)"` (seperti pola `updateScoreLabels`/`updateItemType`).
 
 # File Storage (pola WAJIB)
 Alur async via worker (JANGAN simpan file langsung di request):

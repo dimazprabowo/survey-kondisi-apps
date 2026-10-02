@@ -215,6 +215,57 @@ if (! function_exists('survey_score_color')) {
     }
 }
 
+if (! function_exists('to_roman')) {
+    /**
+     * Convert an integer to a Roman numeral (1 -> I, 2 -> II, 4 -> IV, ...).
+     * Used for positional numbering of survey categories in the UI.
+     */
+    function to_roman(int $number): string
+    {
+        if ($number <= 0) {
+            return '';
+        }
+
+        $map = [
+            1000 => 'M', 900 => 'CM', 500 => 'D', 400 => 'CD',
+            100 => 'C', 90 => 'XC', 50 => 'L', 40 => 'XL',
+            10 => 'X', 9 => 'IX', 5 => 'V', 4 => 'IV', 1 => 'I',
+        ];
+
+        $result = '';
+        foreach ($map as $value => $numeral) {
+            while ($number >= $value) {
+                $result .= $numeral;
+                $number -= $value;
+            }
+        }
+
+        return $result;
+    }
+}
+
+if (! function_exists('to_letter')) {
+    /**
+     * Convert an integer to lowercase Excel-style letters (1 -> a, 26 -> z, 27 -> aa, ...).
+     * Used for positional numbering of survey items in the UI.
+     */
+    function to_letter(int $number): string
+    {
+        if ($number <= 0) {
+            return '';
+        }
+
+        $result = '';
+        while ($number > 0) {
+            $number--;
+            $result = chr(97 + ($number % 26)).$result;
+            $number = intdiv($number, 26);
+        }
+
+        return $result;
+    }
+}
+
 if (! function_exists('survey_score_badge_class')) {
     /**
      * Get the Tailwind badge class for a survey CAP score.

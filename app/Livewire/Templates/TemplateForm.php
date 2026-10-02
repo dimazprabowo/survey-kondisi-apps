@@ -6,6 +6,7 @@ use App\Livewire\Traits\HasNotification;
 use App\Models\SurveyTemplate;
 use App\Services\SurveyTemplateService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class TemplateForm extends Component
@@ -31,6 +32,12 @@ class TemplateForm extends Component
 
     // Nested structure: categories → sub_categories → item_groups → items
     public $categories = [];
+
+    // Active category tab (index into $categories)
+    public int $activeCategoryTab = 0;
+
+    // Active sub-category tab within the active category panel
+    public int $activeSubCategoryTab = 0;
 
     public function mount(?SurveyTemplate $template = null)
     {
@@ -63,7 +70,7 @@ class TemplateForm extends Component
         foreach ($template->categories as $cat) {
             $catData = [
                 'id' => $cat->id,
-                'code' => $cat->code,
+                'row_key' => 'cat-'.$cat->id,
                 'label' => $cat->label,
                 'order_num' => $cat->order_num,
                 'sub_categories' => [],
@@ -71,6 +78,7 @@ class TemplateForm extends Component
             foreach ($cat->subCategories as $sub) {
                 $subData = [
                     'id' => $sub->id,
+                    'row_key' => 'sub-'.$sub->id,
                     'name' => $sub->name,
                     'order_num' => $sub->order_num,
                     'item_groups' => [],
@@ -78,7 +86,7 @@ class TemplateForm extends Component
                 foreach ($sub->itemGroups as $ig) {
                     $igData = [
                         'id' => $ig->id,
-                        'code' => $ig->code ?? '',
+                        'row_key' => 'ig-'.$ig->id,
                         'name' => $ig->name,
                         'order_num' => $ig->order_num,
                         'items' => [],
@@ -86,7 +94,7 @@ class TemplateForm extends Component
                     foreach ($ig->items as $item) {
                         $igData['items'][] = [
                             'id' => $item->id,
-                            'code' => $item->code ?? '',
+                            'row_key' => 'item-'.$item->id,
                             'name' => $item->name,
                             'item_type' => $item->item_type?->value ?? 'score',
                             'score_labels' => $item->score_labels ?? ['C', 'V'],
@@ -106,7 +114,7 @@ class TemplateForm extends Component
     {
         return [
             'id' => null,
-            'code' => '',
+            'row_key' => (string) Str::uuid(),
             'label' => '',
             'order_num' => 1,
             'sub_categories' => [],
@@ -117,6 +125,7 @@ class TemplateForm extends Component
     {
         return [
             'id' => null,
+            'row_key' => (string) Str::uuid(),
             'name' => '',
             'order_num' => 1,
             'item_groups' => [],
@@ -127,7 +136,7 @@ class TemplateForm extends Component
     {
         return [
             'id' => null,
-            'code' => '',
+            'row_key' => (string) Str::uuid(),
             'name' => '',
             'order_num' => 1,
             'items' => [],
@@ -138,7 +147,7 @@ class TemplateForm extends Component
     {
         return [
             'id' => null,
-            'code' => '',
+            'row_key' => (string) Str::uuid(),
             'name' => '',
             'item_type' => 'score',
             'score_labels' => ['C', 'V'],
@@ -156,15 +165,12 @@ class TemplateForm extends Component
             'is_active' => ['boolean'],
             'is_default' => ['boolean'],
             'categories' => ['required', 'array', 'min:1'],
-            'categories.*.code' => ['nullable', 'string', 'max:10'],
             'categories.*.label' => ['required', 'string', 'max:255'],
             'categories.*.sub_categories' => ['nullable', 'array'],
             'categories.*.sub_categories.*.name' => ['required', 'string', 'max:255'],
             'categories.*.sub_categories.*.item_groups' => ['nullable', 'array'],
-            'categories.*.sub_categories.*.item_groups.*.code' => ['nullable', 'string', 'max:50'],
             'categories.*.sub_categories.*.item_groups.*.name' => ['required', 'string', 'max:255'],
             'categories.*.sub_categories.*.item_groups.*.items' => ['nullable', 'array'],
-            'categories.*.sub_categories.*.item_groups.*.items.*.code' => ['nullable', 'string', 'max:50'],
             'categories.*.sub_categories.*.item_groups.*.items.*.name' => ['required', 'string', 'max:500'],
             'categories.*.sub_categories.*.item_groups.*.items.*.item_type' => ['required', 'in:'.implode(',', \App\Enums\SurveyItemType::values())],
             'categories.*.sub_categories.*.item_groups.*.items.*.score_labels' => ['nullable', 'array'],
@@ -187,17 +193,60 @@ class TemplateForm extends Component
     }
 
     // Category actions
+    public function setActiveCategoryTab($index)
+    {
+        $this->activeCategoryTab = (int) $index;
+        // Sub-category tabs belong to the active category panel — reset when switching categories
+        $this->activeSubCategoryTab = 0;
+    }
+
+    public function setActiveSubCategoryTab($index)
+    {
+        $this->activeSubCategoryTab = (int) $index;
+    }
+
     public function addCategory()
     {
         $this->categories[] = $this->emptyCategory();
         $this->reorderCategories();
+        $this->activeCategoryTab = count($this->categories) - 1;
+    }
+
+    public function confirmRemoveCategory($index)
+    {
+        $index = (int) $index;
+        if (! isset($this->categories[$index])) {
+            return;
+        }
+
+        $label = trim($this->categories[$index]['label'] ?? '') ?: 'Tab Baru';
+
+        $this->dispatch('confirm-remove-category',
+            action: 'removeCategory',
+            actionParams: $index,
+            title: 'Hapus Kategori',
+            message: "Kategori \"{$label}\" beserta seluruh sub kategori, item group, dan item di dalamnya akan dihapus.",
+            confirmText: 'Ya, Hapus',
+            cancelText: 'Batal',
+            type: 'danger',
+        );
     }
 
     public function removeCategory($index)
     {
+        $index = (int) $index;
         unset($this->categories[$index]);
         $this->categories = array_values($this->categories);
         $this->reorderCategories();
+
+        // Keep the active tab pointing at the same (or nearest) category
+        if ($index < $this->activeCategoryTab) {
+            $this->activeCategoryTab--;
+        }
+        $this->activeCategoryTab = min($this->activeCategoryTab, max(count($this->categories) - 1, 0));
+
+        $this->dispatch('confirm-remove-category-close');
+        $this->notifyInfo('Kategori berhasil dihapus.');
     }
 
     public function moveCategoryUp($index)
@@ -209,6 +258,13 @@ class TemplateForm extends Component
         $this->categories[$index - 1] = $this->categories[$index];
         $this->categories[$index] = $temp;
         $this->reorderCategories();
+
+        // Keep the active tab on the same category after the swap
+        if ($this->activeCategoryTab === (int) $index) {
+            $this->activeCategoryTab = $index - 1;
+        } elseif ($this->activeCategoryTab === $index - 1) {
+            $this->activeCategoryTab = (int) $index;
+        }
     }
 
     public function moveCategoryDown($index)
@@ -220,6 +276,12 @@ class TemplateForm extends Component
         $this->categories[$index + 1] = $this->categories[$index];
         $this->categories[$index] = $temp;
         $this->reorderCategories();
+
+        if ($this->activeCategoryTab === (int) $index) {
+            $this->activeCategoryTab = $index + 1;
+        } elseif ($this->activeCategoryTab === $index + 1) {
+            $this->activeCategoryTab = (int) $index;
+        }
     }
 
     protected function reorderCategories(): void
@@ -235,13 +297,46 @@ class TemplateForm extends Component
     {
         $this->categories[$catIndex]['sub_categories'][] = $this->emptySubCategory();
         $this->reorderSubCategories($catIndex);
+        $this->activeSubCategoryTab = count($this->categories[$catIndex]['sub_categories']) - 1;
+    }
+
+    public function confirmRemoveSubCategory($catIndex, $subIndex)
+    {
+        $catIndex = (int) $catIndex;
+        $subIndex = (int) $subIndex;
+        if (! isset($this->categories[$catIndex]['sub_categories'][$subIndex])) {
+            return;
+        }
+
+        $name = trim($this->categories[$catIndex]['sub_categories'][$subIndex]['name'] ?? '') ?: 'Sub Baru';
+
+        $this->dispatch('confirm-remove-sub',
+            action: 'removeSubCategory',
+            actionParams: [$catIndex, $subIndex],
+            title: 'Hapus Sub Kategori',
+            message: "Sub kategori \"{$name}\" beserta seluruh item group dan item di dalamnya akan dihapus.",
+            confirmText: 'Ya, Hapus',
+            cancelText: 'Batal',
+            type: 'danger',
+        );
     }
 
     public function removeSubCategory($catIndex, $subIndex)
     {
+        $catIndex = (int) $catIndex;
+        $subIndex = (int) $subIndex;
         unset($this->categories[$catIndex]['sub_categories'][$subIndex]);
         $this->categories[$catIndex]['sub_categories'] = array_values($this->categories[$catIndex]['sub_categories']);
         $this->reorderSubCategories($catIndex);
+
+        // Keep the active sub tab pointing at the same (or nearest) sub-category
+        if ($subIndex < $this->activeSubCategoryTab) {
+            $this->activeSubCategoryTab--;
+        }
+        $this->activeSubCategoryTab = min($this->activeSubCategoryTab, max(count($this->categories[$catIndex]['sub_categories']) - 1, 0));
+
+        $this->dispatch('confirm-remove-sub-close');
+        $this->notifyInfo('Sub kategori berhasil dihapus.');
     }
 
     public function moveSubCategoryUp($catIndex, $subIndex)
@@ -253,6 +348,12 @@ class TemplateForm extends Component
         $this->categories[$catIndex]['sub_categories'][$subIndex - 1] = $this->categories[$catIndex]['sub_categories'][$subIndex];
         $this->categories[$catIndex]['sub_categories'][$subIndex] = $temp;
         $this->reorderSubCategories($catIndex);
+
+        if ($this->activeSubCategoryTab === (int) $subIndex) {
+            $this->activeSubCategoryTab = $subIndex - 1;
+        } elseif ($this->activeSubCategoryTab === $subIndex - 1) {
+            $this->activeSubCategoryTab = (int) $subIndex;
+        }
     }
 
     public function moveSubCategoryDown($catIndex, $subIndex)
@@ -265,6 +366,12 @@ class TemplateForm extends Component
         $this->categories[$catIndex]['sub_categories'][$subIndex + 1] = $this->categories[$catIndex]['sub_categories'][$subIndex];
         $this->categories[$catIndex]['sub_categories'][$subIndex] = $temp;
         $this->reorderSubCategories($catIndex);
+
+        if ($this->activeSubCategoryTab === (int) $subIndex) {
+            $this->activeSubCategoryTab = $subIndex + 1;
+        } elseif ($this->activeSubCategoryTab === $subIndex + 1) {
+            $this->activeSubCategoryTab = (int) $subIndex;
+        }
     }
 
     protected function reorderSubCategories($catIndex): void
@@ -394,6 +501,14 @@ class TemplateForm extends Component
         try {
             $this->validate();
         } catch (\Illuminate\Validation\ValidationException $e) {
+            // Jump to the first category (and sub-category) tab that has validation errors so the user can see them
+            foreach ($e->validator->errors()->keys() as $key) {
+                if (preg_match('/^categories\.(\d+)(?:\.sub_categories\.(\d+))?/', $key, $m)) {
+                    $this->activeCategoryTab = (int) $m[1];
+                    $this->activeSubCategoryTab = isset($m[2]) ? (int) $m[2] : 0;
+                    break;
+                }
+            }
             $this->notifyValidationError($e);
             throw $e;
         }
