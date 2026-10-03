@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\SurveyStatus;
+use App\Traits\Blameable;
 use App\Traits\HasEncryptedRouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,7 +15,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
 
 class Survey extends Model
 {
-    use HasEncryptedRouteKey, HasFactory, LogsActivity, SoftDeletes;
+    use Blameable, HasEncryptedRouteKey, HasFactory, LogsActivity, SoftDeletes;
 
     protected $fillable = [
         'survey_number',
@@ -48,11 +49,6 @@ class Survey extends Model
     public function template(): BelongsTo
     {
         return $this->belongsTo(SurveyTemplate::class, 'survey_template_id');
-    }
-
-    public function creator(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function responses(): HasMany

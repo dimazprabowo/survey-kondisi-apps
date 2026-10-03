@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Traits\Blameable;
 use App\Traits\HasEncryptedRouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
@@ -13,7 +13,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
 
 class SurveyTemplate extends Model
 {
-    use HasEncryptedRouteKey, HasFactory, LogsActivity, SoftDeletes;
+    use Blameable, HasEncryptedRouteKey, HasFactory, LogsActivity, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -28,11 +28,6 @@ class SurveyTemplate extends Model
         'is_active' => 'boolean',
         'is_default' => 'boolean',
     ];
-
-    public function creator(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'created_by');
-    }
 
     public function categories(): HasMany
     {

@@ -21,6 +21,8 @@ return new class extends Migration
             $table->string('owner')->nullable();
             $table->string('operator')->nullable();
             $table->enum('status', ['active', 'inactive'])->default('active');
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
 
@@ -37,6 +39,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->boolean('is_default')->default(false);
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
 
@@ -104,6 +107,7 @@ return new class extends Migration
             $table->decimal('overall_cap_score', 5, 2)->nullable();
             $table->text('notes')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
 

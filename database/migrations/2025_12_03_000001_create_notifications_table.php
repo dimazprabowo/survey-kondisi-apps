@@ -18,6 +18,8 @@ return new class extends Migration
             $table->string('action_url')->nullable();
             $table->json('data')->nullable();
             $table->timestamp('read_at')->nullable();
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
             $table->index(['user_id', 'read_at']);

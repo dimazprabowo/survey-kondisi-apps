@@ -4,13 +4,14 @@ namespace App\Models;
 
 use App\Enums\ConfigCategory;
 use App\Enums\ConfigDataType;
+use App\Traits\Blameable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 
 class SystemConfiguration extends Model
 {
-    use HasFactory;
+    use Blameable, HasFactory;
 
     protected $fillable = [
         'key',

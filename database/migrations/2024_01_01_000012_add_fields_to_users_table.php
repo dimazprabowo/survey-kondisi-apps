@@ -13,6 +13,8 @@ return new class extends Migration
             $table->string('phone', 20)->nullable()->after('email');
             $table->string('position')->nullable()->after('phone');
             $table->boolean('is_active')->default(true)->after('position');
+            $table->foreignId('created_by')->nullable()->after('is_active')->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->after('created_by')->constrained('users')->nullOnDelete();
 
             $table->index('company_id');
             $table->index('is_active');
@@ -23,7 +25,9 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             $table->dropForeign(['company_id']);
-            $table->dropColumn(['company_id', 'phone', 'position', 'is_active']);
+            $table->dropForeign(['created_by']);
+            $table->dropForeign(['updated_by']);
+            $table->dropColumn(['company_id', 'phone', 'position', 'is_active', 'created_by', 'updated_by']);
         });
     }
 };

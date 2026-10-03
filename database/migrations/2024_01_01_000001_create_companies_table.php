@@ -20,6 +20,8 @@ return new class extends Migration
             $table->string('pic_phone', 20)->nullable();
             $table->string('npwp', 16)->nullable()->unique();
             $table->enum('status', ['active', 'inactive', 'suspended'])->default('active');
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
 

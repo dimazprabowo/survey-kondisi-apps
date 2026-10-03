@@ -13,6 +13,7 @@ return new class extends Migration
             $table->string('name')->nullable(); // null for 1-on-1, set for group
             $table->boolean('is_group')->default(false);
             $table->foreignId('created_by')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
         });
     }
