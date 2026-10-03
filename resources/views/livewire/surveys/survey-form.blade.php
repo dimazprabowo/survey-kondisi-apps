@@ -3,6 +3,9 @@
         autoSaveTimer: null,
         lastSaved: null,
         dirty: false,
+        // State collapse per item-group bertahan di root — tidak ikut
+        // re-init saat Livewire morph (mis. pindah tab lalu kembali)
+        collapsedGroups: {},
         init() {
             // Draft yang ter-restore = form sudah punya perubahan
             this.dirty = !! this.$wire.hasDraft;
@@ -16,6 +19,23 @@
             // Nested arrays (responses/groupNotes) are covered by delegated
             // input/change listeners on the root — root-level $watch cannot
             // detect deferred nested mutations.
+
+            // Auto-geser scrollbar tab agar tab aktif selalu terlihat
+            this.$wire.$watch('activeCategory', () => requestAnimationFrame(() => this.scrollActiveTabs()));
+            this.$wire.$watch('activeSubCategory', () => requestAnimationFrame(() => this.scrollActiveTabs()));
+            requestAnimationFrame(() => this.scrollActiveTabs());
+        },
+        scrollActiveTabs() {
+            this.$root.querySelectorAll('[data-tab-active]').forEach((el) => {
+                const scroller = el.closest('.overflow-x-auto');
+                if (! scroller) return;
+                const elRect = el.getBoundingClientRect();
+                const scRect = scroller.getBoundingClientRect();
+                const offset = elRect.left - scRect.left;
+                const overshoot = elRect.right - scRect.right;
+                if (offset > 0 && ! (overshoot > 0)) return; // sudah terlihat penuh
+                scroller.scrollBy({ left: offset - (scRect.width - elRect.width) / 2, behavior: 'smooth' });
+            });
         },
         flashField(el) {
             el.classList.remove('autosave-glow');
@@ -80,7 +100,34 @@
                 e.preventDefault();
                 target.focus();
                 if (typeof target.select === 'function') target.select();
+                this.scrollFieldIntoView(target);
+                return;
             }
+
+            // Di batas field terakhir: blok perilaku native arrow yang mengubah
+            // nilai (select cycle opsi, number/date increment) — nilai tidak boleh
+            // berubah hanya karena user menekan arrow
+            const isSelect = el.tagName === 'SELECT';
+            const vertical = key === 'ArrowUp' || key === 'ArrowDown';
+            if (isSelect || (vertical && (el.type === 'number' || el.type === 'date'))) {
+                e.preventDefault();
+            }
+        },
+        scrollFieldIntoView(el) {
+            // Gulung horizontal/vertikal minimal agar field terlihat
+            el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            // Koreksi overlay elemen sticky (action bar bawah, header atas):
+            // fokus native bisa menempatkan field tepat di bawah sticky bar
+            requestAnimationFrame(() => {
+                const margin = 96;
+                const r = el.getBoundingClientRect();
+                const overflow = r.bottom + margin - window.innerHeight;
+                if (overflow > 0) {
+                    window.scrollBy(0, overflow);
+                } else if (margin - r.top > 0) {
+                    window.scrollBy(0, r.top - margin);
+                }
+            });
         },
         nextField(el, key) {
             const fields = Array.from(this.$root.querySelectorAll('.autosave-field'))
@@ -214,7 +261,7 @@
                             $catAvg = $this->calculateCategoryAvg($cat->id);
                             $isActive = $this->activeCategory == $cat->id;
                         @endphp
-                        <button type="button" wire:click="setCategory({{ $cat->id }})" wire:target="setCategory({{ $cat->id }})"
+                        <button type="button" wire:click="setCategory({{ $cat->id }})" wire:target="setCategory({{ $cat->id }})" @if($isActive) data-tab-active @endif
                             class="px-3 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors {{ $isActive ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30' }}">
                             <span wire:loading.remove="inline" wire:target="setCategory({{ $cat->id }})">{{ to_roman($loop->iteration) }}.</span>
                             <svg wire:loading class="animate-spin h-3.5 w-3.5 inline" wire:target="setCategory({{ $cat->id }})" fill="none" viewBox="0 0 24 24">
@@ -265,7 +312,7 @@
                                             $subCatAvg = $this->calculateSubCategoryAvg($subCat->id);
                                             $isSubActive = $this->activeSubCategory == $subCat->id;
                                         @endphp
-                                        <button type="button" wire:click="setSubCategory({{ $subCat->id }})" wire:target="setSubCategory({{ $subCat->id }})" wire:key="subtab-{{ $subCat->id }}"
+                                        <button type="button" wire:click="setSubCategory({{ $subCat->id }})" wire:target="setSubCategory({{ $subCat->id }})" wire:key="subtab-{{ $subCat->id }}" @if($isSubActive) data-tab-active @endif
                                             class="px-3 py-1.5 text-sm font-medium rounded-md whitespace-nowrap transition-colors {{ $isSubActive ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30' }}">
                                             <span wire:loading.remove="inline" wire:target="setSubCategory({{ $subCat->id }})">{{ $subCat->order_num }}.</span>
                                             <svg wire:loading class="animate-spin h-3.5 w-3.5 inline" wire:target="setSubCategory({{ $subCat->id }})" fill="none" viewBox="0 0 24 24">
@@ -296,12 +343,16 @@
                                     @endphp
                                     <!-- Item Group -->
                                     <div wire:key="ig-{{ $itemGroup->id }}" class="mb-4 border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
-                                        <div class="bg-gray-50 dark:bg-gray-700/20 px-3 py-2 flex items-center justify-between">
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                        <button type="button" x-on:click="collapsedGroups[{{ $itemGroup->id }}] = ! collapsedGroups[{{ $itemGroup->id }}]" title="Buka/tutup grup item"
+                                            class="w-full bg-gray-50 dark:bg-gray-700/20 px-3 py-2 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700/40 transition-colors">
+                                            <span class="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
+                                                <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="{ 'rotate-90': ! collapsedGroups[{{ $itemGroup->id }}] }" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                                                </svg>
                                                 {{ $subCat->order_num }}.{{ $itemGroup->order_num }} {{ $itemGroup->name }}
-                                            </div>
+                                            </span>
                                             @unless($isInventoryGroup)
-                                                <div class="flex items-center gap-2">
+                                                <span class="flex items-center gap-2">
                                                     <span class="text-xs text-gray-500 dark:text-gray-400">Avg:</span>
                                                     @if($igAvg !== null)
                                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ survey_score_badge_class($igAvg) }}">
@@ -310,12 +361,26 @@
                                                     @else
                                                         <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
                                                     @endif
-                                                </div>
+                                                </span>
                                             @endunless
-                                        </div>
+                                        </button>
 
+                                        <div x-show="! collapsedGroups[{{ $itemGroup->id }}]">
                                         <div class="overflow-x-auto custom-scrollbar">
-                                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                            <table class="min-w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
+                                                <colgroup>
+                                                    <col class="w-10">
+                                                    <col>
+                                                    @if($isInventoryGroup)
+                                                        <col class="w-24">
+                                                        <col>
+                                                    @else
+                                                        @foreach($scoreLabels as $label)
+                                                            <col class="w-20">
+                                                        @endforeach
+                                                        <col class="w-20">
+                                                    @endif
+                                                </colgroup>
                                                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                                                     <tr>
                                                         <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">No</th>
@@ -422,6 +487,7 @@
                                                     </x-loading-button>
                                                 </div>
                                             </div>
+                                        </div>
                                         </div>
                                     </div>
                                 @endforeach
