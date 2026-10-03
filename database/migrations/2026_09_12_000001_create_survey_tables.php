@@ -93,7 +93,10 @@ return new class extends Migration
             $table->id();
             $table->string('survey_number', 50)->unique();
             $table->foreignId('ship_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('survey_template_id')->constrained()->cascadeOnDelete();
+            // Snapshot: template hanya cetakan — survey menyimpan struktur sendiri
+            // saat dibuat, sehingga perubahan template tidak merusak survey lama.
+            $table->foreignId('survey_template_id')->nullable()->constrained()->nullOnDelete();
+            $table->json('structure')->nullable();
             $table->date('survey_date');
             $table->string('surveyor')->nullable();
             $table->string('location')->nullable();
@@ -114,7 +117,9 @@ return new class extends Migration
         Schema::create('survey_responses', function (Blueprint $table) {
             $table->id();
             $table->foreignId('survey_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('survey_item_id')->constrained()->cascadeOnDelete();
+            // Tanpa FK: id merujuk snapshot surveys.structure — item template
+            // boleh dihapus/diubah tanpa merusak response survey lama.
+            $table->unsignedBigInteger('survey_item_id');
             $table->json('scores')->nullable();
             $table->decimal('avg_score', 5, 2)->nullable();
             $table->date('date_issued')->nullable();
@@ -131,7 +136,8 @@ return new class extends Migration
         Schema::create('survey_group_notes', function (Blueprint $table) {
             $table->id();
             $table->foreignId('survey_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('survey_item_group_id')->constrained()->cascadeOnDelete();
+            // Tanpa FK: id merujuk snapshot surveys.structure (lihat survey_responses).
+            $table->unsignedBigInteger('survey_item_group_id');
             $table->string('note', 500);
             $table->unsignedInteger('order_num')->default(0);
             $table->timestamps();

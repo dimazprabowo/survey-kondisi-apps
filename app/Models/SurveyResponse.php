@@ -31,9 +31,4 @@ class SurveyResponse extends Model
     {
         return $this->belongsTo(Survey::class);
     }
-
-    public function item(): BelongsTo
-    {
-        return $this->belongsTo(SurveyItem::class, 'survey_item_id');
-    }
 }

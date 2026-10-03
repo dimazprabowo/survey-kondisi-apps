@@ -2,11 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\SurveyItemType;
 use App\Enums\SurveyStatus;
 use App\Models\Survey;
 use App\Models\SurveyGroupNote;
-use App\Models\SurveyItem;
 use App\Models\SurveyResponse;
+use App\Models\SurveyTemplate;
 use App\Traits\HasDynamicLike;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -67,6 +68,8 @@ class SurveyService
             $data['created_by'] = $data['created_by'] ?? auth()->id();
             $data['status'] = $data['status'] ?? SurveyStatus::Draft->value;
 
+            $data['structure'] = $data['structure'] ?? $this->buildStructureSnapshot($data['survey_template_id'] ?? null);
+
             $survey = Survey::create($data);
 
             // Pre-create empty responses for all items
@@ -76,11 +79,91 @@ class SurveyService
         });
     }
 
+    /**
+     * Snapshot struktur template (kategori -> sub -> grup -> item) ke array.
+     * Disimpan sekali saat survey dibuat — perubahan template setelahnya
+     * tidak memengaruhi survey yang sudah ada.
+     */
+    public function buildStructureSnapshot(?int $templateId): ?array
+    {
+        if (! $templateId) {
+            return null;
+        }
+
+        $template = SurveyTemplate::with('categories.subCategories.itemGroups.items')->find($templateId);
+
+        if (! $template) {
+            return null;
+        }
+
+        return [
+            'template_id' => $template->id,
+            'template_name' => $template->name,
+            'snapshot_at' => now()->toIso8601String(),
+            'categories' => $template->categories->sortBy('order_num')->map(fn ($cat) => [
+                'id' => $cat->id,
+                'label' => $cat->label,
+                'order_num' => $cat->order_num,
+                'subCategories' => $cat->subCategories->sortBy('order_num')->map(fn ($sc) => [
+                    'id' => $sc->id,
+                    'name' => $sc->name,
+                    'order_num' => $sc->order_num,
+                    'itemGroups' => $sc->itemGroups->sortBy('order_num')->map(fn ($ig) => [
+                        'id' => $ig->id,
+                        'name' => $ig->name,
+                        'order_num' => $ig->order_num,
+                        'items' => $ig->items->sortBy('order_num')->map(fn ($item) => [
+                            'id' => $item->id,
+                            'name' => $item->name,
+                            'order_num' => $item->order_num,
+                            'item_type' => $item->item_type->value,
+                            'score_labels' => $item->score_labels ?? ['C', 'V'],
+                            'has_date_fields' => (bool) $item->has_date_fields,
+                        ])->values()->all(),
+                    ])->values()->all(),
+                ])->values()->all(),
+            ])->values()->all(),
+        ];
+    }
+
+    /**
+     * Hydrate snapshot JSON menjadi tree object dengan shape yang sama
+     * seperti model template (dipakai komponen form/show).
+     */
+    public function hydrateStructure(?array $structure): Collection
+    {
+        return collect($structure['categories'] ?? [])->map(function ($cat) {
+            $cat = (object) $cat;
+            $cat->subCategories = collect($cat->subCategories ?? [])->map(function ($sc) {
+                $sc = (object) $sc;
+                $sc->itemGroups = collect($sc->itemGroups ?? [])->map(function ($ig) {
+                    $ig = (object) $ig;
+                    $ig->items = collect($ig->items ?? [])->map(function ($item) {
+                        $item = (object) $item;
+                        $item->item_type = SurveyItemType::from($item->item_type);
+                        $item->score_labels = $item->score_labels ?? ['C', 'V'];
+                        $item->has_date_fields = (bool) ($item->has_date_fields ?? false);
+
+                        return $item;
+                    });
+
+                    return $ig;
+                });
+
+                return $sc;
+            });
+
+            return $cat;
+        });
+    }
+
     public function initResponses(Survey $survey): void
     {
-        $itemIds = SurveyItem::whereHas('itemGroup.subCategory.category', function ($q) use ($survey) {
-            $q->where('survey_template_id', $survey->survey_template_id);
-        })->pluck('id');
+        // Id item diambil dari snapshot — selalu konsisten dengan structure.
+        $itemIds = collect($survey->structure['categories'] ?? [])
+            ->flatMap(fn ($cat) => $cat['subCategories'] ?? [])
+            ->flatMap(fn ($sc) => $sc['itemGroups'] ?? [])
+            ->flatMap(fn ($ig) => collect($ig['items'] ?? [])->pluck('id'));
         $rows = $itemIds->map(fn ($id) => [
             'survey_id' => $survey->id,
             'survey_item_id' => $id,
@@ -193,106 +276,49 @@ class SurveyService
      */
     public function recalculateOverall(int $surveyId): ?float
     {
-        // Fetch all responses with full hierarchy in one query
-        $rows = DB::table('survey_responses')
-            ->join('survey_items', 'survey_responses.survey_item_id', '=', 'survey_items.id')
-            ->join('survey_item_groups', 'survey_items.survey_item_group_id', '=', 'survey_item_groups.id')
-            ->join('survey_sub_categories', 'survey_item_groups.survey_sub_category_id', '=', 'survey_sub_categories.id')
-            ->join('survey_categories', 'survey_sub_categories.survey_category_id', '=', 'survey_categories.id')
-            ->where('survey_responses.survey_id', $surveyId)
-            ->whereNotNull('survey_responses.avg_score')
-            ->select(
-                'survey_responses.avg_score',
-                'survey_item_groups.id as ig_id',
-                'survey_sub_categories.id as sc_id',
-                'survey_categories.id as cat_id'
-            )
-            ->get();
+        $survey = Survey::findOrFail($surveyId);
+        $structure = $survey->structure ?? [];
 
-        if ($rows->isEmpty()) {
+        // Rata-rata per item dari responses (id item merujuk snapshot, bukan tabel template)
+        $itemAvgs = SurveyResponse::where('survey_id', $surveyId)
+            ->whereNotNull('avg_score')
+            ->pluck('avg_score', 'survey_item_id');
+
+        if ($itemAvgs->isEmpty() || empty($structure['categories'])) {
             Survey::where('id', $surveyId)->update(['overall_cap_score' => null]);
 
             return null;
         }
 
-        // Group item averages by item group
-        $igAvgs = [];
-        foreach ($rows as $row) {
-            $igAvgs[$row->ig_id][] = (float) $row->avg_score;
-        }
-        $igAvgMap = [];
-        foreach ($igAvgs as $igId => $avgs) {
-            $igAvgMap[$igId] = round(array_sum($avgs) / count($avgs), 2);
-        }
-
-        // Map sub-category -> item groups (with their averages)
-        $scToIg = [];
-        foreach ($rows as $row) {
-            $scToIg[$row->sc_id][$row->ig_id] = $igAvgMap[$row->ig_id];
-        }
-        $scAvgMap = [];
-        foreach ($scToIg as $scId => $igMap) {
-            $vals = array_filter($igMap, fn ($v) => $v !== null);
-            if (! empty($vals)) {
-                $scAvgMap[$scId] = round(array_sum($vals) / count($vals), 2);
+        $catAvgs = [];
+        foreach ($structure['categories'] as $cat) {
+            $scAvgs = [];
+            foreach ($cat['subCategories'] ?? [] as $sc) {
+                $igAvgs = [];
+                foreach ($sc['itemGroups'] ?? [] as $ig) {
+                    $avgs = collect($ig['items'] ?? [])
+                        ->map(fn ($item) => $itemAvgs->get($item['id']))
+                        ->filter(fn ($v) => $v !== null)
+                        ->map(fn ($v) => (float) $v)
+                        ->all();
+                    if ($avgs !== []) {
+                        $igAvgs[] = round(array_sum($avgs) / count($avgs), 2);
+                    }
+                }
+                if ($igAvgs !== []) {
+                    $scAvgs[] = round(array_sum($igAvgs) / count($igAvgs), 2);
+                }
             }
-        }
-
-        // Map category -> sub-categories (with their averages)
-        $catToSc = [];
-        foreach ($rows as $row) {
-            $catToSc[$row->cat_id][$row->sc_id] = $scAvgMap[$row->sc_id] ?? null;
-        }
-        $catAvgMap = [];
-        foreach ($catToSc as $catId => $scMap) {
-            $vals = array_filter($scMap, fn ($v) => $v !== null);
-            if (! empty($vals)) {
-                $catAvgMap[$catId] = round(array_sum($vals) / count($vals), 2);
+            if ($scAvgs !== []) {
+                $catAvgs[] = round(array_sum($scAvgs) / count($scAvgs), 2);
             }
         }
 
         // Overall = average of category averages
-        $overall = null;
-        if (! empty($catAvgMap)) {
-            $overall = round(array_sum($catAvgMap) / count($catAvgMap), 2);
-        }
+        $overall = $catAvgs !== [] ? round(array_sum($catAvgs) / count($catAvgs), 2) : null;
 
         Survey::where('id', $surveyId)->update(['overall_cap_score' => $overall]);
 
         return $overall;
-    }
-
-    /**
-     * Calculate live averages for a set of responses (for frontend display).
-     * Returns hierarchy of averages without saving.
-     */
-    public function calculateLiveAverages(Collection $responses): array
-    {
-        $itemAvgs = [];
-        $igAvgs = [];
-        $scAvgs = [];
-        $catAvgs = [];
-
-        foreach ($responses as $r) {
-            $item = $r->item ?? $r['item'] ?? null;
-            if (! $item) {
-                continue;
-            }
-            $avg = $r->avg_score ?? ($r['avg_score'] ?? null);
-            if ($avg !== null) {
-                $igId = $item->itemGroup->id ?? $item['item_group_id'];
-                $scId = $item->itemGroup->subCategory->id ?? $item['sub_category_id'];
-                $catId = $item->itemGroup->subCategory->category->id ?? $item['category_id'];
-                $itemAvgs[$item->id ?? $item['id']] = (float) $avg;
-                $igAvgs[$igId][] = (float) $avg;
-            }
-        }
-
-        return [
-            'items' => $itemAvgs,
-            'item_groups' => $igAvgs,
-            'sub_categories' => $scAvgs,
-            'categories' => $catAvgs,
-        ];
     }
 }

@@ -20,6 +20,7 @@ class Survey extends Model
         'survey_number',
         'ship_id',
         'survey_template_id',
+        'structure',
         'survey_date',
         'surveyor',
         'location',
@@ -32,6 +33,7 @@ class Survey extends Model
     protected $casts = [
         'status' => SurveyStatus::class,
         'survey_date' => 'date',
+        'structure' => 'array',
         'overall_cap_score' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

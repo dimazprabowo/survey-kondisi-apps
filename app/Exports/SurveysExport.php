@@ -81,7 +81,7 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
             $survey->ship?->name ?? '-',
             $survey->ship?->code ?? '-',
             $survey->ship?->year_built ?? '-',
-            $survey->template?->name ?? '-',
+            $survey->template?->name ?? ($survey->structure['template_name'] ?? '-'),
             $survey->survey_date?->format('d M Y') ?? '-',
             $survey->surveyor ?? '-',
             $survey->location ?? '-',

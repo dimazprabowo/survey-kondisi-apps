@@ -5,7 +5,7 @@ namespace App\Livewire\Surveys;
 use App\Livewire\Traits\HasNotification;
 use App\Models\Survey;
 use App\Models\SurveyCategory;
-use App\Models\SurveySubCategory;
+use App\Services\SurveyService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Component;
 
@@ -19,6 +19,9 @@ class SurveyShow extends Component
 
     public $activeSubCategory;
 
+    // Per-request cache responses (tidak diserialisasi Livewire)
+    protected $responsesCache = null;
+
     public function mount(Survey $survey)
     {
         $this->authorize('view', $survey);
@@ -31,6 +34,12 @@ class SurveyShow extends Component
 
     public function getCategoriesProperty()
     {
+        // Render dari snapshot tersimpan — tidak terpengaruh
+        // perubahan/penghapusan master template.
+        if ($this->survey->structure) {
+            return app(SurveyService::class)->hydrateStructure($this->survey->structure);
+        }
+
         return SurveyCategory::with(['subCategories.itemGroups.items'])
             ->where('survey_template_id', $this->survey->survey_template_id)
             ->orderBy('order_num')
@@ -39,7 +48,8 @@ class SurveyShow extends Component
 
     public function getResponsesProperty()
     {
-        return \App\Models\SurveyResponse::where('survey_id', $this->survey->id)
+        // Memoize per-request — dipakai berulang oleh avg calculators di Blade.
+        return $this->responsesCache ??= \App\Models\SurveyResponse::where('survey_id', $this->survey->id)
             ->get()
             ->keyBy('survey_item_id');
     }
@@ -65,26 +75,57 @@ class SurveyShow extends Component
         $this->activeSubCategory = $subCategoryId;
     }
 
-    /**
-     * Sub-category average dari responses yang sudah eager-loaded (tanpa query tambahan).
-     */
-    public function subCategoryAvg(SurveySubCategory $subCat): ?float
+    protected function avgList(array $avgs): ?float
     {
-        $igAvgs = [];
-        foreach ($subCat->itemGroups as $itemGroup) {
-            $itemAvgs = [];
-            foreach ($itemGroup->items as $item) {
-                $avg = $this->responses->get($item->id)?->avg_score;
-                if ($avg !== null) {
-                    $itemAvgs[] = (float) $avg;
-                }
-            }
-            if (! empty($itemAvgs)) {
-                $igAvgs[] = array_sum($itemAvgs) / count($itemAvgs);
+        return $avgs === [] ? null : round(array_sum($avgs) / count($avgs), 2);
+    }
+
+    /**
+     * Item group average dari responses yang sudah eager-loaded (tanpa query tambahan).
+     */
+    public function itemGroupAvg($itemGroup): ?float
+    {
+        $itemAvgs = [];
+        foreach ($itemGroup->items as $item) {
+            $avg = $this->responses->get($item->id)?->avg_score;
+            if ($avg !== null) {
+                $itemAvgs[] = (float) $avg;
             }
         }
 
-        return empty($igAvgs) ? null : round(array_sum($igAvgs) / count($igAvgs), 2);
+        return $this->avgList($itemAvgs);
+    }
+
+    /**
+     * Sub-category average (average of item group averages).
+     */
+    public function subCategoryAvg($subCat): ?float
+    {
+        $igAvgs = [];
+        foreach ($subCat->itemGroups as $itemGroup) {
+            $avg = $this->itemGroupAvg($itemGroup);
+            if ($avg !== null) {
+                $igAvgs[] = $avg;
+            }
+        }
+
+        return $this->avgList($igAvgs);
+    }
+
+    /**
+     * Category average (average of sub-category averages).
+     */
+    public function categoryAvg($cat): ?float
+    {
+        $scAvgs = [];
+        foreach ($cat->subCategories as $subCat) {
+            $avg = $this->subCategoryAvg($subCat);
+            if ($avg !== null) {
+                $scAvgs[] = $avg;
+            }
+        }
+
+        return $this->avgList($scAvgs);
     }
 
     public function editSurvey()

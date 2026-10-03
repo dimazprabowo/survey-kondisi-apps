@@ -7,7 +7,6 @@ use App\Livewire\Traits\HasNotification;
 use App\Models\Ship;
 use App\Models\Survey;
 use App\Models\SurveyCategory;
-use App\Models\SurveyItem;
 use App\Models\SurveyTemplate;
 use App\Services\SurveyService;
 use App\Services\SurveyTemplateService;
@@ -58,6 +57,9 @@ class SurveyForm extends Component
 
     // True jika ada draft yang ter-restore saat mount (form punya perubahan tersimpan)
     public bool $hasDraft = false;
+
+    // Per-request cache index hierarki struktur (tidak diserialisasi Livewire)
+    protected ?array $structureIndexCache = null;
 
     public function mount(?Survey $survey = null)
     {
@@ -206,41 +208,37 @@ class SurveyForm extends Component
     }
 
     /**
-     * Get item group ids for the selected template.
+     * Get item group ids dari struktur aktif (snapshot untuk edit, template untuk create).
      */
     protected function getTemplateItemGroupIds(): array
     {
-        if (! $this->survey_template_id) {
-            return [];
-        }
-
-        return \App\Models\SurveyItemGroup::whereHas('subCategory.category', function ($q) {
-            $q->where('survey_template_id', $this->survey_template_id);
-        })->pluck('id')->all();
+        return $this->categories
+            ->flatMap(fn ($cat) => $cat->subCategories)
+            ->flatMap(fn ($sc) => $sc->itemGroups)
+            ->pluck('id')
+            ->all();
     }
 
     /**
-     * Get items for the selected template (with hierarchy eager loaded).
+     * Get items dari struktur aktif (snapshot untuk edit, template untuk create).
      */
     protected function getTemplateItems()
     {
-        if (! $this->survey_template_id) {
-            return collect();
-        }
-
-        return SurveyItem::whereHas('itemGroup.subCategory.category', function ($q) {
-            $q->where('survey_template_id', $this->survey_template_id);
-        })
-            ->with('itemGroup.subCategory.category')
-            ->orderBy('order_num')
-            ->get();
+        return $this->categories
+            ->flatMap(fn ($cat) => $cat->subCategories)
+            ->flatMap(fn ($sc) => $sc->itemGroups)
+            ->flatMap(fn ($ig) => $ig->items);
     }
 
     public function rules()
     {
         return [
             'ship_id' => ['required', 'exists:ships,id'],
-            'survey_template_id' => ['required', 'exists:survey_templates,id'],
+            // Template beku di snapshot saat survey dibuat; di edit mode boleh
+            // null bila template sumber sudah dihapus.
+            'survey_template_id' => $this->editMode
+                ? ['nullable', 'integer']
+                : ['required', 'exists:survey_templates,id'],
             'survey_date' => ['required', 'date'],
             'surveyor' => ['nullable', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
@@ -282,6 +280,12 @@ class SurveyForm extends Component
 
     public function getCategoriesProperty()
     {
+        // Edit mode: render dari snapshot tersimpan — tidak terpengaruh
+        // perubahan/penghapusan master template.
+        if ($this->editMode && $this->survey?->structure) {
+            return app(SurveyService::class)->hydrateStructure($this->survey->structure);
+        }
+
         if (! $this->survey_template_id) {
             return collect();
         }
@@ -311,25 +315,47 @@ class SurveyForm extends Component
     }
 
     /**
+     * Index hierarki struktur aktif: id parent -> daftar id anak.
+     * Per-request cache (reset tiap request Livewire baru).
+     */
+    protected function structureIndex(): array
+    {
+        return $this->structureIndexCache ??= $this->buildStructureIndex();
+    }
+
+    protected function buildStructureIndex(): array
+    {
+        $index = ['igItems' => [], 'scIgs' => [], 'catScs' => []];
+        foreach ($this->categories as $cat) {
+            foreach ($cat->subCategories as $sc) {
+                $index['catScs'][$cat->id][] = $sc->id;
+                foreach ($sc->itemGroups as $ig) {
+                    $index['scIgs'][$sc->id][] = $ig->id;
+                    foreach ($ig->items as $item) {
+                        $index['igItems'][$ig->id][] = $item->id;
+                    }
+                }
+            }
+        }
+
+        return $index;
+    }
+
+    protected function avgOf(array $avgs): ?float
+    {
+        $avgs = array_filter($avgs, fn ($v) => $v !== null);
+
+        return $avgs !== [] ? round(array_sum($avgs) / count($avgs), 2) : null;
+    }
+
+    /**
      * Calculate item group average (average of item averages)
      */
     public function calculateItemGroupAvg($itemGroupId): ?float
     {
-        $itemIds = SurveyItem::where('survey_item_group_id', $itemGroupId)
-            ->whereHas('itemGroup.subCategory.category', fn ($q) => $q->where('survey_template_id', $this->survey_template_id))
-            ->pluck('id');
-        $avgs = [];
-        foreach ($itemIds as $id) {
-            $avg = $this->calculateItemAvg($id);
-            if ($avg !== null) {
-                $avgs[] = $avg;
-            }
-        }
-        if (empty($avgs)) {
-            return null;
-        }
+        $itemIds = $this->structureIndex()['igItems'][$itemGroupId] ?? [];
 
-        return round(array_sum($avgs) / count($avgs), 2);
+        return $this->avgOf(array_map(fn ($id) => $this->calculateItemAvg($id), $itemIds));
     }
 
     /**
@@ -337,21 +363,9 @@ class SurveyForm extends Component
      */
     public function calculateSubCategoryAvg($subCategoryId): ?float
     {
-        $itemGroupIds = \App\Models\SurveyItemGroup::where('survey_sub_category_id', $subCategoryId)
-            ->whereHas('subCategory.category', fn ($q) => $q->where('survey_template_id', $this->survey_template_id))
-            ->pluck('id');
-        $avgs = [];
-        foreach ($itemGroupIds as $id) {
-            $avg = $this->calculateItemGroupAvg($id);
-            if ($avg !== null) {
-                $avgs[] = $avg;
-            }
-        }
-        if (empty($avgs)) {
-            return null;
-        }
+        $igIds = $this->structureIndex()['scIgs'][$subCategoryId] ?? [];
 
-        return round(array_sum($avgs) / count($avgs), 2);
+        return $this->avgOf(array_map(fn ($id) => $this->calculateItemGroupAvg($id), $igIds));
     }
 
     /**
@@ -359,21 +373,9 @@ class SurveyForm extends Component
      */
     public function calculateCategoryAvg($categoryId): ?float
     {
-        $subCatIds = \App\Models\SurveySubCategory::where('survey_category_id', $categoryId)
-            ->whereHas('category', fn ($q) => $q->where('survey_template_id', $this->survey_template_id))
-            ->pluck('id');
-        $avgs = [];
-        foreach ($subCatIds as $id) {
-            $avg = $this->calculateSubCategoryAvg($id);
-            if ($avg !== null) {
-                $avgs[] = $avg;
-            }
-        }
-        if (empty($avgs)) {
-            return null;
-        }
+        $scIds = $this->structureIndex()['catScs'][$categoryId] ?? [];
 
-        return round(array_sum($avgs) / count($avgs), 2);
+        return $this->avgOf(array_map(fn ($id) => $this->calculateSubCategoryAvg($id), $scIds));
     }
 
     /**
@@ -381,19 +383,9 @@ class SurveyForm extends Component
      */
     public function calculateOverallAvg(): ?float
     {
-        $catIds = SurveyCategory::where('survey_template_id', $this->survey_template_id)->pluck('id');
-        $avgs = [];
-        foreach ($catIds as $id) {
-            $avg = $this->calculateCategoryAvg($id);
-            if ($avg !== null) {
-                $avgs[] = $avg;
-            }
-        }
-        if (empty($avgs)) {
-            return null;
-        }
+        $catIds = array_keys($this->structureIndex()['catScs']);
 
-        return round(array_sum($avgs) / count($avgs), 2);
+        return $this->avgOf(array_map(fn ($id) => $this->calculateCategoryAvg($id), $catIds));
     }
 
     public function setCategory($categoryId): void
