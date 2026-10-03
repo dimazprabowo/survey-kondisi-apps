@@ -149,4 +149,79 @@ class SurveySnapshotTest extends TestCase
 
         $this->assertSame('Item Versi Baru', $item['name']);
     }
+
+    public function test_removing_structure_node_prunes_responses_and_notes(): void
+    {
+        $survey = $this->createSurvey();
+        $service = new SurveyService;
+
+        $service->saveResponses($survey->id, [
+            $this->item->id => ['scores' => ['C' => '4', 'V' => '4']],
+        ], [$this->itemGroup->id => ['catatan']]);
+
+        // Simulasi pemangkasan struktur oleh komponen (grup item dihapus)
+        $structure = $survey->structure;
+        $structure['categories'][0]['subCategories'][0]['itemGroups'] = [];
+        $service->update($survey->fresh(), ['structure' => $structure]);
+
+        $service->saveResponses($survey->id, []);
+
+        $this->assertSame(0, \App\Models\SurveyResponse::where('survey_id', $survey->id)->count());
+        $this->assertSame(0, \App\Models\SurveyGroupNote::where('survey_id', $survey->id)->count());
+        $this->assertNull($survey->fresh()->overall_cap_score);
+    }
+
+    public function test_component_remove_structure_node_requires_edit_mode_toggle(): void
+    {
+        $survey = $this->createSurvey();
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+        \Illuminate\Support\Facades\Gate::before(fn () => true);
+
+        // Toggle off: penghapusan ditolak
+        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+            ->call('removeStructureNode', 'item', $this->item->id);
+        $items = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'];
+        $this->assertCount(1, $items);
+
+        // Toggle on: item terhapus dari working copy + responses ikut bersih
+        $component->call('toggleEditStructure')
+            ->call('removeStructureNode', 'item', $this->item->id);
+        $items = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'];
+        $this->assertCount(0, $items);
+        $this->assertArrayNotHasKey($this->item->id, $component->get('responses'));
+    }
+
+    public function test_order_num_resequenced_after_node_removal(): void
+    {
+        // Tambah item & grup kedua agar ada yang di-renumber
+        $item2 = SurveyItem::create([
+            'survey_item_group_id' => $this->itemGroup->id,
+            'name' => 'Item Kedua',
+            'item_type' => 'score',
+            'score_labels' => ['C', 'V'],
+            'order_num' => 2,
+        ]);
+        $group2 = SurveyItemGroup::create([
+            'survey_sub_category_id' => $this->itemGroup->survey_sub_category_id,
+            'name' => 'Grup Kedua',
+            'order_num' => 2,
+        ]);
+
+        $survey = $this->createSurvey();
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+        \Illuminate\Support\Facades\Gate::before(fn () => true);
+
+        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+            ->call('toggleEditStructure')
+            ->call('removeStructureNode', 'item', $this->item->id)
+            ->call('removeStructureNode', 'item_group', $this->itemGroup->id);
+
+        $sub = $component->get('structureTree')['categories'][0]['subCategories'][0];
+
+        // Item kedua menempati posisi 1; grup kedua jadi grup 1
+        $this->assertSame(1, $sub['itemGroups'][0]['order_num']);
+        $this->assertSame($group2->id, $sub['itemGroups'][0]['id']);
+    }
 }

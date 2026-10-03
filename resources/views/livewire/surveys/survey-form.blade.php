@@ -181,6 +181,7 @@
     x-on:change="handleInput($event)"
     x-on:keydown="handleKeydown($event)"
     x-on:group-note-removed.window="onFieldChange()"
+    x-on:structure-node-removed.window="onFieldChange()"
 >
     <!-- Breadcrumb -->
     <nav class="mb-6 flex" aria-label="Breadcrumb">
@@ -201,9 +202,15 @@
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
                         Informasi Survey
                     </h3>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Auto Save</span>
-                        <x-toggle-switch wire:click="toggleAutoSave" :active="$autoSave" target="toggleAutoSave" activeColor="green" title="Aktifkan/nonaktifkan penyimpanan draft otomatis" />
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Edit Struktur</span>
+                            <x-toggle-switch wire:click="toggleEditStructure" :active="$editStructure" target="toggleEditStructure" activeColor="amber" title="Aktifkan/nonaktifkan mode hapus struktur (kategori, sub kategori, grup item, item)" />
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Auto Save</span>
+                            <x-toggle-switch wire:click="toggleAutoSave" :active="$autoSave" target="toggleAutoSave" activeColor="green" title="Aktifkan/nonaktifkan penyimpanan draft otomatis" />
+                        </div>
                     </div>
                 </div>
 
@@ -261,20 +268,35 @@
                             $catAvg = $this->calculateCategoryAvg($cat->id);
                             $isActive = $this->activeCategory == $cat->id;
                         @endphp
-                        <button type="button" wire:click="setCategory({{ $cat->id }})" wire:target="setCategory({{ $cat->id }})" @if($isActive) data-tab-active @endif
-                            class="px-3 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors {{ $isActive ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30' }}">
-                            <span wire:loading.remove="inline" wire:target="setCategory({{ $cat->id }})">{{ to_roman($loop->iteration) }}.</span>
-                            <svg wire:loading class="animate-spin h-3.5 w-3.5 inline" wire:target="setCategory({{ $cat->id }})" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.121 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            {{ $cat->label }}
-                            @if($catAvg !== null)
-                                <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold {{ $isActive ? 'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' }}">
-                                    {{ number_format($catAvg, 2) }}
-                                </span>
+                        @php
+                            $catTabPillClass = $isActive
+                                ? 'bg-blue-100 dark:bg-blue-900/30'
+                                : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
+                            $catTabTextClass = $isActive
+                                ? 'text-blue-700 dark:text-blue-400'
+                                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300';
+                        @endphp
+                        <div class="flex items-center rounded-md transition-colors {{ $catTabPillClass }}" wire:key="cattab-wrap-{{ $cat->id }}">
+                            <button type="button" wire:click="setCategory({{ $cat->id }})" wire:target="setCategory({{ $cat->id }})" @if($isActive) data-tab-active @endif
+                                class="{{ $editStructure ? 'pl-3 pr-1.5' : 'px-3' }} py-2 text-sm font-medium whitespace-nowrap transition-colors {{ $catTabTextClass }}">
+                                <span wire:loading.remove="inline" wire:target="setCategory({{ $cat->id }})">{{ to_roman($loop->iteration) }}.</span>
+                                <svg wire:loading class="animate-spin h-3.5 w-3.5 inline" wire:target="setCategory({{ $cat->id }})" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.121 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                {{ $cat->label }}
+                                @if($catAvg !== null)
+                                    <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold {{ $isActive ? 'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' }}">
+                                        {{ number_format($catAvg, 2) }}
+                                    </span>
+                                @endif
+                            </button>
+                            @if($editStructure)
+                                <x-loading-button wire:click="confirmRemoveNode('category', {{ $cat->id }})"
+                                    target="confirmRemoveNode('category', {{ $cat->id }})"
+                                    variant="icon-red" icon="delete" wire:key="cat-del-{{ $cat->id }}" title="Hapus kategori {{ $cat->label }} beserta isinya" class="mr-1" />
                             @endif
-                        </button>
+                        </div>
                     @endforeach
                 </nav>
             </div>
@@ -312,20 +334,35 @@
                                             $subCatAvg = $this->calculateSubCategoryAvg($subCat->id);
                                             $isSubActive = $this->activeSubCategory == $subCat->id;
                                         @endphp
-                                        <button type="button" wire:click="setSubCategory({{ $subCat->id }})" wire:target="setSubCategory({{ $subCat->id }})" wire:key="subtab-{{ $subCat->id }}" @if($isSubActive) data-tab-active @endif
-                                            class="px-3 py-1.5 text-sm font-medium rounded-md whitespace-nowrap transition-colors {{ $isSubActive ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30' }}">
-                                            <span wire:loading.remove="inline" wire:target="setSubCategory({{ $subCat->id }})">{{ $subCat->order_num }}.</span>
-                                            <svg wire:loading class="animate-spin h-3.5 w-3.5 inline" wire:target="setSubCategory({{ $subCat->id }})" fill="none" viewBox="0 0 24 24">
-                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.121 5.824 3 7.938l3-2.647z"></path>
-                                            </svg>
-                                            {{ $subCat->name }}
-                                            @if($subCatAvg !== null)
-                                                <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold {{ $isSubActive ? 'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' }}">
-                                                    {{ number_format($subCatAvg, 2) }}
-                                                </span>
+                                        @php
+                                            $subTabPillClass = $isSubActive
+                                                ? 'bg-blue-100 dark:bg-blue-900/30'
+                                                : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
+                                            $subTabTextClass = $isSubActive
+                                                ? 'text-blue-700 dark:text-blue-400'
+                                                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300';
+                                        @endphp
+                                        <div class="flex items-center rounded-md transition-colors {{ $subTabPillClass }}" wire:key="subtab-wrap-{{ $subCat->id }}">
+                                            <button type="button" wire:click="setSubCategory({{ $subCat->id }})" wire:target="setSubCategory({{ $subCat->id }})" wire:key="subtab-{{ $subCat->id }}" @if($isSubActive) data-tab-active @endif
+                                                class="{{ $editStructure ? 'pl-3 pr-1.5' : 'px-3' }} py-1.5 text-sm font-medium whitespace-nowrap transition-colors {{ $subTabTextClass }}">
+                                                <span wire:loading.remove="inline" wire:target="setSubCategory({{ $subCat->id }})">{{ $subCat->order_num }}.</span>
+                                                <svg wire:loading class="animate-spin h-3.5 w-3.5 inline" wire:target="setSubCategory({{ $subCat->id }})" fill="none" viewBox="0 0 24 24">
+                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.121 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                {{ $subCat->name }}
+                                                @if($subCatAvg !== null)
+                                                    <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold {{ $isSubActive ? 'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' }}">
+                                                        {{ number_format($subCatAvg, 2) }}
+                                                    </span>
+                                                @endif
+                                            </button>
+                                            @if($editStructure)
+                                                <x-loading-button wire:click="confirmRemoveNode('sub_category', {{ $subCat->id }})"
+                                                    target="confirmRemoveNode('sub_category', {{ $subCat->id }})"
+                                                    variant="icon-red" icon="delete" wire:key="sub-del-{{ $subCat->id }}" title="Hapus sub kategori {{ $subCat->name }} beserta isinya" class="mr-1" />
                                             @endif
-                                        </button>
+                                        </div>
                                     @endforeach
                                 </nav>
                             </div>
@@ -343,27 +380,34 @@
                                     @endphp
                                     <!-- Item Group -->
                                     <div wire:key="ig-{{ $itemGroup->id }}" class="mb-4 border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
-                                        <button type="button" x-on:click="collapsedGroups[{{ $itemGroup->id }}] = ! collapsedGroups[{{ $itemGroup->id }}]" title="Buka/tutup grup item"
-                                            class="w-full bg-gray-50 dark:bg-gray-700/20 px-3 py-2 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700/40 transition-colors">
-                                            <span class="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
-                                                <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="{ 'rotate-90': ! collapsedGroups[{{ $itemGroup->id }}] }" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <div class="w-full bg-gray-50 dark:bg-gray-700/20 px-3 py-2 flex items-center justify-between gap-2 hover:bg-gray-100 dark:hover:bg-gray-700/40 transition-colors">
+                                            <button type="button" x-on:click="collapsedGroups[{{ $itemGroup->id }}] = ! collapsedGroups[{{ $itemGroup->id }}]" title="Buka/tutup grup item"
+                                                class="flex items-center gap-2 flex-1 min-w-0 text-left text-sm font-medium text-gray-900 dark:text-white">
+                                                <svg class="w-4 h-4 shrink-0 text-gray-400 transition-transform duration-200" :class="{ 'rotate-90': ! collapsedGroups[{{ $itemGroup->id }}] }" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
                                                 </svg>
-                                                {{ $subCat->order_num }}.{{ $itemGroup->order_num }} {{ $itemGroup->name }}
+                                                <span class="truncate">{{ $subCat->order_num }}.{{ $itemGroup->order_num }} {{ $itemGroup->name }}</span>
+                                            </button>
+                                            <span class="flex items-center gap-1 shrink-0">
+                                                @unless($isInventoryGroup)
+                                                    <span class="flex items-center gap-2">
+                                                        <span class="text-xs text-gray-500 dark:text-gray-400">Avg:</span>
+                                                        @if($igAvg !== null)
+                                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ survey_score_badge_class($igAvg) }}">
+                                                                {{ number_format($igAvg, 2) }}
+                                                            </span>
+                                                        @else
+                                                            <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
+                                                        @endif
+                                                    </span>
+                                                @endunless
+                                                @if($editStructure)
+                                                    <x-loading-button wire:click="confirmRemoveNode('item_group', {{ $itemGroup->id }})"
+                                                        target="confirmRemoveNode('item_group', {{ $itemGroup->id }})"
+                                                        variant="icon-red" icon="delete" wire:key="ig-del-{{ $itemGroup->id }}" title="Hapus grup item ini beserta isinya" />
+                                                @endif
                                             </span>
-                                            @unless($isInventoryGroup)
-                                                <span class="flex items-center gap-2">
-                                                    <span class="text-xs text-gray-500 dark:text-gray-400">Avg:</span>
-                                                    @if($igAvg !== null)
-                                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ survey_score_badge_class($igAvg) }}">
-                                                            {{ number_format($igAvg, 2) }}
-                                                        </span>
-                                                    @else
-                                                        <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
-                                                    @endif
-                                                </span>
-                                            @endunless
-                                        </button>
+                                        </div>
 
                                         <div x-show="! collapsedGroups[{{ $itemGroup->id }}]">
                                         <div class="overflow-x-auto custom-scrollbar">
@@ -380,6 +424,9 @@
                                                         @endforeach
                                                         <col class="w-20">
                                                     @endif
+                                                    @if($editStructure)
+                                                        <col class="w-10">
+                                                    @endif
                                                 </colgroup>
                                                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                                                     <tr>
@@ -393,6 +440,9 @@
                                                                 <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-20">{{ $label }}</th>
                                                             @endforeach
                                                             <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-20">Avg</th>
+                                                        @endif
+                                                        @if($editStructure)
+                                                            <th class="w-10"></th>
                                                         @endif
                                                     </tr>
                                                 </thead>
@@ -412,6 +462,13 @@
                                                                         placeholder="Spesifikasi alat"
                                                                         class="autosave-field w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500" />
                                                                 </td>
+                                                                @if($editStructure)
+                                                                    <td class="px-1 py-2 text-center">
+                                                                        <x-loading-button wire:click="confirmRemoveNode('item', {{ $item->id }})"
+                                                                            target="confirmRemoveNode('item', {{ $item->id }})"
+                                                                            variant="icon-red" icon="delete" wire:key="item-del-{{ $item->id }}" title="Hapus item ini" />
+                                                                    </td>
+                                                                @endif
                                                             </tr>
                                                         @else
                                                             @php
@@ -455,6 +512,13 @@
                                                                         <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
                                                                     @endif
                                                                 </td>
+                                                                @if($editStructure)
+                                                                    <td class="px-1 py-2 text-center">
+                                                                        <x-loading-button wire:click="confirmRemoveNode('item', {{ $item->id }})"
+                                                                            target="confirmRemoveNode('item', {{ $item->id }})"
+                                                                            variant="icon-red" icon="delete" wire:key="item-del-{{ $item->id }}" title="Hapus item ini" />
+                                                                    </td>
+                                                                @endif
                                                             </tr>
                                                         @endif
                                                     @endforeach
@@ -503,8 +567,9 @@
             </div>
         </div>
 
-        <!-- Action Bar (Sticky, width matches cards above) -->
-        <div class="sticky bottom-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-3 px-4 sm:px-6 z-10">
+        <!-- Action Bar (Sticky, width matches cards above; offset dari tepi
+             viewport agar tidak mepet — terlihat mengambang, tidak tertutup chrome) -->
+        <div class="sticky bottom-3 sm:bottom-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-3 px-4 sm:px-6 z-10">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-end">
                 <!-- Draft auto-save indicator -->
                 <div class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mr-auto" x-show="lastSaved" x-cloak>
@@ -524,4 +589,5 @@
     <!-- Modal konfirmasi buang perubahan saat Batal -->
     <x-confirm-modal eventName="confirm-cancel-survey" />
     <x-confirm-modal eventName="confirm-remove-note" />
+    <x-confirm-modal eventName="confirm-remove-node" />
 </div>

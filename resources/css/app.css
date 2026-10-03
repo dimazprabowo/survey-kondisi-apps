@@ -96,3 +96,13 @@ button, a, [role="button"], label[for], select, summary {
 .navbar-scroll::-webkit-scrollbar {
     display: none;
 }
+
+/* overflow-x:hidden di body membuat scroll container yang merusak position:sticky
+   (sticky bar menempel ke bawah dokumen, bukan viewport). overflow-x:clip memberi
+   clipping yang sama TANPA membuat scroll container. Browser lama tetap fallback
+   ke overflow-x-hidden dari class Tailwind di body. */
+@supports (overflow-x: clip) {
+    body {
+        overflow-x: clip;
+    }
+}

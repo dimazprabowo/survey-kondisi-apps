@@ -214,12 +214,38 @@ class SurveyService
     public function saveResponses(int $surveyId, array $responses, array $groupNotes = []): void
     {
         DB::transaction(function () use ($surveyId, $responses, $groupNotes) {
+            $this->pruneOrphanedData($surveyId);
             foreach ($responses as $itemId => $data) {
                 $this->saveResponse($surveyId, (int) $itemId, $data);
             }
             $this->saveGroupNotes($surveyId, $groupNotes);
             $this->recalculateOverall($surveyId);
         });
+    }
+
+    /**
+     * Hapus responses & group notes yang merujuk node di luar structure
+     * tersimpan (mis. setelah node struktur dihapus pada edit survey).
+     */
+    protected function pruneOrphanedData(int $surveyId): void
+    {
+        $structure = Survey::findOrFail($surveyId)->structure ?? [];
+
+        $itemIds = [];
+        $groupIds = [];
+        foreach ($structure['categories'] ?? [] as $cat) {
+            foreach ($cat['subCategories'] ?? [] as $sc) {
+                foreach ($sc['itemGroups'] ?? [] as $ig) {
+                    $groupIds[] = $ig['id'];
+                    foreach ($ig['items'] ?? [] as $item) {
+                        $itemIds[] = $item['id'];
+                    }
+                }
+            }
+        }
+
+        SurveyResponse::where('survey_id', $surveyId)->whereNotIn('survey_item_id', $itemIds)->delete();
+        SurveyGroupNote::where('survey_id', $surveyId)->whereNotIn('survey_item_group_id', $groupIds)->delete();
     }
 
     /**

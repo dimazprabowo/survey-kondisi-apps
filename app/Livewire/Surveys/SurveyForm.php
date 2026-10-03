@@ -6,7 +6,6 @@ use App\Enums\SurveyStatus;
 use App\Livewire\Traits\HasNotification;
 use App\Models\Ship;
 use App\Models\Survey;
-use App\Models\SurveyCategory;
 use App\Models\SurveyTemplate;
 use App\Services\SurveyService;
 use App\Services\SurveyTemplateService;
@@ -58,6 +57,12 @@ class SurveyForm extends Component
     // True jika ada draft yang ter-restore saat mount (form punya perubahan tersimpan)
     public bool $hasDraft = false;
 
+    // Working copy struktur survey (snapshot) — sumber tunggal render & hapus node
+    public array $structureTree = ['categories' => []];
+
+    // Mode hapus struktur (kategori/sub/grup/item) — toggle di header
+    public bool $editStructure = false;
+
     // Per-request cache index hierarki struktur (tidak diserialisasi Livewire)
     protected ?array $structureIndexCache = null;
 
@@ -77,6 +82,12 @@ class SurveyForm extends Component
             $this->location = $survey->location;
             $this->status = $survey->status->value;
             $this->notes = $survey->notes;
+
+            // Working copy struktur: snapshot tersimpan (fallback bangun ulang
+            // dari template untuk data lama yang belum punya structure)
+            $this->structureTree = $survey->structure
+                ?? app(SurveyService::class)->buildStructureSnapshot($survey->survey_template_id)
+                ?? ['categories' => []];
 
             // Load existing responses
             $this->loadResponses();
@@ -111,6 +122,10 @@ class SurveyForm extends Component
                 $defaultTemplate = (new SurveyTemplateService)->getDefault();
                 $this->survey_template_id = $defaultTemplate?->id;
             }
+
+            // Working copy struktur dari template terpilih (snapshot awal)
+            $this->structureTree = app(SurveyService::class)->buildStructureSnapshot($this->survey_template_id)
+                ?? ['categories' => []];
 
             $this->initEmptyResponses();
             $firstCat = $this->categories->first();
@@ -280,20 +295,9 @@ class SurveyForm extends Component
 
     public function getCategoriesProperty()
     {
-        // Edit mode: render dari snapshot tersimpan — tidak terpengaruh
-        // perubahan/penghapusan master template.
-        if ($this->editMode && $this->survey?->structure) {
-            return app(SurveyService::class)->hydrateStructure($this->survey->structure);
-        }
-
-        if (! $this->survey_template_id) {
-            return collect();
-        }
-
-        return SurveyCategory::with(['subCategories.itemGroups.items'])
-            ->where('survey_template_id', $this->survey_template_id)
-            ->orderBy('order_num')
-            ->get();
+        // Single source: working copy struktur (snapshot). Di create mode diisi
+        // dari template saat mount; perubahan template setelahnya tidak ikut.
+        return app(SurveyService::class)->hydrateStructure($this->structureTree);
     }
 
     /**
@@ -459,6 +463,9 @@ class SurveyForm extends Component
                 'location' => $this->location,
                 'status' => $this->status,
                 'notes' => $this->notes,
+                // Struktur survey ikut tersimpan — hasil snapshot (create) atau
+                // working copy yang mungkin sudah dipangkas (edit).
+                'structure' => $this->structureTree,
             ];
 
             if ($this->editMode) {
@@ -502,6 +509,230 @@ class SurveyForm extends Component
     }
 
     /**
+     * Toggle mode hapus struktur (kategori/sub kategori/grup item/item).
+     * Sengaja tidak persist di session — selalu mulai nonaktif demi keamanan.
+     */
+    public function toggleEditStructure()
+    {
+        $this->editStructure = ! $this->editStructure;
+        $this->notifyInfo($this->editStructure
+            ? 'Mode hapus struktur aktif. Hapus node via ikon tempat sampah.'
+            : 'Mode hapus struktur nonaktif.');
+    }
+
+    /**
+     * Minta konfirmasi sebelum menghapus node struktur.
+     */
+    public function confirmRemoveNode(string $level, $id): void
+    {
+        if (! $this->editStructure) {
+            return;
+        }
+
+        $node = $this->findNode($this->structureTree['categories'] ?? [], (int) $id);
+        if (! $node) {
+            return;
+        }
+
+        $labels = [
+            'category' => 'kategori',
+            'sub_category' => 'sub kategori',
+            'item_group' => 'grup item',
+            'item' => 'item',
+        ];
+        $label = $labels[$level] ?? 'node';
+        $name = $node['label'] ?? $node['name'] ?? '#'.$id;
+
+        $this->dispatch('confirm-remove-node',
+            action: 'removeStructureNode',
+            actionParams: [$level, $id],
+            title: 'Hapus '.ucfirst($label),
+            message: ucfirst($label).' "'.$name.'" beserta seluruh isinya (skor, qty, catatan) akan dihapus dari survey ini.',
+            confirmText: 'Ya, Hapus',
+            cancelText: 'Batal',
+            type: 'danger',
+        );
+    }
+
+    /**
+     * Hapus node struktur dari working copy + bersihkan data terkait
+     * (responses & group notes yang merujuk node di bawahnya).
+     */
+    public function removeStructureNode(string $level, $id): void
+    {
+        // Guard server-side — modal hanya bisa dibuka saat mode aktif.
+        if (! $this->editStructure) {
+            $this->dispatch('confirm-remove-node-close');
+
+            return;
+        }
+
+        $id = (int) $id;
+        $removed = $level === 'category'
+            ? $this->removeFromList($this->structureTree['categories'], $id)
+            : $this->removeFromTree($this->structureTree['categories'], $level, $id);
+
+        if (! $removed) {
+            $this->dispatch('confirm-remove-node-close');
+
+            return;
+        }
+
+        [$itemIds, $groupIds] = $this->descendantIds($removed);
+        foreach ($itemIds as $itemId) {
+            unset($this->responses[$itemId]);
+        }
+        foreach ($groupIds as $groupId) {
+            unset($this->groupNotes[$groupId]);
+        }
+
+        $this->structureTree['categories'] = $this->renumberNodes($this->structureTree['categories'] ?? []);
+        $this->structureIndexCache = null;
+        $this->fixActiveTabs();
+
+        $this->dispatch('confirm-remove-node-close');
+        $this->dispatch('structure-node-removed');
+        $this->notifyInfo('Struktur berhasil dihapus dari survey ini.');
+    }
+
+    /**
+     * Cari node (kategori/sub/grup/item) di tree berdasarkan id.
+     */
+    protected function findNode(array $nodes, int $id): ?array
+    {
+        foreach ($nodes as $node) {
+            if (($node['id'] ?? null) === $id) {
+                return $node;
+            }
+            foreach (['subCategories', 'itemGroups', 'items'] as $key) {
+                if ($found = $this->findNode($node[$key] ?? [], $id)) {
+                    return $found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Hapus elemen dengan id dari list (in-place), kembalikan node yang dihapus.
+     */
+    protected function removeFromList(array &$list, int $id): ?array
+    {
+        foreach ($list as $i => $node) {
+            if (($node['id'] ?? null) === $id) {
+                $removed = $list[$i];
+                array_splice($list, $i, 1);
+
+                return $removed;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Cari parent yang memuat node target lalu hapus dari list anaknya.
+     */
+    protected function removeFromTree(array &$nodes, string $level, int $id): ?array
+    {
+        $childKey = [
+            'sub_category' => 'subCategories',
+            'item_group' => 'itemGroups',
+            'item' => 'items',
+        ][$level] ?? null;
+
+        if (! $childKey) {
+            return null;
+        }
+
+        foreach ($nodes as &$node) {
+            if (! empty($node[$childKey]) && ($removed = $this->removeFromList($node[$childKey], $id))) {
+                return $removed;
+            }
+            foreach (['subCategories', 'itemGroups', 'items'] as $key) {
+                if (! empty($node[$key]) && ($found = $this->removeFromTree($node[$key], $level, $id))) {
+                    return $found;
+                }
+            }
+        }
+        unset($node);
+
+        return null;
+    }
+
+    /**
+     * Kumpulkan semua id item & item-group di bawah node (termasuk node itu
+     * sendiri bila ia item/group) — dipakai untuk cleanup data terkait.
+     */
+    protected function descendantIds(array $node): array
+    {
+        $itemIds = [];
+        $groupIds = [];
+
+        $walk = function (array $n) use (&$walk, &$itemIds, &$groupIds) {
+            if (isset($n['item_type'])) {
+                $itemIds[] = $n['id'];
+
+                return;
+            }
+            if (isset($n['items'])) {
+                $groupIds[] = $n['id'];
+                foreach ($n['items'] as $item) {
+                    $walk($item);
+                }
+
+                return;
+            }
+            foreach (['subCategories', 'itemGroups'] as $key) {
+                foreach ($n[$key] ?? [] as $child) {
+                    $walk($child);
+                }
+            }
+        };
+
+        $walk($node);
+
+        return [$itemIds, $groupIds];
+    }
+
+    /**
+     * Renumber order_num secara sekuensial di semua level (sub kategori, grup, item)
+     * agar penomoran tampil berurutan tanpa loncat setelah ada node dihapus.
+     * Rekursif — node children di-level berapapun ikut dinormalisasi.
+     */
+    protected function renumberNodes(array $nodes): array
+    {
+        foreach ($nodes as $i => &$node) {
+            $node['order_num'] = $i + 1;
+            foreach (['subCategories', 'itemGroups', 'items'] as $key) {
+                if (isset($node[$key]) && is_array($node[$key])) {
+                    $node[$key] = $this->renumberNodes($node[$key]);
+                }
+            }
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * Perbaiki tab aktif bila node yang dihapus sedang aktif/berisi tab aktif.
+     */
+    protected function fixActiveTabs(): void
+    {
+        $cats = $this->categories;
+
+        if (! $cats->contains('id', $this->activeCategory)) {
+            $this->activeCategory = $cats->first()?->id;
+        }
+
+        $activeCat = $cats->firstWhere('id', $this->activeCategory);
+        if (! $activeCat?->subCategories->contains('id', $this->activeSubCategory)) {
+            $this->activeSubCategory = $activeCat?->subCategories->first()?->id;
+        }
+    }
+
+    /**
      * Session key untuk draft — terpisah per mode agar draft create
      * tidak tabrakan dengan draft edit survey lain.
      */
@@ -530,6 +761,7 @@ class SurveyForm extends Component
             'notes' => $this->notes,
             'responses' => $this->responses,
             'groupNotes' => $this->groupNotes,
+            'structure' => $this->structureTree,
             'activeCategory' => $this->activeCategory,
             'activeSubCategory' => $this->activeSubCategory,
             'saved_at' => now()->toIso8601String(),
@@ -553,6 +785,14 @@ class SurveyForm extends Component
         $this->location = $draft['location'];
         $this->status = $draft['status'];
         $this->notes = $draft['notes'];
+
+        // Restore working copy struktur bila draft menyimpan hasil pemangkasan,
+        // lalu re-init responses/notes agar selaras dengan struktur itu.
+        if (! empty($draft['structure'])) {
+            $this->structureTree = $draft['structure'];
+            $this->structureIndexCache = null;
+            $this->editMode ? $this->loadResponses() : $this->initEmptyResponses();
+        }
 
         // Merge draft responses with empty responses (in case template changed)
         foreach ($this->responses as $itemId => $empty) {

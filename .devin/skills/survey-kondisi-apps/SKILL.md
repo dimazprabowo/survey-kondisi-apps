@@ -263,6 +263,7 @@ Jika ada ambiguitas yang berdampak besar -> TANYA dulu, jangan berasumsi.
 - Tabel: gunakan `overflow-x-auto` wrapper di luar `<table>` untuk horizontal scroll di mobile.
 - Grid form: `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4` (1 kolom mobile, 2 tablet, 3 desktop).
 - Action bar: tombol `w-full sm:w-auto` (full-width mobile, auto desktop).
+- Floating/sticky action bar (card berisi tombol aksi yang menempel di tepi viewport): JANGAN mepet tepi (`bottom-0`/`top-0`). Selalu beri offset `sticky bottom-3 sm:bottom-4` (atau `top-3`/`top-4` untuk bar atas) + `rounded-lg` + `shadow-lg` — terlihat mengambang, tidak tertutup browser chrome/toolbar mobile, dan tidak mengganjal konten saat scroll.
 - Filter & search: stack vertical di mobile (`flex flex-col sm:flex-row gap-3`), horizontal di desktop.
 - Modal: `max-w-2xl` default, content `px-4 py-4 sm:p-6` (padding lebih kecil di mobile).
 - Sidebar: sudah auto-collapse di mobile via Alpine store (jangan override).
