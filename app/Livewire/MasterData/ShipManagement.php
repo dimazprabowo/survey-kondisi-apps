@@ -8,6 +8,7 @@ use App\Livewire\Traits\HasNotification;
 use App\Models\Ship;
 use App\Services\ShipService;
 use App\Traits\HasDynamicLike;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -22,32 +23,6 @@ class ShipManagement extends Component
 
     public bool $filterChanged = false;
 
-    public $showModal = false;
-
-    public $editMode = false;
-
-    public $shipId;
-
-    public $name;
-
-    public $code;
-
-    public $year_built;
-
-    public $imo_number;
-
-    public $ship_type;
-
-    public $flag;
-
-    public $gross_tonnage;
-
-    public $owner;
-
-    public $operator;
-
-    public $status = 'active';
-
     public $showDeleteModal = false;
 
     public $deletingShipId;
@@ -57,38 +32,6 @@ class ShipManagement extends Component
     public function mount()
     {
         $this->authorize('viewAny', Ship::class);
-    }
-
-    public function rules()
-    {
-        return [
-            'name' => ['required', 'string', 'max:255'],
-            'code' => ['nullable', 'string', 'max:50', $this->editMode ? 'unique:ships,code,'.$this->shipId : 'unique:ships,code'],
-            'year_built' => ['nullable', 'integer', 'min:1900', 'max:'.(int) now()->format('Y')],
-            'imo_number' => ['nullable', 'string', 'max:20'],
-            'ship_type' => ['nullable', 'string', 'max:100'],
-            'flag' => ['nullable', 'string', 'max:100'],
-            'gross_tonnage' => ['nullable', 'string', 'max:20'],
-            'owner' => ['nullable', 'string', 'max:255'],
-            'operator' => ['nullable', 'string', 'max:255'],
-            'status' => ['required', 'string', 'in:'.implode(',', ShipStatus::values())],
-        ];
-    }
-
-    public function validationAttributes()
-    {
-        return [
-            'name' => 'nama kapal',
-            'code' => 'kode kapal',
-            'year_built' => 'tahun pembuatan',
-            'imo_number' => 'nomor IMO',
-            'ship_type' => 'jenis kapal',
-            'flag' => 'bendera',
-            'gross_tonnage' => 'gross tonnage',
-            'owner' => 'pemilik',
-            'operator' => 'operator',
-            'status' => 'status',
-        ];
     }
 
     public function updatingSearch()
@@ -111,20 +54,11 @@ class ShipManagement extends Component
         $this->notifySuccess('Filter berhasil direset.');
     }
 
-    public function getStatusOptionsProperty(): array
-    {
-        return collect(ShipStatus::cases())->map(fn ($case) => [
-            'value' => $case->value,
-            'label' => $case->label(),
-        ])->toArray();
-    }
-
     public function create()
     {
         $this->authorize('create', Ship::class);
-        $this->resetForm();
-        $this->editMode = false;
-        $this->showModal = true;
+
+        return $this->redirect(route('master-data.ships.create'), navigate: true);
     }
 
     public function edit($id)
@@ -132,63 +66,7 @@ class ShipManagement extends Component
         $ship = Ship::findOrFail($id);
         $this->authorize('update', $ship);
 
-        $this->shipId = $ship->id;
-        $this->name = $ship->name;
-        $this->code = $ship->code;
-        $this->year_built = $ship->year_built;
-        $this->imo_number = $ship->imo_number;
-        $this->ship_type = $ship->ship_type;
-        $this->flag = $ship->flag;
-        $this->gross_tonnage = $ship->gross_tonnage;
-        $this->owner = $ship->owner;
-        $this->operator = $ship->operator;
-        $this->status = $ship->status->value;
-
-        $this->editMode = true;
-        $this->showModal = true;
-    }
-
-    public function save(ShipService $service)
-    {
-        try {
-            $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            $this->notifyValidationError($e);
-            throw $e;
-        }
-
-        try {
-            $data = [
-                'name' => $this->name,
-                'code' => $this->code,
-                'year_built' => $this->year_built,
-                'imo_number' => $this->imo_number,
-                'ship_type' => $this->ship_type,
-                'flag' => $this->flag,
-                'gross_tonnage' => $this->gross_tonnage,
-                'owner' => $this->owner,
-                'operator' => $this->operator,
-                'status' => $this->status,
-            ];
-
-            if ($this->editMode) {
-                $ship = Ship::findOrFail($this->shipId);
-                $this->authorize('update', $ship);
-                $service->update($ship, $data);
-                $message = 'Kapal berhasil diupdate!';
-            } else {
-                $this->authorize('create', Ship::class);
-                $service->create($data);
-                $message = 'Kapal berhasil ditambahkan!';
-            }
-
-            $this->notifySuccess($message);
-            $this->closeModal();
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
-            $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
-        } catch (\Exception $e) {
-            $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
-        }
+        return $this->redirect(route('master-data.ships.edit', $ship), navigate: true);
     }
 
     public function confirmDelete($id)
@@ -237,20 +115,12 @@ class ShipManagement extends Component
         }
     }
 
-    public function closeModal()
+    public function getStatusOptionsProperty(): array
     {
-        $this->showModal = false;
-        $this->resetForm();
-        $this->resetValidation();
-    }
-
-    private function resetForm()
-    {
-        $this->reset([
-            'shipId', 'name', 'code', 'year_built', 'imo_number',
-            'ship_type', 'flag', 'gross_tonnage', 'owner', 'operator', 'status',
-        ]);
-        $this->status = ShipStatus::Active->value;
+        return collect(ShipStatus::cases())->map(fn ($case) => [
+            'value' => $case->value,
+            'label' => $case->label(),
+        ])->toArray();
     }
 
     public function exportExcel()
@@ -259,6 +129,21 @@ class ShipManagement extends Component
 
         return (new ShipsExport($this->search, $this->statusFilter))
             ->download('kapal-'.now()->format('Y-m-d-His').'.xlsx');
+    }
+
+    public function exportPdf(ShipService $service)
+    {
+        $this->authorize('exportPdf', Ship::class);
+
+        $ships = $service->filteredQuery($this->search, $this->statusFilter)->get();
+
+        $pdf = Pdf::loadView('exports.ships-pdf', ['ships' => $ships]);
+        $pdf->setPaper('a4', 'landscape');
+
+        return response()->streamDownload(
+            fn () => print ($pdf->output()),
+            'kapal-'.now()->format('Y-m-d-His').'.pdf'
+        );
     }
 
     public function render(ShipService $service)

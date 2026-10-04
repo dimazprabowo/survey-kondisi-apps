@@ -483,7 +483,7 @@ class SurveyForm extends Component
                 $this->notifySuccess('Survey berhasil dibuat!');
             }
 
-            return $this->redirect(route('surveys.index'), navigate: true);
+            return $this->redirect(route('surveys.show', $survey), navigate: true);
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {

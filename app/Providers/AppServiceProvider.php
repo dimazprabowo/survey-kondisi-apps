@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\Notification;
 use App\Models\Ship;
 use App\Models\Survey;
+use App\Models\SurveyReport;
 use App\Models\SurveyTemplate;
 use App\Models\SystemConfiguration;
 use App\Models\User;
@@ -18,6 +19,7 @@ use App\Policies\NotificationPolicy;
 use App\Policies\RolePolicy;
 use App\Policies\ShipPolicy;
 use App\Policies\SurveyPolicy;
+use App\Policies\SurveyReportPolicy;
 use App\Policies\SurveyTemplatePolicy;
 use App\Policies\SystemConfigurationPolicy;
 use App\Policies\UserPolicy;
@@ -51,6 +53,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(ChatMessage::class, ChatPolicy::class);
         Gate::policy(Ship::class, ShipPolicy::class);
         Gate::policy(Survey::class, SurveyPolicy::class);
+        Gate::policy(SurveyReport::class, SurveyReportPolicy::class);
         Gate::policy(SurveyTemplate::class, SurveyTemplatePolicy::class);
 
         // Dashboard policy — bound to a string key (no Eloquent model)

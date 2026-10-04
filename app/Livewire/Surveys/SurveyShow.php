@@ -75,25 +75,13 @@ class SurveyShow extends Component
         $this->activeSubCategory = $subCategoryId;
     }
 
-    protected function avgList(array $avgs): ?float
-    {
-        return $avgs === [] ? null : round(array_sum($avgs) / count($avgs), 2);
-    }
-
     /**
      * Item group average dari responses yang sudah eager-loaded (tanpa query tambahan).
+     * Delegasi ke SurveyService — single source of truth perhitungan rata-rata.
      */
     public function itemGroupAvg($itemGroup): ?float
     {
-        $itemAvgs = [];
-        foreach ($itemGroup->items as $item) {
-            $avg = $this->responses->get($item->id)?->avg_score;
-            if ($avg !== null) {
-                $itemAvgs[] = (float) $avg;
-            }
-        }
-
-        return $this->avgList($itemAvgs);
+        return app(SurveyService::class)->itemGroupAvg($itemGroup, $this->responses);
     }
 
     /**
@@ -101,15 +89,7 @@ class SurveyShow extends Component
      */
     public function subCategoryAvg($subCat): ?float
     {
-        $igAvgs = [];
-        foreach ($subCat->itemGroups as $itemGroup) {
-            $avg = $this->itemGroupAvg($itemGroup);
-            if ($avg !== null) {
-                $igAvgs[] = $avg;
-            }
-        }
-
-        return $this->avgList($igAvgs);
+        return app(SurveyService::class)->subCategoryAvg($subCat, $this->responses);
     }
 
     /**
@@ -117,15 +97,7 @@ class SurveyShow extends Component
      */
     public function categoryAvg($cat): ?float
     {
-        $scAvgs = [];
-        foreach ($cat->subCategories as $subCat) {
-            $avg = $this->subCategoryAvg($subCat);
-            if ($avg !== null) {
-                $scAvgs[] = $avg;
-            }
-        }
-
-        return $this->avgList($scAvgs);
+        return app(SurveyService::class)->categoryAvg($cat, $this->responses);
     }
 
     public function editSurvey()
@@ -133,6 +105,13 @@ class SurveyShow extends Component
         $this->authorize('update', $this->survey);
 
         return $this->redirect(route('surveys.edit', $this->survey), navigate: true);
+    }
+
+    public function openReport()
+    {
+        $this->authorize('viewAny', \App\Models\SurveyReport::class);
+
+        return $this->redirect(route('surveys.report', $this->survey), navigate: true);
     }
 
     public function render()

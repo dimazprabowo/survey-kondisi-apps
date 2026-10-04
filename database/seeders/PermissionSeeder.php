@@ -88,6 +88,11 @@ class PermissionSeeder extends Seeder
             'surveys_export_excel',
             'surveys_export_pdf',
 
+            // Laporan Survey (DOCX)
+            'survey_reports_view',
+            'survey_reports_update',
+            'survey_reports_generate',
+
             // Template Form (manajemen template survey)
             'survey_templates_view',
             'survey_templates_create',

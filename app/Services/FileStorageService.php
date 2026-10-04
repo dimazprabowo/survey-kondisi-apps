@@ -112,6 +112,33 @@ class FileStorageService
     }
 
     /**
+     * Simpan konten file yang dihasilkan aplikasi (mis. dokumen hasil generate)
+     * langsung ke disk permanen sesuai konvensi path.
+     *
+     * @param  array<string>  $segments
+     * @return array{path: string, name: string, size: int}
+     *
+     * @throws \RuntimeException Jika gagal disimpan.
+     */
+    public function storeContent(string $contents, string $feature, array $segments, string $fileName): array
+    {
+        $destination = $this->buildPath($feature, $segments, $fileName);
+        $disk = file_disk();
+
+        Storage::disk($disk)->put($destination, $contents);
+
+        if (! Storage::disk($disk)->exists($destination)) {
+            throw new \RuntimeException('Failed to store file to disk ['.$disk.']: '.$destination);
+        }
+
+        return [
+            'path' => $destination,
+            'name' => $fileName,
+            'size' => strlen($contents),
+        ];
+    }
+
+    /**
      * Hapus file permanen jika ada. Aman dipanggil dengan path null/kosong.
      */
     public function delete(?string $path): void
@@ -143,6 +170,17 @@ class FileStorageService
     public function download(string $path, ?string $downloadName = null)
     {
         return Storage::disk(file_disk())->download($path, $downloadName);
+    }
+
+    public function inline(string $path, string $contentType = 'application/octet-stream')
+    {
+        abort_unless($this->exists($path), 404);
+
+        return response(Storage::disk(file_disk())->get($path), 200, [
+            'Content-Type' => $contentType,
+            'Content-Disposition' => 'inline',
+            'Cache-Control' => 'private, max-age=300',
+        ]);
     }
 
     public function exists(?string $path): bool

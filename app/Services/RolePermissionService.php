@@ -133,6 +133,9 @@ class RolePermissionService
                 ['name' => 'surveys_delete',       'label' => 'Hapus Survey'],
                 ['name' => 'surveys_export_excel', 'label' => 'Export Excel Survey'],
                 ['name' => 'surveys_export_pdf',   'label' => 'Export PDF Survey'],
+                ['name' => 'survey_reports_view',     'label' => 'Lihat Laporan Survey'],
+                ['name' => 'survey_reports_update',   'label' => 'Edit Laporan Survey'],
+                ['name' => 'survey_reports_generate', 'label' => 'Generate Laporan Survey'],
             ],
             'Template Form' => [
                 ['name' => 'survey_templates_view',         'label' => 'Lihat Template'],

@@ -304,6 +304,11 @@
     <!-- Action Bar -->
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-end">
         <x-cancel-button wire:click="$redirect(route('surveys.index'))" target="$redirect" class="w-full sm:w-auto" />
+        @can('survey_reports_view')
+            <x-loading-button wire:click="openReport" target="openReport" variant="secondary" size="md" loadingText="Memuat..." icon="view" class="w-full sm:w-auto">
+                Laporan
+            </x-loading-button>
+        @endcan
         @can('surveys_update', $survey)
             <x-loading-button wire:click="editSurvey" target="editSurvey" variant="primary" size="md" loadingText="Memuat..." icon="edit" class="w-full sm:w-auto">
                 Edit Survey

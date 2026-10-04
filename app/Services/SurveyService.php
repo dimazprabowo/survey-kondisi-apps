@@ -280,6 +280,63 @@ class SurveyService
     }
 
     /**
+     * Rata-rata dari daftar nilai (null di-skip). Null jika list kosong.
+     */
+    protected function avgOfList(array $avgs): ?float
+    {
+        $avgs = array_values(array_filter($avgs, fn ($v) => $v !== null));
+
+        return $avgs !== [] ? round(array_sum($avgs) / count($avgs), 2) : null;
+    }
+
+    /**
+     * Item group average dari responses ter-keyed by survey_item_id.
+     * Dipakai bersama oleh SurveyShow (UI) dan report builder (DOCX).
+     */
+    public function itemGroupAvg(object $itemGroup, Collection $responses): ?float
+    {
+        $itemAvgs = [];
+        foreach ($itemGroup->items as $item) {
+            $avg = $responses->get($item->id)?->avg_score;
+            if ($avg !== null) {
+                $itemAvgs[] = (float) $avg;
+            }
+        }
+
+        return $this->avgOfList($itemAvgs);
+    }
+
+    /**
+     * Sub-category average (average of item group averages).
+     */
+    public function subCategoryAvg(object $subCat, Collection $responses): ?float
+    {
+        return $this->avgOfList(
+            $subCat->itemGroups->map(fn ($ig) => $this->itemGroupAvg($ig, $responses))->all()
+        );
+    }
+
+    /**
+     * Category average (average of sub-category averages).
+     */
+    public function categoryAvg(object $cat, Collection $responses): ?float
+    {
+        return $this->avgOfList(
+            $cat->subCategories->map(fn ($sc) => $this->subCategoryAvg($sc, $responses))->all()
+        );
+    }
+
+    /**
+     * Overall average (average of category averages).
+     */
+    public function overallAvg(Collection $categories, Collection $responses): ?float
+    {
+        return $this->avgOfList(
+            $categories->map(fn ($cat) => $this->categoryAvg($cat, $responses))->all()
+        );
+    }
+
+    /**
      * Calculate item average from scores (mirrors Excel =AVERAGE(E:F))
      * Only count numeric scores, ignore null/empty/"-".
      */

@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // 1. Ships (master data kapal)
+        // 1. Ships (master data kapal + particulars untuk laporan)
         Schema::create('ships', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -20,6 +20,24 @@ return new class extends Migration
             $table->string('gross_tonnage', 20)->nullable();
             $table->string('owner')->nullable();
             $table->string('operator')->nullable();
+            // Ship particulars (dipakai BAB II laporan survey)
+            $table->string('call_sign', 20)->nullable();
+            $table->string('net_tonnage', 20)->nullable();
+            $table->string('loa', 20)->nullable();
+            $table->string('lpp', 20)->nullable();
+            $table->string('breadth', 20)->nullable();
+            $table->string('depth', 20)->nullable();
+            $table->string('draft', 20)->nullable();
+            $table->string('dwt', 20)->nullable();
+            $table->string('builder')->nullable();
+            $table->string('port_of_registry')->nullable();
+            $table->string('hull_material', 100)->nullable();
+            $table->string('class_name')->nullable();
+            $table->string('class_notations')->nullable();
+            $table->string('main_engine')->nullable();
+            $table->string('main_engine_power')->nullable();
+            $table->string('aux_engine')->nullable();
+            $table->string('aux_engine_power')->nullable();
             $table->enum('status', ['active', 'inactive'])->default('active');
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
@@ -28,6 +46,21 @@ return new class extends Migration
 
             $table->index('status');
             $table->index('name');
+        });
+
+        // 1b. Ship certificates — repeater Status Class pada laporan (BAB II)
+        Schema::create('ship_certificates', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('ship_id')->constrained()->cascadeOnDelete();
+            $table->string('certificate_type');
+            $table->date('last_date')->nullable();
+            $table->date('next_1_date')->nullable();
+            $table->date('next_2_date')->nullable();
+            $table->date('postpone_date')->nullable();
+            $table->unsignedInteger('order_num')->default(0);
+            $table->timestamps();
+
+            $table->index(['ship_id', 'order_num']);
         });
 
         // 2. Survey templates (dapat dikelola admin, satu template = satu set struktur)
@@ -148,10 +181,76 @@ return new class extends Migration
 
             $table->index(['survey_id', 'survey_item_group_id']);
         });
+
+        // 7. Survey reports — dokumen laporan DOCX per survey (1:1)
+        Schema::create('survey_reports', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('survey_id')->unique()->constrained()->cascadeOnDelete();
+            // Meta laporan (cover, lembar pengesahan, referensi kontrak)
+            $table->string('report_number')->nullable();
+            $table->string('report_title')->nullable();
+            $table->string('contract_agreement_no')->nullable();
+            $table->date('contract_agreement_date')->nullable();
+            $table->string('contract_appointment_no')->nullable();
+            $table->date('contract_appointment_date')->nullable();
+            $table->string('approval_place')->nullable();
+            $table->date('approval_date')->nullable();
+            $table->string('approver_name')->nullable();
+            $table->string('inspector_1')->nullable();
+            $table->string('inspector_2')->nullable();
+            // File hasil generate (pola async Job + FileStorageService)
+            $table->string('file_path')->nullable();
+            $table->string('file_name')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->enum('file_status', ['processing', 'completed', 'failed'])->nullable();
+            $table->text('file_error')->nullable();
+            $table->timestamp('file_processed_at')->nullable();
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamps();
+
+            $table->index('file_status');
+        });
+
+        // 8. Survey report sections — blok narasi editable per section laporan
+        //    key: executive_summary | general | memoranda | finding_{catId} | saran_{catId}
+        Schema::create('survey_report_sections', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('survey_report_id')->constrained()->cascadeOnDelete();
+            $table->string('key', 100);
+            $table->longText('content')->nullable();
+            $table->unsignedInteger('order_num')->default(0);
+            $table->timestamps();
+
+            $table->unique(['survey_report_id', 'key']);
+        });
+
+        // 9. Dokumentasi temuan — maksimal satu foto utama per kategori snapshot survey
+        Schema::create('survey_report_documentations', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('survey_report_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('survey_category_id');
+            $table->string('file_path')->nullable();
+            $table->string('file_name')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->enum('file_status', ['processing', 'completed', 'failed'])->nullable();
+            $table->text('file_error')->nullable();
+            $table->timestamp('file_processed_at')->nullable();
+            $table->json('crop_data')->nullable();
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamps();
+
+            $table->unique(['survey_report_id', 'survey_category_id'], 'survey_report_documentation_category_unique');
+            $table->index('file_status');
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('survey_report_documentations');
+        Schema::dropIfExists('survey_report_sections');
+        Schema::dropIfExists('survey_reports');
         Schema::dropIfExists('survey_group_notes');
         Schema::dropIfExists('survey_responses');
         Schema::dropIfExists('surveys');
@@ -160,6 +259,7 @@ return new class extends Migration
         Schema::dropIfExists('survey_sub_categories');
         Schema::dropIfExists('survey_categories');
         Schema::dropIfExists('survey_templates');
+        Schema::dropIfExists('ship_certificates');
         Schema::dropIfExists('ships');
     }
 };

@@ -1,0 +1,887 @@
+<?php
+
+namespace App\Services;
+
+use App\Enums\SurveyItemType;
+use App\Models\SurveyReport;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpWord\TemplateProcessor;
+
+/**
+ * Bangun dokumen laporan survey (DOCX) dari template ber-placeholder.
+ *
+ * Dua lapis pengisian:
+ *  1. TemplateProcessor  -> placeholder skalar ${field} + gambar ${benchmark_chart}
+ *  2. Injeksi XML        -> blok dinamis (tabel BAB III, breakdown CAP, dll.)
+ *     menggantikan paragraf marker ${blok} dengan XML WordprocessingML
+ *     yang dibangun programatis.
+ *
+ * Layout (cover, header/footer, TOC, tabel kriteria CAP, dll.) tetap utuh
+ * dari template — hanya konten dinamis yang diisi/diinjeksi.
+ */
+class SurveyReportDocxBuilder
+{
+    public const TEMPLATE_PATH = 'app/private/templates/report-charter-condition.docx';
+
+    public function __construct(
+        protected SurveyService $surveyService,
+        protected SurveyReportService $reportService,
+    ) {}
+
+    /**
+     * Generate DOCX ke file temporary; return absolute path.
+     *
+     * @throws \RuntimeException
+     */
+    public function build(SurveyReport $report): string
+    {
+        $templatePath = storage_path(self::TEMPLATE_PATH);
+        if (! is_file($templatePath)) {
+            throw new \RuntimeException('Template laporan tidak ditemukan: '.$templatePath);
+        }
+
+        $data = $this->reportService->buildReportData($report);
+
+        $tp = new TemplateProcessor($templatePath);
+        $this->fillScalars($tp, $data);
+        $this->fillBenchmarkChart($tp, $data);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'report_').'.docx';
+        $tp->saveAs($tmpFile);
+
+        $this->injectBlocks($tmpFile, $data);
+
+        return $tmpFile;
+    }
+
+    // =================================================================
+    //  Layer 1 — placeholder skalar via TemplateProcessor
+    // =================================================================
+
+    protected function fillScalars(TemplateProcessor $tp, array $data): void
+    {
+        $report = $data['report'];
+        $ship = $data['ship'];
+
+        $tp->setValue('report_no', $report->report_number ?? '-');
+        $tp->setValue('report_title', $report->report_title ?? '');
+        $tp->setValue('ship_name', $ship?->name ?? '-');
+        $tp->setValue('ship_type', $ship?->ship_type ?? '-');
+
+        // Lembar pengesahan — ringkasan dimensi kapal + tanda tangan
+        $tp->setValue('loa', $ship?->loa ?? '-');
+        $tp->setValue('breadth', $ship?->breadth ?? '-');
+        $tp->setValue('draft', $ship?->draft ?? '-');
+        $tp->setValue('approval_place_date', $this->approvalPlaceDate($report));
+        $tp->setValue('approver_name', $report->approver_name ?? '-');
+        $tp->setValue('inspector_1', $report->inspector_1 ?? '-');
+        $tp->setValue('inspector_2', $report->inspector_2 ?? '-');
+
+        // BAB II — ship particulars
+        $tp->setValue('sp_name', $ship?->name ?? '-');
+        $tp->setValue('sp_type', $ship?->ship_type ?? '-');
+        $tp->setValue('sp_imo', $ship?->imo_number ?? '-');
+        $tp->setValue('sp_call_sign', $ship?->call_sign ?? '-');
+        $tp->setValue('sp_gt_nt', trim(($ship?->gross_tonnage ?? '-').'/'.($ship?->net_tonnage ?? '-'), '/'));
+        $tp->setValue('sp_year_built', (string) ($ship?->year_built ?? '-'));
+        $tp->setValue('sp_builder', $ship?->builder ?? '-');
+        $tp->setValue('sp_port_registry', $ship?->port_of_registry ?? '-');
+        $tp->setValue('sp_hull_material', $ship?->hull_material ?? '-');
+        $tp->setValue('sp_loa', $ship?->loa ?? '-');
+        $tp->setValue('sp_lpp', $ship?->lpp ?? '-');
+        $tp->setValue('sp_breadth', $ship?->breadth ?? '-');
+        $tp->setValue('sp_depth', $ship?->depth ?? '-');
+        $tp->setValue('sp_draft', $ship?->draft ?? '-');
+        $tp->setValue('sp_dwt', $ship?->dwt ?? '-');
+        $tp->setValue('sp_class', $ship?->class_name ?? '-');
+        $tp->setValue('sp_class_notations', $ship?->class_notations ?? '-');
+        $tp->setValue('sp_main_engine', $ship?->main_engine ?? '-');
+        $tp->setValue('sp_me_power', $ship?->main_engine_power ?? '-');
+        $tp->setValue('sp_aux_engine', $ship?->aux_engine ?? '-');
+        $tp->setValue('sp_aux_power', $ship?->aux_engine_power ?? '-');
+    }
+
+    protected function approvalPlaceDate(SurveyReport $report): string
+    {
+        $place = $report->approval_place ?: '';
+        $date = $report->approval_date?->translatedFormat('d F Y') ?? '';
+
+        return trim($place.($place && $date ? ', ' : '').$date) ?: '-';
+    }
+
+    protected function fillBenchmarkChart(TemplateProcessor $tp, array $data): void
+    {
+        $chartPath = $this->renderBenchmarkChart($data['benchmark']);
+        if ($chartPath) {
+            $tp->setImageValue('benchmark_chart', [
+                'path' => $chartPath,
+                'width' => 480,
+                'height' => 300,
+                'ratio' => false,
+            ]);
+        }
+    }
+
+    // =================================================================
+    //  Layer 2 — injeksi blok XML ke marker ${...}
+    // =================================================================
+
+    protected function injectBlocks(string $docxPath, array $data): void
+    {
+        $zip = new \ZipArchive;
+        if ($zip->open($docxPath) !== true) {
+            throw new \RuntimeException('Gagal membuka dokumen hasil generate.');
+        }
+
+        $xml = $zip->getFromName('word/document.xml');
+        $data['documentationRelationships'] = $this->injectDocumentationImages($zip, $data);
+        $blocks = $this->buildBlocks($data);
+
+        foreach ($blocks as $marker => $blockXml) {
+            $xml = $this->replaceMarkerParagraph($xml, $marker, $blockXml);
+        }
+
+        $zip->addFromString('word/document.xml', $xml);
+        $this->enableFieldUpdates($zip);
+        $zip->close();
+    }
+
+    protected function enableFieldUpdates(\ZipArchive $zip): void
+    {
+        $settingsPath = 'word/settings.xml';
+        $settings = $zip->getFromName($settingsPath);
+        if ($settings === false || str_contains($settings, '<w:updateFields')) {
+            return;
+        }
+
+        $settings = str_replace('</w:settings>', '<w:updateFields w:val="true"/></w:settings>', $settings);
+        $zip->addFromString($settingsPath, $settings);
+    }
+
+    protected function injectDocumentationImages(\ZipArchive $zip, array $data): array
+    {
+        $relationshipsPath = 'word/_rels/document.xml.rels';
+        $relationships = $zip->getFromName($relationshipsPath);
+        if ($relationships === false) {
+            return [];
+        }
+
+        preg_match_all('/Id="rId(\d+)"/', $relationships, $matches);
+        $nextId = $matches[1] ? max(array_map('intval', $matches[1])) + 1 : 1;
+        $injected = [];
+
+        foreach ($data['documentations'] as $categoryId => $documentation) {
+            if (! $documentation->file_path || ! Storage::disk(file_disk())->exists($documentation->file_path)) {
+                continue;
+            }
+
+            $relationshipId = 'rId'.$nextId++;
+            $mediaName = 'report-documentation-'.$documentation->id.'.jpg';
+            $zip->addFromString('word/media/'.$mediaName, Storage::disk(file_disk())->get($documentation->file_path));
+            $relationship = '<Relationship Id="'.$relationshipId.'" '
+                .'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+                .'Target="media/'.$mediaName.'"/>';
+            $relationships = str_replace('</Relationships>', $relationship.'</Relationships>', $relationships);
+            $injected[(int) $categoryId] = $relationshipId;
+        }
+
+        $zip->addFromString($relationshipsPath, $relationships);
+
+        if ($injected !== []) {
+            $contentTypes = $zip->getFromName('[Content_Types].xml');
+            if ($contentTypes !== false && ! str_contains($contentTypes, 'Extension="jpg"')) {
+                $contentTypes = str_replace(
+                    '</Types>',
+                    '<Default Extension="jpg" ContentType="image/jpeg"/></Types>',
+                    $contentTypes
+                );
+                $zip->addFromString('[Content_Types].xml', $contentTypes);
+            }
+        }
+
+        return $injected;
+    }
+
+    /**
+     * Ganti paragraf <w:p> yang berisi teks marker ${name} dengan XML blok.
+     * Marker sengaja berada di paragraf kosong tersendiri pada template.
+     */
+    protected function replaceMarkerParagraph(string $xml, string $marker, string $blockXml): string
+    {
+        $quoted = preg_quote('${'.$marker.'}', '/');
+        $pattern = '/<w:p\b[^>]*>(?:(?!<\/w:p>).)*?'.$quoted.'(?:(?!<\/w:p>).)*?<\/w:p>/s';
+
+        $result = preg_replace($pattern, $blockXml, $xml, 1);
+
+        return $result ?? $xml;
+    }
+
+    /**
+     * Bangun seluruh blok XML dinamis. Key = nama marker di template.
+     */
+    protected function buildBlocks(array $data): array
+    {
+        return [
+            'exec_summary' => $this->buildExecSummary($data),
+            'cap_breakdown' => $this->buildCapBreakdown($data),
+            'temuan_table' => $this->buildFindingsTable($data),
+            'bab1_contract' => $this->buildContractParagraph($data),
+            'bab1_general' => $this->buildParagraphs($this->section($data, 'general')),
+            'status_class_table' => $this->buildStatusClassTable($data),
+            'memoranda' => $this->buildParagraphs($this->section($data, 'memoranda')),
+            'bab3' => $this->buildBab3($data),
+            'bab4' => $this->buildBab4($data),
+        ];
+    }
+
+    // -----------------------------------------------------------------
+    //  Blok: Executive Summary
+    // -----------------------------------------------------------------
+
+    protected function buildExecSummary(array $data): string
+    {
+        $xml = $this->buildParagraphs($this->section($data, 'executive_summary'));
+
+        // Daftar kategori sebagai daftar bernomor (roman sesuai tampilan report)
+        $i = 0;
+        foreach ($data['categories'] as $cat) {
+            $xml .= $this->p(($i + 1).'. '.$cat->label, ['indent' => 360]);
+            $i++;
+        }
+
+        // Kalimat pembuka tabel breakdown
+        $xml .= $this->p(
+            'Tabel berikut menyajikan rincian Overall CAP Rating hasil survei kondisi kapal '
+            .($data['ship']?->name ?? '-').', yang diperoleh dari rata-rata penilaian pada komponen pemeriksaan utama.'
+            .($data['overallCap'] !== null
+                ? ' Berdasarkan hasil penilaian, kapal ini memperoleh Overall CAP Rating sebesar '
+                    .number_format($data['overallCap'], 2).'. Adapun rincian penilaian sebagai berikut:'
+                : '')
+        );
+
+        return $xml;
+    }
+
+    protected function buildCapBreakdown(array $data): string
+    {
+        $categories = $data['categories'];
+        $responses = $data['responses'];
+        $shipName = $data['ship']?->name ?? '-';
+        $overall = $data['overallCap'];
+
+        // Layout dua kolom seperti template: separuh kategori kiri, sisanya kanan.
+        $half = (int) ceil($categories->count() / 2);
+        $left = $categories->slice(0, $half)->values();
+        $right = $categories->slice($half)->values();
+
+        $leftXml = $this->buildBreakdownColumn($left, $responses, 0);
+        $rightXml = $this->buildBreakdownColumn($right, $responses, $half);
+
+        $overallRow = $this->tbl([82, 3, 15], [[
+            $this->tc($this->p('Overall CAP Rating Condition '.$shipName, ['bold' => true]), []),
+            $this->tc($this->p(':', ['bold' => true, 'jc' => 'center']), []),
+            $this->tc($this->p($overall !== null ? number_format($overall, 2) : '-', ['bold' => true, 'jc' => 'center']), []),
+        ]], [], ['borders' => false]);
+
+        $rows = [
+            [$this->tc($this->p('Overall CAP Rating Breakdown', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['span' => 2, 'shade' => '4472C4'])],
+            [$this->tc($overallRow, ['span' => 2])],
+            [$this->tc($this->p(''), ['span' => 2, 'shade' => '888888'])],
+            [
+                $this->tc($leftXml, []),
+                $this->tc($rightXml, []),
+            ],
+        ];
+
+        return $this->tbl([50, 50], $rows, [0]);
+    }
+
+    /**
+     * Konten satu kolom breakdown: judul kategori bold + daftar sub kategori.
+     */
+    protected function buildBreakdownColumn(Collection $categories, Collection $responses, int $startIndex): string
+    {
+        $rows = [];
+        foreach ($categories as $i => $cat) {
+            $catAvg = $this->surveyService->categoryAvg($cat, $responses);
+            $rows[] = [
+                $this->tc($this->p(($startIndex + $i + 1).'. '.$cat->label, ['bold' => true, 'bottomBorder' => true]), ['span' => 2]),
+                $this->tc($this->p(':', ['bold' => true, 'jc' => 'center', 'bottomBorder' => true]), []),
+                $this->tc($this->p($catAvg !== null ? number_format($catAvg, 2) : '-', ['jc' => 'right', 'bottomBorder' => true]), []),
+            ];
+            foreach ($cat->subCategories as $sc) {
+                $scAvg = $this->surveyService->subCategoryAvg($sc, $responses);
+                $rows[] = [
+                    $this->tc($this->p('-', ['jc' => 'center']), []),
+                    $this->tc($this->p($sc->name), []),
+                    $this->tc($this->p(''), []),
+                    $this->tc($this->p($scAvg !== null ? number_format($scAvg, 2) : '-', ['jc' => 'right']), []),
+                ];
+            }
+        }
+
+        return $rows !== [] ? $this->tbl([7, 68, 5, 20], $rows, [], ['borders' => false]) : $this->p('');
+    }
+
+    protected function buildFindingsTable(array $data): string
+    {
+        $rows = [
+            [
+                $this->tc($this->p('No.', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '5B9BD5']),
+                $this->tc($this->p('Item Pemeriksaan', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '5B9BD5']),
+                $this->tc($this->p('Keterangan', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '5B9BD5']),
+                $this->tc($this->p('Dokumentasi', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '5B9BD5']),
+            ],
+        ];
+
+        $i = 0;
+        foreach ($data['categories'] as $cat) {
+            $i++;
+            $content = $this->section($data, 'finding_'.$cat->id);
+            $relationshipId = $data['documentationRelationships'][$cat->id] ?? null;
+            $rows[] = [
+                $this->tc($this->p((string) $i, ['jc' => 'center']), []),
+                $this->tc($this->p($cat->label), []),
+                $this->tc($this->buildParagraphs($content ?: '-'), []),
+                $this->tc($relationshipId ? $this->imageDrawing($relationshipId, $cat->id) : $this->p(''), ['vAlign' => 'center']),
+            ];
+        }
+
+        return $this->tbl([6, 18, 42, 34], $rows, [0]);
+    }
+
+    // -----------------------------------------------------------------
+    //  Blok: BAB I & BAB II
+    // -----------------------------------------------------------------
+
+    protected function buildContractParagraph(array $data): string
+    {
+        $report = $data['report'];
+
+        $agreement = $report->contract_agreement_no
+            ? 'Surat Perjanjian Nomor. '.$report->contract_agreement_no
+                .($report->contract_agreement_date ? ' tanggal '.$report->contract_agreement_date->translatedFormat('d F Y') : '')
+            : null;
+        $appointment = $report->contract_appointment_no
+            ? 'Surat Penunjukan Pelaksanaan Pekerjaan Nomor. '.$report->contract_appointment_no
+                .($report->contract_appointment_date ? ' tanggal '.$report->contract_appointment_date->translatedFormat('d F Y') : '')
+            : null;
+
+        $refs = implode('; dan ', array_filter([$agreement, $appointment]));
+        $title = $report->report_title ? ' tentang Pekerjaan '.$report->report_title.'.' : '.';
+
+        return $this->p(
+            ($refs ? 'Sesuai dengan '.$refs : 'Sesuai dengan dokumen kontrak terkait')
+            .' kepada PT. Biro Klasifikasi Indonesia (Persero) – SBU Marine Services Jakarta'.$title
+        );
+    }
+
+    protected function buildStatusClassTable(array $data): string
+    {
+        $rows = [
+            [
+                $this->tc($this->p('CERTIFICATE TYPE', ['bold' => true, 'jc' => 'center']), ['shade' => 'D9E2F3']),
+                $this->tc($this->p('LAST', ['bold' => true, 'jc' => 'center']), ['shade' => 'D9E2F3']),
+                $this->tc($this->p('NEXT 1', ['bold' => true, 'jc' => 'center']), ['shade' => 'D9E2F3']),
+                $this->tc($this->p('NEXT 2', ['bold' => true, 'jc' => 'center']), ['shade' => 'D9E2F3']),
+                $this->tc($this->p('POSTPONE', ['bold' => true, 'jc' => 'center']), ['shade' => 'D9E2F3']),
+            ],
+        ];
+
+        foreach ($data['ship']?->certificates ?? [] as $cert) {
+            $rows[] = [
+                $this->tc($this->p($cert->certificate_type), []),
+                $this->tc($this->p($cert->last_date?->format('d/m/Y') ?? '', ['jc' => 'center']), []),
+                $this->tc($this->p($cert->next_1_date?->format('d/m/Y') ?? '', ['jc' => 'center']), []),
+                $this->tc($this->p($cert->next_2_date?->format('d/m/Y') ?? '', ['jc' => 'center']), []),
+                $this->tc($this->p($cert->postpone_date?->format('d/m/Y') ?? '', ['jc' => 'center']), []),
+            ];
+        }
+
+        return $this->tbl([36, 16, 16, 16, 16], $rows);
+    }
+
+    // -----------------------------------------------------------------
+    //  Blok: BAB III — tabel pemeriksaan per kategori
+    // -----------------------------------------------------------------
+
+    protected function buildBab3(array $data): string
+    {
+        $responses = $data['responses'];
+        $groupNotes = $data['groupNotes'];
+        $xml = '';
+
+        foreach ($data['categories'] as $catIndex => $cat) {
+            $catAvg = $this->surveyService->categoryAvg($cat, $responses);
+            $xml .= $this->p(strtoupper($cat->label), ['style' => 'Heading2']);
+
+            $legend = $this->scoreLegend($cat);
+            if ($legend !== '') {
+                $xml .= $this->p($legend, ['bold' => true, 'jc' => 'center']);
+            }
+
+            $summaryRows = [
+                [
+                    $this->tc($this->p('No.', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '4472C4']),
+                    $this->tc($this->p('Item', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '4472C4']),
+                    $this->tc($this->p('Overall CAP Rating', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '4472C4']),
+                ],
+                [
+                    $this->tc($this->p(to_roman($catIndex + 1), ['bold' => true, 'jc' => 'center']), []),
+                    $this->tc($this->p(strtoupper($cat->label).' OVERALL CAP RATING', ['bold' => true]), []),
+                    $this->tc($this->p($catAvg !== null ? number_format($catAvg, 2) : '-', ['bold' => true, 'jc' => 'center']), []),
+                ],
+            ];
+
+            foreach ($cat->subCategories as $scIndex => $sc) {
+                $scAvg = $this->surveyService->subCategoryAvg($sc, $responses);
+                $summaryRows[] = [
+                    $this->tc($this->p((string) ($scIndex + 1), ['bold' => true, 'jc' => 'center']), []),
+                    $this->tc($this->p($sc->name, ['bold' => true]), []),
+                    $this->tc($this->p($scAvg !== null ? number_format($scAvg, 2) : '-', ['jc' => 'center']), []),
+                ];
+            }
+            $xml .= $this->tbl([7, 80, 13], $summaryRows, [0]);
+
+            foreach ($cat->subCategories as $scIndex => $sc) {
+                foreach ($sc->itemGroups as $igIndex => $ig) {
+                    $xml .= $this->buildBab3GroupTable(
+                        ($scIndex + 1).'.'.($igIndex + 1),
+                        $ig,
+                        $responses,
+                        $groupNotes
+                    );
+                }
+            }
+
+            $xml .= $this->p('');
+        }
+
+        return $xml;
+    }
+
+    protected function buildBab3GroupTable(
+        string $number,
+        object $group,
+        Collection $responses,
+        Collection $groupNotes
+    ): string {
+        $isInventory = $this->isInventoryGroup($group);
+        $labels = $isInventory ? ['Qty', 'Specification'] : $this->groupScoreLabels($group);
+        $scoreWidth = 23 / count($labels);
+        $widths = array_merge([7, 9, 4, 44], array_fill(0, count($labels), $scoreWidth), [13]);
+        $remainingSpan = 3 + count($labels);
+        $groupAvg = $this->surveyService->itemGroupAvg($group, $responses);
+
+        $rows = [[
+            $this->tc($this->p(''), []),
+            $this->tc($this->p($number, ['bold' => true, 'jc' => 'center']), []),
+            $this->tc($this->p(''), []),
+            $this->tc($this->p(strtoupper($group->name), ['bold' => true]), ['span' => 1 + count($labels)]),
+            $this->tc($this->p($groupAvg !== null ? number_format($groupAvg, 2) : '-', ['jc' => 'center']), []),
+        ]];
+
+        $labelCells = [$this->tc($this->p(''), ['span' => 4])];
+        foreach ($labels as $label) {
+            $labelCells[] = $this->tc($this->p($label, ['bold' => true, 'jc' => 'center']), []);
+        }
+        $labelCells[] = $this->tc($this->p($isInventory ? '' : 'Avg', ['bold' => true, 'jc' => 'center']), []);
+        $rows[] = $labelCells;
+
+        foreach ($group->items as $itemIndex => $item) {
+            $response = $responses->get($item->id);
+            $itemName = $item->name.($item->has_date_fields ? $this->dateSuffix($response) : '');
+            $cells = [
+                $this->tc($this->p(''), ['span' => 2]),
+                $this->tc($this->p(to_letter($itemIndex + 1), ['jc' => 'center']), []),
+                $this->tc($this->p($itemName), []),
+            ];
+
+            if ($isInventory) {
+                $cells[] = $this->tc($this->p($response?->qty !== null ? (string) $response->qty : '-', ['jc' => 'center']), []);
+                $cells[] = $this->tc($this->p($response?->specification ?? '-'), []);
+            } else {
+                foreach ($labels as $label) {
+                    $score = $response?->scores[$label] ?? null;
+                    $cells[] = $this->tc($this->p($score !== null && $score !== '' ? (string) $score : '-', ['jc' => 'center']), []);
+                }
+            }
+
+            $cells[] = $this->tc($this->p(
+                $response?->avg_score !== null ? number_format((float) $response->avg_score, 2) : '-',
+                ['jc' => 'center']
+            ), []);
+            $rows[] = $cells;
+        }
+
+        $rows[] = [
+            $this->tc($this->p(''), []),
+            $this->tc($this->p('Note:', ['bold' => true]), []),
+            $this->tc($this->p(''), ['span' => $remainingSpan]),
+        ];
+        $notes = $groupNotes->get($group->id);
+        if ($notes && $notes->isNotEmpty()) {
+            foreach ($notes as $note) {
+                $rows[] = [
+                    $this->tc($this->p(''), []),
+                    $this->tc($this->p('-', ['jc' => 'center']), []),
+                    $this->tc($this->p($note->note), ['span' => $remainingSpan]),
+                ];
+            }
+        } else {
+            $rows[] = [
+                $this->tc($this->p(''), []),
+                $this->tc($this->p('-', ['jc' => 'center']), []),
+                $this->tc($this->p(''), ['span' => $remainingSpan]),
+            ];
+        }
+
+        return $this->tbl($widths, $rows);
+    }
+
+    protected function isInventoryGroup(object $group): bool
+    {
+        return $group->items->every(fn ($item) => $item->item_type === SurveyItemType::Inventory);
+    }
+
+    protected function groupScoreLabels(object $group): array
+    {
+        $labels = $group->items
+            ->filter(fn ($item) => $item->item_type === SurveyItemType::Score)
+            ->flatMap(fn ($item) => $item->score_labels ?? [])
+            ->unique()
+            ->values()
+            ->all();
+
+        return $labels !== [] ? $labels : ['C', 'V'];
+    }
+
+    /**
+     * Tanggal issued/expired untuk item sertifikat (has_date_fields).
+     */
+    protected function dateSuffix($response): string
+    {
+        if (! $response || (! $response->date_issued && ! $response->date_expired)) {
+            return '';
+        }
+
+        $parts = [];
+        if ($response->date_issued) {
+            $parts[] = 'Issued: '.$response->date_issued->format('d/m/Y');
+        }
+        if ($response->date_expired) {
+            $parts[] = 'Expired: '.$response->date_expired->format('d/m/Y');
+        }
+
+        return ' ('.implode(' – ', $parts).')';
+    }
+
+    /**
+     * Legend label skor di atas tabel kategori, mis. "C= Coating   V= Visual".
+     */
+    protected function scoreLegend(object $cat): string
+    {
+        $map = ['C' => 'Coating', 'V' => 'Visual', 'F' => 'Function', 'M' => 'Maintenance'];
+
+        $usedLabels = $cat->subCategories
+            ->flatMap(fn ($sc) => $sc->itemGroups)
+            ->flatMap(fn ($ig) => $ig->items)
+            ->filter(fn ($item) => $item->item_type === SurveyItemType::Score)
+            ->flatMap(fn ($item) => $item->score_labels ?? [])
+            ->unique();
+
+        return collect(array_keys($map))
+            ->filter(fn ($label) => $usedLabels->contains($label))
+            ->map(fn ($label) => $label.'= '.$map[$label])
+            ->implode('    ');
+    }
+
+    // -----------------------------------------------------------------
+    //  Blok: BAB IV — Saran
+    // -----------------------------------------------------------------
+
+    protected function buildBab4(array $data): string
+    {
+        $xml = $this->p('Adapun saran dari hasil pemeriksaan kondisi kapal yaitu sebagai berikut:');
+
+        foreach ($data['categories'] as $cat) {
+            $content = trim((string) $this->section($data, 'saran_'.$cat->id));
+            if ($content === '') {
+                continue;
+            }
+
+            $xml .= $this->p($cat->label.':', ['bold' => true]);
+
+            foreach (preg_split('/\r?\n/', $content) as $line) {
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+
+                if (str_starts_with($line, '- ')) {
+                    $xml .= $this->p('• '.substr($line, 2), ['indent' => 360]);
+                } else {
+                    $xml .= $this->p($line);
+                }
+            }
+        }
+
+        return $xml;
+    }
+
+    // -----------------------------------------------------------------
+    //  Grafik benchmark (scatter: umur kapal vs CAP rating)
+    // -----------------------------------------------------------------
+
+    /**
+     * Render scatter chart ke PNG via GD; return binary PNG atau null.
+     * Dipakai oleh DOCX (ditulis ke temp file) dan preview live di editor.
+     */
+    public function renderBenchmarkChartPng(array $benchmark): ?string
+    {
+        if (! extension_loaded('gd')) {
+            return null;
+        }
+
+        $w = 960;
+        $h = 600;
+        $padL = 80;
+        $padR = 30;
+        $padT = 50;
+        $padB = 70;
+
+        $img = imagecreatetruecolor($w, $h);
+        $white = imagecolorallocate($img, 255, 255, 255);
+        $black = imagecolorallocate($img, 40, 40, 40);
+        $gray = imagecolorallocate($img, 200, 200, 200);
+        $blue = imagecolorallocate($img, 37, 99, 235);
+        $red = imagecolorallocate($img, 220, 38, 38);
+        imagefill($img, 0, 0, $white);
+
+        $allX = array_map(fn ($p) => $p['x'], $benchmark['points']);
+        if ($benchmark['current']) {
+            $allX[] = $benchmark['current']['x'];
+        }
+        $maxX = max(10, (int) ceil(($allX ? max($allX) : 40) / 10) * 10);
+        $maxY = 4.0;
+
+        $px = fn ($x) => (int) round($padL + ($x / $maxX) * ($w - $padL - $padR));
+        $py = fn ($y) => (int) round($h - $padB - ($y / $maxY) * ($h - $padT - $padB));
+
+        // Grid + axis labels
+        for ($y = 0; $y <= 4; $y++) {
+            $yy = $py($y);
+            imageline($img, $padL, $yy, $w - $padR, $yy, $y === 0 ? $black : $gray);
+            imagestring($img, 4, $padL - 30, $yy - 8, (string) $y, $black);
+        }
+        $stepX = $maxX > 50 ? 10 : 5;
+        for ($x = 0; $x <= $maxX; $x += $stepX) {
+            $xx = $px($x);
+            imageline($img, $xx, $h - $padB, $xx, $h - $padB + 5, $black);
+            imagestring($img, 3, $xx - 8, $h - $padB + 10, (string) $x, $black);
+        }
+        imageline($img, $padL, $h - $padB, $w - $padR, $h - $padB, $black);
+        imageline($img, $padL, $h - $padB, $padL, $padT, $black);
+
+        imagestring($img, 4, (int) ($w / 2 - 60), $h - 30, 'Ship Age (years)', $black);
+        imagestringup($img, 4, 15, (int) ($h / 2 + 60), 'Overall CAP Rating', $black);
+        imagestring($img, 4, $padL, 15, 'Benchmark: Umur Kapal vs CAP Rating', $black);
+
+        // Titik populasi (biru)
+        foreach ($benchmark['points'] as $p) {
+            imagefilledellipse($img, (int) $px($p['x']), (int) $py($p['y']), 12, 12, $blue);
+        }
+
+        // Titik kapal ini (merah)
+        if ($benchmark['current']) {
+            imagefilledellipse(
+                $img,
+                (int) $px($benchmark['current']['x']),
+                (int) $py($benchmark['current']['y']),
+                18,
+                18,
+                $red
+            );
+        }
+
+        ob_start();
+        imagepng($img);
+        $png = ob_get_clean();
+        imagedestroy($img);
+
+        return $png !== false ? $png : null;
+    }
+
+    /**
+     * Render scatter chart ke PNG temporary; return path atau null.
+     */
+    protected function renderBenchmarkChart(array $benchmark): ?string
+    {
+        $png = $this->renderBenchmarkChartPng($benchmark);
+        if ($png === null) {
+            return null;
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'chart_').'.png';
+        file_put_contents($path, $png);
+
+        return $path;
+    }
+
+    // =================================================================
+    //  WordprocessingML helpers
+    // =================================================================
+
+    protected function section(array $data, string $key): string
+    {
+        return (string) ($data['sections']->get($key)?->content ?? '');
+    }
+
+    /**
+     * Paragraf multi-baris: tiap baris -> satu <w:p>. Kosong -> satu <w:p> kosong.
+     */
+    protected function buildParagraphs(string $content): string
+    {
+        $lines = preg_split('/\r?\n/', trim($content));
+        if ($lines === false || $lines === ['']) {
+            return $this->p('');
+        }
+
+        return implode('', array_map(fn ($line) => $this->p(trim($line)), $lines));
+    }
+
+    protected function imageDrawing(string $relationshipId, int $categoryId): string
+    {
+        $width = 2286000;
+        $height = 1524000;
+        $name = 'Dokumentasi kategori '.$categoryId;
+
+        return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing>'
+            .'<wp:inline distT="0" distB="0" distL="0" distR="0">'
+            .'<wp:extent cx="'.$width.'" cy="'.$height.'"/>'
+            .'<wp:docPr id="'.(10000 + $categoryId).'" name="'.$this->esc($name).'"/>'
+            .'<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+            .'<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+            .'<pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="'.$this->esc($name).'"/><pic:cNvPicPr/></pic:nvPicPr>'
+            .'<pic:blipFill><a:blip r:embed="'.$relationshipId.'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+            .'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'.$width.'" cy="'.$height.'"/></a:xfrm>'
+            .'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>'
+            .'</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+    }
+
+    /**
+     * Satu paragraf <w:p>.
+     * opts: bold, italic, color, jc (center/right/both), style (pStyle), indent (twips).
+     */
+    protected function p(string $text, array $opts = []): string
+    {
+        $pPr = '';
+        $pPrInner = '';
+        if (! empty($opts['style'])) {
+            $pPrInner .= '<w:pStyle w:val="'.$opts['style'].'"/>';
+        }
+        if (! empty($opts['indent'])) {
+            $pPrInner .= '<w:ind w:left="'.$opts['indent'].'"/>';
+        }
+        if (! empty($opts['jc'])) {
+            $pPrInner .= '<w:jc w:val="'.$opts['jc'].'"/>';
+        }
+        if (! empty($opts['bottomBorder'])) {
+            $pPrInner .= '<w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="666666"/></w:pBdr>';
+        }
+        if ($pPrInner !== '') {
+            $pPr = '<w:pPr>'.$pPrInner.'</w:pPr>';
+        }
+
+        $rPr = '';
+        if (! empty($opts['bold'])) {
+            $rPr .= '<w:b/><w:bCs/>';
+        }
+        if (! empty($opts['italic'])) {
+            $rPr .= '<w:i/><w:iCs/>';
+        }
+        if (! empty($opts['color'])) {
+            $rPr .= '<w:color w:val="'.$opts['color'].'"/>';
+        }
+        if ($rPr !== '') {
+            $rPr = '<w:rPr>'.$rPr.'</w:rPr>';
+        }
+
+        return '<w:p>'.$pPr.'<w:r>'.$rPr.'<w:t xml:space="preserve">'.$this->esc($text).'</w:t></w:r></w:p>';
+    }
+
+    /**
+     * Sel tabel <w:tc>. opts: span (gridSpan), shade (hex fill), width (pct*50).
+     */
+    protected function tc(string $innerXml, array $opts = []): string
+    {
+        $tcPr = '';
+        if (! empty($opts['span']) && $opts['span'] > 1) {
+            $tcPr .= '<w:gridSpan w:val="'.$opts['span'].'"/>';
+        }
+        if (! empty($opts['shade'])) {
+            $tcPr .= '<w:shd w:val="clear" w:color="auto" w:fill="'.$opts['shade'].'"/>';
+        }
+        if (! empty($opts['vAlign'])) {
+            $tcPr .= '<w:vAlign w:val="'.$opts['vAlign'].'"/>';
+        }
+        $tcPr = $tcPr !== '' ? '<w:tcPr>'.$tcPr.'</w:tcPr>' : '';
+
+        // Sel wajib berisi minimal satu paragraf
+        if (! str_contains($innerXml, '<w:p')) {
+            $innerXml = $this->p($innerXml);
+        }
+
+        return '<w:tc>'.$tcPr.$innerXml.'</w:tc>';
+    }
+
+    /**
+     * Tabel <w:tbl> dengan border single.
+     *
+     * @param  array<int>  $widthsPct  Lebar kolom dalam persen (total ~100)
+     * @param  array<array<string>>  $rows  Tiap baris = daftar string <w:tc>
+     * @param  array<int>  $headerRowIdx  Index baris yang ditandai header (repeat on page break)
+     * @param  array{borders?: bool}  $opts
+     */
+    protected function tbl(array $widthsPct, array $rows, array $headerRowIdx = [], array $opts = []): string
+    {
+        $total = array_sum($widthsPct);
+        $gridXml = implode('', array_map(
+            fn ($w) => '<w:gridCol w:w="'.(int) round($w / max(1, $total) * 9638).'"/>',
+            $widthsPct
+        ));
+
+        $rowsXml = '';
+        foreach ($rows as $i => $cells) {
+            $trPr = in_array($i, $headerRowIdx, true)
+                ? '<w:trPr><w:tblHeader/></w:trPr>'
+                : '';
+            $rowsXml .= '<w:tr>'.$trPr.implode('', $cells).'</w:tr>';
+        }
+
+        $borderStyle = ($opts['borders'] ?? true) ? 'single' : 'nil';
+        $borders = '<w:tblBorders>'
+            .'<w:top w:val="'.$borderStyle.'" w:sz="4" w:space="0" w:color="000000"/>'
+            .'<w:left w:val="'.$borderStyle.'" w:sz="4" w:space="0" w:color="000000"/>'
+            .'<w:bottom w:val="'.$borderStyle.'" w:sz="4" w:space="0" w:color="000000"/>'
+            .'<w:right w:val="'.$borderStyle.'" w:sz="4" w:space="0" w:color="000000"/>'
+            .'<w:insideH w:val="'.$borderStyle.'" w:sz="4" w:space="0" w:color="000000"/>'
+            .'<w:insideV w:val="'.$borderStyle.'" w:sz="4" w:space="0" w:color="000000"/>'
+            .'</w:tblBorders>';
+
+        return '<w:tbl>'
+            .'<w:tblPr><w:tblW w:w="5000" w:type="pct"/>'
+            .$borders
+            .'<w:tblLayout w:type="fixed"/>'
+            .'</w:tblPr>'
+            .'<w:tblGrid>'.$gridXml.'</w:tblGrid>'
+            .$rowsXml
+            .'</w:tbl>';
+    }
+
+    protected function esc(string $text): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES | ENT_XML1, 'UTF-8');
+    }
+}

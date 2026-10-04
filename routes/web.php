@@ -27,6 +27,10 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
     Route::prefix('master-data')->name('master-data.')->group(function () {
         Route::view('/companies', 'master-data.companies')->middleware('can:companies_view')->name('companies');
         Route::view('/ships', 'master-data.ships')->middleware('can:ships_view')->name('ships');
+        Route::view('/ships/create', 'master-data.ships-create')->middleware('can:ships_create')->name('ships.create');
+        Route::get('/ships/{ship}/edit', function (\App\Models\Ship $ship) {
+            return view('master-data.ships-edit', ['ship' => $ship]);
+        })->middleware('can:ships_update')->name('ships.edit');
 
         // Template Form (manajemen template survey)
         Route::prefix('survey-templates')->name('survey-templates.')->group(function () {
@@ -48,6 +52,29 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
         Route::get('/{survey}/edit', function (\App\Models\Survey $survey) {
             return view('surveys.edit', ['survey' => $survey]);
         })->middleware('can:surveys_update')->name('edit');
+        Route::get('/{survey}/report', function (\App\Models\Survey $survey) {
+            return view('surveys.report', ['survey' => $survey]);
+        })->middleware('can:survey_reports_view')->name('report');
+        Route::get('/{survey}/report/benchmark-chart', function (\App\Models\Survey $survey) {
+            $png = app(\App\Services\SurveyReportDocxBuilder::class)->renderBenchmarkChartPng(
+                app(\App\Services\SurveyReportService::class)->benchmarkData($survey)
+            );
+            abort_if($png === null, 404);
+
+            return response($png, 200, [
+                'Content-Type' => 'image/png',
+                'Cache-Control' => 'no-store',
+            ]);
+        })->middleware('can:survey_reports_view')->name('report.benchmark');
+        Route::get('/{survey}/report/documentation/{categoryToken}', function (\App\Models\Survey $survey, string $categoryToken) {
+            $categoryId = (int) \Illuminate\Support\Facades\Crypt::decryptString($categoryToken);
+            $documentation = $survey->report?->documentations()
+                ->where('survey_category_id', $categoryId)
+                ->where('file_status', \App\Enums\FileStatus::Completed)
+                ->firstOrFail();
+
+            return app(\App\Services\FileStorageService::class)->inline($documentation->file_path, 'image/jpeg');
+        })->middleware('can:survey_reports_view')->name('report.documentation');
         Route::get('/{survey}', function (\App\Models\Survey $survey) {
             return view('surveys.show', ['survey' => $survey]);
         })->middleware('can:surveys_view')->name('show');

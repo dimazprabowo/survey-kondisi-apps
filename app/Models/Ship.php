@@ -26,6 +26,23 @@ class Ship extends Model
         'gross_tonnage',
         'owner',
         'operator',
+        'call_sign',
+        'net_tonnage',
+        'loa',
+        'lpp',
+        'breadth',
+        'depth',
+        'draft',
+        'dwt',
+        'builder',
+        'port_of_registry',
+        'hull_material',
+        'class_name',
+        'class_notations',
+        'main_engine',
+        'main_engine_power',
+        'aux_engine',
+        'aux_engine_power',
         'status',
     ];
 
@@ -40,6 +57,11 @@ class Ship extends Model
     public function surveys(): HasMany
     {
         return $this->hasMany(Survey::class);
+    }
+
+    public function certificates(): HasMany
+    {
+        return $this->hasMany(ShipCertificate::class)->orderBy('order_num');
     }
 
     public function scopeActive($query)
@@ -60,7 +82,7 @@ class Ship extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'code', 'year_built', 'status'])
+            ->logOnly(['name', 'code', 'year_built', 'imo_number', 'ship_type', 'status'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->useLogName('ship');
