@@ -111,7 +111,6 @@
         $paperTextareaCell = 'w-full bg-transparent border border-dashed border-transparent rounded px-1 py-0.5 text-[13px] leading-6 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-400 focus:ring-0 resize-none overflow-hidden min-h-20';
         $autoZone = 'relative mt-6 rounded-md border border-dashed border-gray-300 dark:border-gray-600 p-3 pt-5 sm:p-5 sm:pt-6';
         $autoTag = 'absolute -top-2.5 left-3 bg-white dark:bg-gray-800 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500';
-        $fitJs = "{ fit(){ const el=this.\$el; if (!el.offsetParent) return; el.style.height='auto'; el.style.height=el.scrollHeight+'px' } }";
     @endphp
 
     <input x-ref="documentationInput" wire:model="documentationPhoto" type="file" accept="image/jpeg,image/png,image/webp"
@@ -251,7 +250,7 @@
                     <p class="mt-10 text-xl sm:text-2xl font-bold uppercase">{{ $ship?->name ?? '—' }}</p>
                     <x-input-label for="report_title" value="Judul Laporan" :required="true" class="sr-only" />
                     <textarea wire:model="report_title" id="report_title" rows="2"
-                        x-data="{{ $fitJs }}" x-init="$nextTick(() => fit())" x-on:input="fit()" x-on:report-tab-changed.window="$nextTick(() => fit())"
+                        x-autogrow
                         placeholder="Judul laporan, contoh: JASA KONSULTAN INDEPENDENT SURVEY KONDISI PT. ASDP INDONESIA FERRY - 2026"
                         class="{{ $paperTextarea }} mt-6 text-center text-base sm:text-lg font-bold uppercase"></textarea>
                     <x-input-error :messages="$errors->get('report_title')" class="mt-1" />
@@ -341,7 +340,7 @@
                 <h3 class="text-center text-lg font-bold tracking-wide">EXECUTIVE SUMMARY</h3>
                 <x-input-label for="executive_summary" value="Narasi Executive Summary" class="sr-only" />
                 <textarea wire:model="sectionContent.executive_summary" id="executive_summary" rows="6"
-                    x-data="{{ $fitJs }}" x-init="$nextTick(() => fit())" x-on:input="fit()" x-on:report-tab-changed.window="$nextTick(() => fit())"
+                    x-autogrow
                     placeholder="Ringkasan pelaksanaan survey dan metodologi CAP"
                     class="{{ $paperTextarea }} mt-6 !text-base"></textarea>
                 <x-input-error :messages="$errors->get('sectionContent.executive_summary')" class="mt-1" />
@@ -465,7 +464,7 @@
                                         <td class="border border-gray-400 dark:border-gray-500 px-1 py-1">
                                             <x-input-label for="finding_{{ $cat->id }}" value="Keterangan temuan {{ $cat->label }}" class="sr-only" />
                                             <textarea wire:model="sectionContent.finding_{{ $cat->id }}" id="finding_{{ $cat->id }}" rows="2"
-                                                x-data="{{ $fitJs }}" x-init="$nextTick(() => fit())" x-on:input="fit()" x-on:report-tab-changed.window="$nextTick(() => fit())"
+                                                x-autogrow
                                                 placeholder="Keterangan temuan — satu poin per baris"
                                                 class="{{ $paperTextareaCell }}"></textarea>
                                         </td>
@@ -583,7 +582,7 @@
 
                 <x-input-label for="cap_standards" value="Daftar Standar CAP" class="sr-only" />
                 <textarea wire:model="sectionContent.cap_standards" id="cap_standards" rows="4"
-                    x-data="{{ $fitJs }}" x-init="$nextTick(() => fit())" x-on:input="fit()" x-on:report-tab-changed.window="$nextTick(() => fit())"
+                    x-autogrow
                     placeholder="Satu standar per baris, contoh: 1. BKI – CAP"
                     class="{{ $paperTextarea }} mt-4"></textarea>
                 <x-input-error :messages="$errors->get('sectionContent.cap_standards')" class="mt-1" />
@@ -748,7 +747,7 @@
                 <p class="mt-1">Memoranda</p>
                 <x-input-label for="memoranda" value="Class Memoranda" class="sr-only" />
                 <textarea wire:model="sectionContent.memoranda" id="memoranda" rows="3"
-                    x-data="{{ $fitJs }}" x-init="$nextTick(() => fit())" x-on:input="fit()" x-on:report-tab-changed.window="$nextTick(() => fit())"
+                    x-autogrow
                     placeholder="Isi N/A bila tidak ada memoranda"
                     class="{{ $paperTextarea }} mt-1"></textarea>
                 <x-input-error :messages="$errors->get('sectionContent.memoranda')" class="mt-1" />
@@ -1010,7 +1009,7 @@
                         <p class="font-bold">{{ $cat['label'] }}:</p>
                         <x-input-label for="saran_{{ $cat['id'] }}" value="Saran {{ $cat['label'] }}" class="sr-only" />
                         <textarea wire:model="sectionContent.saran_{{ $cat['id'] }}" id="saran_{{ $cat['id'] }}" rows="3"
-                            x-data="{{ $fitJs }}" x-init="$nextTick(() => fit())" x-on:input="fit()" x-on:report-tab-changed.window="$nextTick(() => fit())"
+                            x-autogrow
                             placeholder="Saran untuk {{ $cat['label'] }}"
                             class="{{ $paperTextarea }} mt-1"></textarea>
                         <x-input-error :messages="$errors->get('sectionContent.saran_'.$cat['id'])" class="mt-1" />

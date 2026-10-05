@@ -100,6 +100,40 @@ document.addEventListener('alpine:init', () => {
             },
         });
     }
+
+    /**
+     * x-autogrow — textarea yang tingginya otomatis mengikuti isi konten.
+     * Resize saat user mengetik (input), saat init, saat tab berganti
+     * (report-tab-changed), dan setelah Livewire morph mengubah value
+     * tanpa memicu event input (via hook morph.updated di bawah).
+     */
+    Alpine.directive('autogrow', (el) => {
+        if (el.tagName !== 'TEXTAREA') return;
+
+        const resize = () => {
+            if (!el.offsetParent) return; // elemen tersembunyi (tab lain) punya scrollHeight 0
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        };
+
+        el._autogrowResize = resize;
+        el.addEventListener('input', resize);
+        window.addEventListener('report-tab-changed', () => requestAnimationFrame(resize));
+        // double rAF agar layout & font sudah settle sebelum ukur scrollHeight
+        requestAnimationFrame(() => requestAnimationFrame(resize));
+    });
+});
+
+/**
+ * Setelah setiap Livewire morph, hitung ulang tinggi textarea x-autogrow.
+ * Morph mengubah value via DOM tanpa event 'input', jadi perlu trigger manual.
+ */
+document.addEventListener('livewire:init', () => {
+    Livewire.hook('morph.updated', ({ el }) => {
+        if (el.nodeType !== Node.ELEMENT_NODE) return;
+        if (el.tagName === 'TEXTAREA' && el._autogrowResize) el._autogrowResize();
+        el.querySelectorAll?.('textarea').forEach(t => t._autogrowResize?.());
+    });
 });
 
 /**
