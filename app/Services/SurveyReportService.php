@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 
 class SurveyReportService
 {
-    public const GENERATOR_VERSION = '2026-10-report-v28';
+    public const GENERATOR_VERSION = '2026-10-report-v32';
 
     public function __construct(protected SurveyService $surveyService) {}
 
@@ -83,14 +83,14 @@ class SurveyReportService
     /**
      * Tandai report sedang diproses lalu dispatch job generate DOCX.
      */
-    public function requestGenerate(SurveyReport $report): SurveyReport
+    public function requestGenerate(SurveyReport $report, ?int $userId = null): SurveyReport
     {
         $report->update([
             'file_status' => FileStatus::Processing,
             'file_error' => null,
         ]);
 
-        ProcessSurveyReport::dispatch($report->id);
+        ProcessSurveyReport::dispatch($report->id, $userId);
 
         return $report;
     }

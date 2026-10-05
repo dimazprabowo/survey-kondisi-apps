@@ -5,6 +5,7 @@
     'loadingText' => null,
     'icon' => null,
     'iconClass' => null,
+    'loading' => false,
 ])
 
 @php
@@ -83,8 +84,8 @@
     @endif
 >
     {{-- Spinner (shown during loading) --}}
-    @if($target)
-        <svg wire:loading wire:target="{{ $target }}"
+    @if($target || $loading)
+        <svg @if($target && ! $loading) wire:loading wire:target="{{ $target }}" @endif
             class="animate-spin {{ $spinnerSize }}"
             xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -94,7 +95,7 @@
 
     {{-- Icon (hidden during loading) --}}
     @if($hasIcon)
-        <span @if($target) wire:loading.class="hidden" wire:target="{{ $target }}" @endif class="inline-flex">
+        <span @if($target && ! $loading) wire:loading.class="hidden" wire:target="{{ $target }}" @endif class="{{ $loading ? 'hidden' : 'inline-flex' }}">
             @if($hasIconProp && isset($builtinIcons[$icon]))
                 <svg class="{{ $finalIconClass }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     {!! $builtinIcons[$icon] !!}
@@ -106,7 +107,9 @@
     @endif
 
     {{-- Text (with optional loading text swap) --}}
-    @if($target && $loadingText)
+    @if($loading && $loadingText)
+        {{ $loadingText }}
+    @elseif($target && $loadingText)
         <span wire:loading.class="hidden" wire:target="{{ $target }}">{{ $slot }}</span>
         <span wire:loading wire:target="{{ $target }}">{{ $loadingText }}</span>
     @else

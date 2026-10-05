@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Enums\FileStatus;
 use App\Models\SurveyReport;
 use App\Services\FileStorageService;
+use App\Services\NotificationService;
 use App\Services\SurveyReportDocxBuilder;
 use App\Services\SurveyReportService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -21,7 +22,10 @@ class ProcessSurveyReport implements ShouldQueue
 
     public int $timeout = 300;
 
-    public function __construct(public int $reportId) {}
+    public function __construct(
+        public int $reportId,
+        public ?int $userId = null,
+    ) {}
 
     public function handle(
         SurveyReportDocxBuilder $builder,
@@ -65,6 +69,12 @@ class ProcessSurveyReport implements ShouldQueue
                 'file_processed_at' => now(),
                 'generator_version' => SurveyReportService::GENERATOR_VERSION,
             ]);
+
+            $this->notifyUser(
+                'Laporan Survey Selesai',
+                "Laporan {$report->report_number} berhasil digenerate dan siap diunduh.",
+                'success'
+            );
         } catch (Throwable $e) {
             Log::error('Gagal generate laporan survey', [
                 'report_id' => $this->reportId,
@@ -89,5 +99,23 @@ class ProcessSurveyReport implements ShouldQueue
             'file_status' => FileStatus::Failed,
             'file_error' => $e->getMessage(),
         ]);
+
+        $this->notifyUser(
+            'Laporan Survey Gagal',
+            'Generate laporan gagal diproses. Silakan coba generate ulang.',
+            'danger'
+        );
+    }
+
+    private function notifyUser(string $title, string $message, string $type): void
+    {
+        if (! $this->userId) {
+            return;
+        }
+
+        $report = SurveyReport::with('survey')->find($this->reportId);
+        $actionUrl = $report?->survey ? route('surveys.report', $report->survey) : null;
+
+        NotificationService::send($this->userId, $title, $message, $type, null, $actionUrl);
     }
 }

@@ -19,10 +19,16 @@ class NotificationBell extends Component
         $this->loadUnreadCount();
     }
 
-    public function handleNewNotification(): void
+    public function handleNewNotification(array $payload = []): void
     {
         $this->loadUnreadCount();
         $this->dispatch('notification-received');
+
+        // Tampilkan toast real-time di halaman mana pun — bell ada di
+        // layout utama sehingga event broadcast selalu tertangkap.
+        // Tipe Notification (info/success/warning/danger) → tipe toast (info/success/warning/error)
+        $type = ['success' => 'success', 'danger' => 'error', 'warning' => 'warning'][$payload['type'] ?? ''] ?? 'info';
+        $this->dispatch('notify', type: $type, message: $payload['message'] ?? '', title: $payload['title'] ?? null);
     }
 
     public function loadUnreadCount(): void

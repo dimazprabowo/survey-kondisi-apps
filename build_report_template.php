@@ -410,11 +410,22 @@ $body->removeChild($children[71]);
 
 // ---------------------------------------------------------------------
 // 10. BAB II — sel "N/A" pada tabel Class Memoranda (child 74)
+//     Isi memoranda rata atas (vAlign=top eksplisit agar step 13 tidak
+//     menimpanya menjadi center).
 // ---------------------------------------------------------------------
 foreach ($xp->query('.//w:tc', $children[74]) as $tc) {
     if ($cellText($tc) === 'N/A') {
         $clearNode($tc);
         $tc->appendChild($markerP('memoranda'));
+
+        $tcPr = $tc->getElementsByTagNameNS($W, 'tcPr')->item(0);
+        if (! $tcPr) {
+            $tcPr = $doc->createElementNS($W, 'w:tcPr');
+            $tc->insertBefore($tcPr, $tc->firstChild);
+        }
+        if ($tcPr->getElementsByTagNameNS($W, 'vAlign')->length === 0) {
+            $tcPr->appendChild($doc->createElementNS($W, 'w:vAlign'))->setAttributeNS($W, 'w:val', 'top');
+        }
     }
 }
 
@@ -434,6 +445,41 @@ foreach (range(78, 130) as $i) {
 $body->insertBefore($markerP('bab4'), $children[132]);
 foreach (range(132, 188) as $i) {
     $body->removeChild($children[$i]);
+}
+
+// ---------------------------------------------------------------------
+// 13. Vertical alignment — sel tanpa vAlign (Word render = top) diberi
+//     center agar konten pendek selalu di tengah vertikal. Sel dengan
+//     vAlign eksplisit (mis. bottom pada blok signature) dipertahankan.
+// ---------------------------------------------------------------------
+foreach ($xp->query('.//w:tc', $body) as $tc) {
+    $tcPr = $tc->getElementsByTagNameNS($W, 'tcPr')->item(0);
+    if ($tcPr && $tcPr->getElementsByTagNameNS($W, 'vAlign')->length > 0) {
+        continue;
+    }
+    if (! $tcPr) {
+        $tcPr = $doc->createElementNS($W, 'w:tcPr');
+        $tc->insertBefore($tcPr, $tc->firstChild);
+    }
+    $tcPr->appendChild($doc->createElementNS($W, 'w:vAlign'))->setAttributeNS($W, 'w:val', 'center');
+}
+
+// ---------------------------------------------------------------------
+// 14. Setiap BAB dan LAMPIRAN mulai di halaman baru — pageBreakBefore
+//     pada heading (pStyle=Heading1, teks diawali "BAB" atau "LAMPIRAN").
+//     Entri TOC tidak terpengaruh karena bukan paragraf Heading1.
+// ---------------------------------------------------------------------
+foreach ($xp->query('./w:p[w:pPr/w:pStyle[@w:val="Heading1"]]', $body) as $p) {
+    $headingText = trim(preg_replace('/\s+/', ' ', $p->textContent));
+    if (! str_starts_with($headingText, 'BAB') && ! str_starts_with($headingText, 'LAMPIRAN')) {
+        continue;
+    }
+    $pPr = $xp->query('./w:pPr', $p)->item(0);
+    if ($pPr->getElementsByTagNameNS($W, 'pageBreakBefore')->length > 0) {
+        continue;
+    }
+    $pStyle = $xp->query('./w:pStyle', $pPr)->item(0);
+    $pPr->insertBefore($doc->createElementNS($W, 'w:pageBreakBefore'), $pStyle->nextSibling);
 }
 
 // ---------------------------------------------------------------------

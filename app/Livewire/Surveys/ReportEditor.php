@@ -190,7 +190,7 @@ class ReportEditor extends Component
                 return;
             }
 
-            $service->requestGenerate($this->report->refresh());
+            $service->requestGenerate($this->report->refresh(), auth()->id());
             $this->notifySuccess('Generate laporan dimulai. File akan tersedia setelah proses selesai.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');

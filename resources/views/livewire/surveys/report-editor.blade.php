@@ -175,12 +175,10 @@
                     </svg>
                 </div>
                 <div class="min-w-0 flex-1">
-                    <div class="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                        <p class="text-sm font-semibold text-gray-900 dark:text-white">Menyiapkan dokumen Word</p>
-                        <span class="text-xs font-medium text-blue-600 dark:text-blue-400">Berjalan di latar belakang</span>
-                    </div>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-white">Menyiapkan dokumen Word</p>
                     <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Data, grafik, tabel, dan dokumentasi sedang disusun. Anda tetap dapat berpindah tab.</p>
                 </div>
+                <span class="shrink-0 self-center text-xs font-medium text-blue-600 dark:text-blue-400">Berjalan di latar belakang</span>
             </div>
             <div class="h-1 overflow-hidden bg-blue-100 dark:bg-blue-950">
                 <div class="progress-indeterminate h-full w-1/3 rounded-full bg-blue-500"></div>
@@ -279,9 +277,9 @@
                             ['DRAFT', $ship?->draft ? $ship->draft.' M' : null],
                         ] as [$plabel, $pval])
                             <tr>
-                                <td class="w-44 pr-4 py-0.5 align-top font-medium">{{ $plabel }}</td>
-                                <td class="w-4 align-top">:</td>
-                                <td class="py-0.5 align-top uppercase">{{ $pval ?: '-' }}</td>
+                                <td class="w-44 pr-4 py-0.5 align-middle font-medium">{{ $plabel }}</td>
+                                <td class="w-4 align-middle">:</td>
+                                <td class="py-0.5 align-middle uppercase">{{ $pval ?: '-' }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -459,8 +457,8 @@
                             <tbody>
                                 @foreach($bab3Categories as $i => $cat)
                                     <tr wire:key="finding-{{ $cat->id }}">
-                                        <td class="border border-gray-400 dark:border-gray-500 px-2 py-1 text-center align-top">{{ $i + 1 }}</td>
-                                        <td class="border border-gray-400 dark:border-gray-500 px-2 py-1 align-top">{{ $cat->label }}</td>
+                                        <td class="border border-gray-400 dark:border-gray-500 px-2 py-1 text-center align-middle">{{ $i + 1 }}</td>
+                                        <td class="border border-gray-400 dark:border-gray-500 px-2 py-1 align-middle">{{ $cat->label }}</td>
                                         <td class="border border-gray-400 dark:border-gray-500 px-1 py-1">
                                             <x-input-label for="finding_{{ $cat->id }}" value="Keterangan temuan {{ $cat->label }}" class="sr-only" />
                                             <textarea wire:model="sectionContent.finding_{{ $cat->id }}" id="finding_{{ $cat->id }}" rows="2"
@@ -469,7 +467,7 @@
                                                 class="{{ $paperTextareaCell }}"></textarea>
                                         </td>
                                         @php $documentation = $documentations->get($cat->id); @endphp
-                                        <td class="relative border border-gray-400 dark:border-gray-500 p-2 align-top" wire:key="documentation-{{ $cat->id }}">
+                                        <td class="relative border border-gray-400 dark:border-gray-500 p-2 align-middle" wire:key="documentation-{{ $cat->id }}">
                                             @if($documentation?->file_status === \App\Enums\FileStatus::Completed)
                                                 <img src="{{ route('surveys.report.documentation', [$survey, \Illuminate\Support\Facades\Crypt::encryptString((string) $cat->id)]) }}"
                                                     alt="Dokumentasi {{ $cat->label }}" class="aspect-[3/2] w-full rounded-md object-cover">
@@ -571,7 +569,7 @@
         <!-- ================= Tab: BAB I — Umum ================= -->
         <div x-show="tab === 'bab1'" x-cloak x-transition.opacity.duration.100ms wire:key="panel-bab1" class="{{ $canvas }}">
             <div class="{{ $sheet }}" style="{{ $times }}">
-                <h3 class="text-center text-lg font-bold tracking-wide">BAB I. UMUM/GENERAL</h3>
+                <h3 class="text-center text-lg font-bold tracking-wide print:break-before-page">BAB I. UMUM/GENERAL</h3>
 
                 <div class="{{ $autoZone }} mt-6">
                     <span class="{{ $autoTag }}" style="{{ $sans }}">Konten tetap dari master Word</span>
@@ -629,9 +627,9 @@
                                                     {{ $capCategory['code'] }}
                                                 </td>
                                             @endif
-                                            <td @if($criterionRowSpan > 1) rowspan="{{ $criterionRowSpan }}" @endif class="border border-gray-500 px-2 py-1 align-top">{{ $criterion['name'] }}</td>
+                                            <td @if($criterionRowSpan > 1) rowspan="{{ $criterionRowSpan }}" @endif class="border border-gray-500 px-2 py-1 align-middle">{{ $criterion['name'] }}</td>
                                             @foreach($criterion['scores'] as $scoreDescription)
-                                                <td class="border border-gray-500 px-2 py-1 align-top">{{ $scoreDescription }}</td>
+                                                <td class="border border-gray-500 px-2 py-1 align-middle">{{ $scoreDescription }}</td>
                                             @endforeach
                                         </tr>
                                         @foreach($criterion['extra_rows'] ?? [] as $extraRow)
@@ -641,7 +639,7 @@
                                                         $extraText = is_array($extraCell) ? ($extraCell['text'] ?? '') : $extraCell;
                                                         $extraColspan = is_array($extraCell) ? (int) ($extraCell['colspan'] ?? 1) : 1;
                                                     @endphp
-                                                    <td @if($extraColspan > 1) colspan="{{ $extraColspan }}" @endif class="border border-gray-500 px-2 py-1 align-top">{{ $extraText }}</td>
+                                                    <td @if($extraColspan > 1) colspan="{{ $extraColspan }}" @endif class="border border-gray-500 px-2 py-1 align-middle">{{ $extraText }}</td>
                                                 @endforeach
                                             </tr>
                                         @endforeach
@@ -664,7 +662,7 @@
         <!-- ================= Tab: BAB II — Kapal ================= -->
         <div x-show="tab === 'bab2'" x-cloak x-transition.opacity.duration.100ms wire:key="panel-bab2" class="{{ $canvas }}">
             <div class="{{ $sheet }}" style="{{ $times }}">
-                <h3 class="text-center text-lg font-bold tracking-wide">BAB II. DATA KAPAL</h3>
+                <h3 class="text-center text-lg font-bold tracking-wide print:break-before-page">BAB II. DATA KAPAL</h3>
 
                 <!-- Ship Particular (otomatis dari master kapal) -->
                 <div class="{{ $autoZone }}">
@@ -697,9 +695,9 @@
                                     ['Auxiliary Cap./Power', $ship?->aux_engine_power],
                                 ] as [$plabel, $pval])
                                     <tr>
-                                        <td class="w-56 pr-4 py-0.5 align-top">{{ $plabel }}</td>
-                                        <td class="w-4 align-top">:</td>
-                                        <td class="py-0.5 align-top">{{ $pval ?: '-' }}</td>
+                                        <td class="w-56 pr-4 py-0.5 align-middle">{{ $plabel }}</td>
+                                        <td class="w-4 align-middle">:</td>
+                                        <td class="py-0.5 align-middle">{{ $pval ?: '-' }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -810,7 +808,7 @@
 
             <div class="{{ $sheet }}" style="{{ $times }}">
                 <div class="lg:ml-4 lg:-mr-4">
-                <h3 class="text-center text-lg font-bold tracking-wide">BAB III. PEMERIKSAAN KONDISI KAPAL</h3>
+                <h3 class="text-center text-lg font-bold tracking-wide print:break-before-page">BAB III. PEMERIKSAAN KONDISI KAPAL</h3>
 
                 @forelse($bab3Categories as $catIndex => $cat)
                     @php
@@ -824,7 +822,7 @@
                         $hasLongLabels = $usedLabels->contains(fn ($label) => mb_strlen((string) $label) > 3);
                         $colWidths = $hasLongLabels
                             ? [7.75, 8.77, 3.76, 44.15, 8.50, 8.50, 9.50, 8.50]
-                            : [7.75, 8.77, 3.76, 43.15, 5.38, 5.67, 13.26, 11.69];
+                            : [7.75, 8.77, 3.76, 41.15, 6.38, 6.67, 13.26, 11.69];
                         $legend = collect($standardLabels)
                             ->filter(fn ($description, $label) => $usedLabels->contains($label))
                             ->map(fn ($description, $label) => $label.'= '.$description)
@@ -833,13 +831,13 @@
                     <section class="mt-8 first:mt-6" wire:key="bab3-cat-{{ $cat->id }}"
                         x-cloak
                         x-show="bab3Cat === 'all' || bab3Cat === '{{ $cat->id }}'">
-                        <h4 class="mb-1 font-bold uppercase">{{ $cat->label }}</h4>
+                        <h4 class="mb-1 font-bold uppercase leading-normal">{{ $cat->label }}</h4>
                         @if($legend !== '')
-                            <p class="mb-2 text-center font-bold">{{ $legend }}</p>
+                            <p class="mb-2 text-center font-bold leading-normal">{{ $legend }}</p>
                         @endif
 
                         <div class="overflow-x-auto">
-                            <table class="w-full min-w-[700px] table-fixed border-collapse border border-black dark:border-gray-400 text-[13px] leading-5">
+                            <table class="w-full min-w-[700px] table-fixed border-collapse border border-black dark:border-gray-400 text-[16px] leading-6">
                                 <colgroup>
                                     @foreach($colWidths as $colWidth)
                                         <col style="width: {{ $colWidth }}%">
@@ -847,30 +845,29 @@
                                 </colgroup>
                                 <thead>
                                     <tr class="bg-[#4285F4] text-white dark:bg-blue-700">
-                                        <th class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">No.</th>
-                                        <th colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400 px-2 py-1 text-center">Item</th>
-                                        <th class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">Overall CAP Rating</th>
+                                        <th class="border-0 px-1.5 py-1 text-center whitespace-nowrap">No.</th>
+                                        <th colspan="{{ 3 + $categorySlotCount }}" class="border-0 px-2 py-1 text-center whitespace-nowrap">Item</th>
+                                        <th class="border-0 px-1.5 py-1 text-center">Overall CAP Rating</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr class="font-bold">
-                                        <td class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">{{ to_roman($catIndex + 1) }}</td>
-                                        <td colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400 px-2 py-1 uppercase">{{ $cat->label }} Overall CAP Rating</td>
-                                        <td class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">{{ $catAvg !== null ? number_format($catAvg, 2) : '-' }}</td>
+                                        <td class="border-0 px-1.5 py-1 text-center whitespace-nowrap">{{ to_roman($catIndex + 1) }}</td>
+                                        <td colspan="{{ 3 + $categorySlotCount }}" class="border-0 px-2 py-1 uppercase">{{ $cat->label }} Overall CAP Rating</td>
+                                        <td class="border-0 px-1.5 py-1 text-center whitespace-nowrap">{{ $catAvg !== null ? number_format($catAvg, 2) : '-' }}</td>
                                     </tr>
-                                    <tr class="bg-[#808080]">
-                                        <td colspan="2" class="h-5 border border-black dark:border-gray-400"></td>
-                                        <td colspan="2" class="border border-black dark:border-gray-400"></td>
-                                        <td colspan="2" class="border border-black dark:border-gray-400"></td>
-                                        <td colspan="2" class="border border-black dark:border-gray-400"></td>
-                                    </tr>
-
                                     @foreach($cat->subCategories as $scIndex => $sc)
                                         @php $scAvg = $this->subCategoryAvg($sc); @endphp
+                                        <tr class="bg-[#808080]" wire:key="bab3-sep-{{ $sc->id }}">
+                                            <td colspan="2" class="h-5"></td>
+                                            <td colspan="2" class="border-0"></td>
+                                            <td colspan="2" class="border-0"></td>
+                                            <td colspan="2" class="border-0"></td>
+                                        </tr>
                                         <tr class="font-bold" wire:key="bab3-sc-{{ $sc->id }}">
-                                            <td class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">{{ $scIndex + 1 }}</td>
-                                            <td colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400 px-2 py-1">{{ $sc->name }}</td>
-                                            <td class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">{{ $scAvg !== null ? number_format($scAvg, 2) : '-' }}</td>
+                                            <td class="border-0 px-1.5 py-1 text-center whitespace-nowrap">{{ $scIndex + 1 }}</td>
+                                            <td colspan="{{ 3 + $categorySlotCount }}" class="border-0 px-2 py-1">{{ $sc->name }}</td>
+                                            <td class="border-0 px-1.5 py-1 text-center whitespace-nowrap">{{ $scAvg !== null ? number_format($scAvg, 2) : '-' }}</td>
                                         </tr>
 
                                         @foreach($sc->itemGroups as $igIndex => $ig)
@@ -891,28 +888,28 @@
                                                 }
                                             @endphp
                                             <tr class="font-bold" wire:key="bab3-ig-{{ $ig->id }}">
-                                                <td class="border border-black dark:border-gray-400"></td>
-                                                <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">{{ $scIndex + 1 }}.{{ $igIndex + 1 }}</td>
-                                                <td class="border border-black dark:border-gray-400"></td>
-                                                <td class="border border-black dark:border-gray-400 px-2 py-1 uppercase">{{ $ig->name }}</td>
-                                                <td colspan="2" class="border border-black dark:border-gray-400"></td>
-                                                <td class="border border-black dark:border-gray-400"></td>
-                                                <td class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">{{ $igAvg !== null ? number_format($igAvg, 2) : '-' }}</td>
+                                                <td class="border-0"></td>
+                                                <td class="border-0 px-1 py-1 text-center whitespace-nowrap">{{ $scIndex + 1 }}.{{ $igIndex + 1 }}</td>
+                                                <td class="border-0"></td>
+                                                <td class="border-0 px-2 py-1 uppercase">{{ $ig->name }}</td>
+                                                <td colspan="2" class="border-0"></td>
+                                                <td class="border-0"></td>
+                                                <td class="border-0 px-1.5 py-1 text-center whitespace-nowrap">{{ $igAvg !== null ? number_format($igAvg, 2) : '-' }}</td>
                                             </tr>
 
                                             <tr class="bg-gray-50 dark:bg-gray-700/30 font-bold">
-                                                <td colspan="2" class="border border-black dark:border-gray-400"></td>
-                                                <td colspan="2" class="border border-black dark:border-gray-400"></td>
+                                                <td colspan="2" class="border-0"></td>
+                                                <td colspan="2" class="border-0"></td>
                                                 @if($isInventory)
-                                                    <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">{{ $groupLabels[0] }}</td>
-                                                    <td colspan="{{ $categorySlotCount }}" class="border border-black dark:border-gray-400 px-1 py-1 text-center">{{ $groupLabels[1] ?? '' }}</td>
+                                                    <td class="border-0 px-1 py-1 text-center whitespace-nowrap">{{ $groupLabels[0] }}</td>
+                                                    <td colspan="{{ $categorySlotCount }}" class="border-0 px-1 py-1 text-center whitespace-nowrap">{{ $groupLabels[1] ?? '' }}</td>
                                                 @else
                                                     @foreach($groupLabels as $groupLabel)
-                                                        <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">{{ $groupLabel }}</td>
+                                                        <td class="border-0 px-1 py-1 text-center whitespace-nowrap">{{ $groupLabel }}</td>
                                                     @endforeach
-                                                    <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">Avg</td>
+                                                    <td class="border-0 px-1 py-1 text-center whitespace-nowrap">Avg</td>
                                                     @for($unused = 0; $unused < $unusedSlots; $unused++)
-                                                        <td class="border border-black dark:border-gray-400"></td>
+                                                        <td class="border-0"></td>
                                                     @endfor
                                                 @endif
                                             </tr>
@@ -920,53 +917,60 @@
                                             @foreach($ig->items as $itemIndex => $item)
                                                 @php $response = $responses->get($item->id); @endphp
                                                 <tr wire:key="bab3-item-{{ $item->id }}">
-                                                    <td colspan="2" class="border border-black dark:border-gray-400"></td>
-                                                    <td class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">{{ to_letter($itemIndex + 1) }}</td>
-                                                    <td class="border border-black dark:border-gray-400 px-2 py-1 align-top">
+                                                    <td colspan="2" class="border-0 align-top"></td>
+                                                    <td class="border-0 px-1 py-1 text-center align-top whitespace-nowrap">{{ to_letter($itemIndex + 1) }}</td>
+                                                    <td class="border-0 px-2 py-1 align-top">
                                                         {{ $item->name }}
                                                         @if($item->has_date_fields && $response && ($response->date_issued || $response->date_expired))
-                                                            <span class="block text-[11px] text-gray-500 dark:text-gray-400">
-                                                                Issued: {{ $response->date_issued?->format('d/m/Y') ?? '-' }} &ndash; Expired: {{ $response->date_expired?->format('d/m/Y') ?? '-' }}
-                                                            </span>
+                                                            @if($response->date_issued)
+                                                                <span class="block text-[13px] text-gray-500 dark:text-gray-400">
+                                                                    Date issued : {{ $response->date_issued->format('d/m/Y') }}
+                                                                </span>
+                                                            @endif
+                                                            @if($response->date_expired)
+                                                                <span class="block text-[13px] text-gray-500 dark:text-gray-400">
+                                                                    Exp : {{ $response->date_expired->format('d/m/Y') }}
+                                                                </span>
+                                                            @endif
                                                         @endif
                                                     </td>
                                                     @if($isInventory)
-                                                        <td class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">{{ $response?->qty ?? '-' }}</td>
-                                                        <td colspan="{{ $categorySlotCount }}" class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">{{ $response?->specification ?? '-' }}</td>
+                                                        <td class="border-0 px-1 py-1 text-center align-top whitespace-nowrap">{{ $response?->qty ?? '-' }}</td>
+                                                        <td colspan="{{ $categorySlotCount }}" class="border-0 px-1 py-1 text-center align-top whitespace-nowrap">{{ $response?->specification ?? '-' }}</td>
                                                     @else
                                                         @foreach($groupLabels as $groupLabel)
                                                             @php $score = $response?->scores[$groupLabel] ?? null; @endphp
-                                                            <td class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">{{ $score !== null && $score !== '' ? $score : '-' }}</td>
+                                                            <td class="border-0 px-1 py-1 text-center align-top whitespace-nowrap">{{ $score !== null && $score !== '' ? $score : '-' }}</td>
                                                         @endforeach
-                                                        <td class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">
+                                                        <td class="border-0 px-1 py-1 text-center align-top whitespace-nowrap">
                                                             {{ $response?->avg_score !== null ? number_format((float) $response->avg_score, 2) : '-' }}
                                                         </td>
                                                         @for($unused = 0; $unused < $unusedSlots; $unused++)
-                                                            <td class="border border-black dark:border-gray-400"></td>
+                                                            <td class="border-0"></td>
                                                         @endfor
                                                     @endif
                                                 </tr>
                                             @endforeach
 
                                             <tr>
-                                                <td class="border border-black dark:border-gray-400"></td>
-                                                <td class="border border-black dark:border-gray-400 px-1 py-1 font-bold">Note:</td>
-                                                <td colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400"></td>
+                                                <td class="border-0"></td>
+                                                <td class="border-0 px-1 py-1 font-bold">Note:</td>
+                                                <td colspan="{{ 3 + $categorySlotCount }}" class="border-0"></td>
                                             </tr>
                                             @foreach($notes as $noteIndex => $note)
                                                 <tr wire:key="bab3-note-{{ $ig->id }}-{{ $note?->id ?? 'empty-'.$noteIndex }}">
-                                                    <td class="border border-black dark:border-gray-400"></td>
-                                                    <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">-</td>
-                                                    <td colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400 px-2 py-1">{{ $note?->note }}</td>
+                                                    <td class="border-0"></td>
+                                                    <td class="border-0 px-1 py-1 text-right whitespace-nowrap">-</td>
+                                                    <td colspan="{{ 3 + $categorySlotCount }}" class="border-0 px-2 py-1">{{ $note?->note }}</td>
                                                 </tr>
                                             @endforeach
                                             <tr>
-                                                <td colspan="2" class="border border-black dark:border-gray-400"></td>
-                                                <td colspan="2" class="border border-black dark:border-gray-400"></td>
-                                                <td class="border border-black dark:border-gray-400"></td>
-                                                <td class="border border-black dark:border-gray-400"></td>
-                                                <td class="border border-black dark:border-gray-400"></td>
-                                                <td class="border border-black dark:border-gray-400"></td>
+                                                <td colspan="2" class="border-0"></td>
+                                                <td colspan="2" class="border-0"></td>
+                                                <td class="border-0"></td>
+                                                <td class="border-0"></td>
+                                                <td class="border-0"></td>
+                                                <td class="border-0"></td>
                                             </tr>
                                         @endforeach
                                     @endforeach
@@ -998,15 +1002,15 @@
         <!-- ================= Tab: BAB IV — Saran ================= -->
         <div x-show="tab === 'bab4'" x-cloak x-transition.opacity.duration.100ms wire:key="panel-bab4" class="{{ $canvas }}">
             <div class="{{ $sheet }}" style="{{ $times }}">
-                <h3 class="text-center text-lg font-bold tracking-wide">BAB IV. SARAN</h3>
-                <p class="mt-6">Adapun saran dari hasil pemeriksaan kondisi kapal yaitu sebagai berikut:</p>
+                <h3 class="text-center text-lg font-bold tracking-wide print:break-before-page">BAB IV. SARAN</h3>
+                <p class="mt-6 text-base">Adapun saran dari hasil pemeriksaan kondisi kapal yaitu sebagai berikut:</p>
                 <p class="mt-1 text-xs text-gray-400 dark:text-gray-500" style="{{ $sans }}">
                     Satu poin per baris; awali dengan "- " agar dirender sebagai bullet di Word.
                 </p>
 
                 @foreach($categories as $cat)
                     <div class="mt-6" wire:key="saran-{{ $cat['id'] }}">
-                        <p class="font-bold">{{ $cat['label'] }}:</p>
+                        <p class="font-bold text-base">{{ $loop->iteration }}. {{ $cat['label'] }}:</p>
                         <x-input-label for="saran_{{ $cat['id'] }}" value="Saran {{ $cat['label'] }}" class="sr-only" />
                         <textarea wire:model="sectionContent.saran_{{ $cat['id'] }}" id="saran_{{ $cat['id'] }}" rows="3"
                             x-autogrow
@@ -1110,6 +1114,7 @@
                     @can('survey_reports_generate')
                         <x-loading-button type="button" wire:click="generate" target="generate" variant="primary" size="lg"
                             loadingText="Memproses..." class="w-full sm:w-auto"
+                            :loading="$report->file_status === \App\Enums\FileStatus::Processing"
                             :disabled="$report->file_status === \App\Enums\FileStatus::Processing">
                             {{ $report->file_status === \App\Enums\FileStatus::Completed ? 'Regenerate DOCX' : 'Generate DOCX' }}
                         </x-loading-button>
