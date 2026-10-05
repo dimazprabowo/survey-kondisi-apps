@@ -202,11 +202,13 @@
                                         <table class="min-w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
                                             <colgroup>
                                                 <col class="w-10">
-                                                <col>
                                                 @if($isInventoryGroup)
+                                                    {{-- Item dikunci persentase agar kolom Qty/Spesifikasi sejajar antar grup --}}
+                                                    <col class="w-[45%]">
                                                     <col class="w-24">
                                                     <col>
                                                 @else
+                                                    <col>
                                                     @foreach($scoreLabels as $label)
                                                         <col class="w-20">
                                                     @endforeach
@@ -247,12 +249,12 @@
                                                             @endif
                                                         </td>
                                                         @if($item->item_type === \App\Enums\SurveyItemType::Inventory)
-                                                            <td class="px-3 py-2 text-center text-sm text-gray-900 dark:text-white">{{ $response?->qty ?? '-' }}</td>
-                                                            <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ $response?->specification ?? '-' }}</td>
+                                                            <td class="px-3 py-2 text-center text-sm text-gray-900 dark:text-white">{{ filled($response?->qty) ? $response->qty : '-' }}</td>
+                                                            <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ filled($response?->specification) ? $response->specification : '-' }}</td>
                                                         @else
                                                             @foreach($item->score_labels as $label)
                                                                 <td class="px-3 py-2 text-center text-sm text-gray-900 dark:text-white">
-                                                                    {{ $scores[$label] ?? '-' }}
+                                                                    {{ filled($scores[$label] ?? null) ? $scores[$label] : '-' }}
                                                                 </td>
                                                             @endforeach
                                                             <td class="px-3 py-2 text-center">
@@ -301,18 +303,20 @@
         </div>
     </div>
 
-    <!-- Action Bar -->
-    <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-end">
-        <x-cancel-button wire:click="$redirect(route('surveys.index'))" target="$redirect" class="w-full sm:w-auto" />
-        @can('survey_reports_view')
-            <x-loading-button wire:click="openReport" target="openReport" variant="secondary" size="md" loadingText="Memuat..." icon="view" class="w-full sm:w-auto">
-                Laporan
-            </x-loading-button>
-        @endcan
-        @can('surveys_update', $survey)
-            <x-loading-button wire:click="editSurvey" target="editSurvey" variant="primary" size="md" loadingText="Memuat..." icon="edit" class="w-full sm:w-auto">
-                Edit Survey
-            </x-loading-button>
-        @endcan
+    <!-- Action Bar (Sticky, mengambang dari tepi viewport) -->
+    <div class="sticky bottom-3 sm:bottom-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-3 px-4 sm:px-6 z-10">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-end">
+            <x-cancel-button wire:click="$redirect(route('surveys.index'))" target="$redirect" class="w-full sm:w-auto" />
+            @can('survey_reports_view')
+                <x-loading-button wire:click="openReport" target="openReport" variant="secondary" size="md" loadingText="Memuat..." icon="view" class="w-full sm:w-auto">
+                    Laporan
+                </x-loading-button>
+            @endcan
+            @can('surveys_update', $survey)
+                <x-loading-button wire:click="editSurvey" target="editSurvey" variant="primary" size="md" loadingText="Memuat..." icon="edit" class="w-full sm:w-auto">
+                    Edit Survey
+                </x-loading-button>
+            @endcan
+        </div>
     </div>
 </div>

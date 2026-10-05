@@ -2,18 +2,57 @@
     x-data="{
         tab: 'info',
         switching: null,
+        bab3Cat: 'all',
+        bab3Switching: null,
         pickerScrollY: 0,
+        pickerCategoryId: null,
+        uploadingCategoryId: null,
         storageKey: 'survey-report-tab-{{ $report->id }}',
+        bab3Key: 'survey-report-bab3-{{ $report->id }}',
+        bab3CatIds: '{{ $bab3Categories->pluck('id')->implode(',') }}'.split(',').filter(Boolean),
         validTabs: ['info', 'exec', 'toc', 'bab1', 'bab2', 'bab3', 'bab4'],
         init() {
             const hashTab = window.location.hash.replace('#', '')
             const savedTab = sessionStorage.getItem(this.storageKey)
             this.tab = this.validTabs.includes(hashTab) ? hashTab : (this.validTabs.includes(savedTab) ? savedTab : 'info')
+            const savedBab3 = sessionStorage.getItem(this.bab3Key)
+            if (savedBab3 === 'all' || this.bab3CatIds.includes(savedBab3)) {
+                this.bab3Cat = savedBab3
+            }
+            this.$wire.set('previewCategoryId', this.bab3Cat === 'all' ? null : this.bab3Cat, false)
             this.$watch('tab', value => {
                 sessionStorage.setItem(this.storageKey, value)
                 history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${value}`)
             })
-            this.$nextTick(() => window.dispatchEvent(new CustomEvent('report-tab-changed')))
+            this.$watch('bab3Cat', value => {
+                sessionStorage.setItem(this.bab3Key, value)
+                this.$wire.set('previewCategoryId', value === 'all' ? null : value, false)
+            })
+            this.$nextTick(() => {
+                window.dispatchEvent(new CustomEvent('report-tab-changed'))
+                this.scrollActiveTab(false)
+                this.scrollBab3Tab(false)
+            })
+        },
+        scrollActiveTab(smooth = true) {
+            const container = this.$refs.tabScroller
+            const active = container?.querySelector('[role=tab][aria-selected=true]')
+            if (container && active) {
+                container.scrollTo({
+                    left: active.offsetLeft - (container.clientWidth - active.clientWidth) / 2,
+                    behavior: smooth ? 'smooth' : 'auto'
+                })
+            }
+        },
+        scrollBab3Tab(smooth = true) {
+            const container = this.$refs.bab3TabScroller
+            const active = container?.querySelector('[aria-selected=true]')
+            if (container && active) {
+                container.scrollTo({
+                    left: active.offsetLeft - (container.clientWidth - active.clientWidth) / 2,
+                    behavior: smooth ? 'smooth' : 'auto'
+                })
+            }
         },
         switchTab(tab) {
             if (this.tab === tab || this.switching) return
@@ -21,19 +60,43 @@
             setTimeout(() => {
                 this.tab = tab
                 this.switching = null
-                this.$nextTick(() => window.dispatchEvent(new CustomEvent('report-tab-changed')))
+                this.$nextTick(() => {
+                    window.dispatchEvent(new CustomEvent('report-tab-changed'))
+                    this.scrollActiveTab()
+                    this.scrollBab3Tab(false)
+                })
+            }, 120)
+        },
+        switchBab3Cat(id) {
+            if (this.bab3Cat === id || this.bab3Switching) return
+            this.bab3Switching = id
+            setTimeout(() => {
+                this.bab3Cat = id
+                this.bab3Switching = null
+                this.$nextTick(() => this.scrollBab3Tab())
             }, 120)
         },
         openDocumentationPicker(categoryId) {
             this.pickerScrollY = window.scrollY
+            this.pickerCategoryId = categoryId
+            this.uploadingCategoryId = categoryId
             this.$wire.set('documentationCategoryId', categoryId, false)
             this.$refs.documentationInput.value = ''
             this.$refs.documentationInput.click()
             requestAnimationFrame(() => window.scrollTo(0, this.pickerScrollY))
-            window.addEventListener('focus', () => requestAnimationFrame(() => window.scrollTo(0, this.pickerScrollY)), { once: true })
+            window.addEventListener('focus', () => {
+                requestAnimationFrame(() => window.scrollTo(0, this.pickerScrollY))
+                setTimeout(() => {
+                    if (! this.$refs.documentationInput.files.length && this.uploadingCategoryId === categoryId) {
+                        this.uploadingCategoryId = null
+                        this.pickerCategoryId = null
+                    }
+                }, 400)
+            }, { once: true })
         }
     }"
-    x-on:documentation-photo-ready.window="$nextTick(() => window.scrollTo(0, pickerScrollY))"
+    x-on:documentation-photo-ready.window="uploadingCategoryId = null; $nextTick(() => window.scrollTo(0, pickerScrollY))"
+    x-on:documentation-photo-invalid.window="uploadingCategoryId = null"
 >
     @php
         // Gaya "paper mode" — lembar meniru halaman Word; input borderless
@@ -52,6 +115,8 @@
     @endphp
 
     <input x-ref="documentationInput" wire:model="documentationPhoto" type="file" accept="image/jpeg,image/png,image/webp"
+        x-on:livewire-upload-start="uploadingCategoryId = pickerCategoryId; pickerCategoryId = null"
+        x-on:livewire-upload-error="uploadingCategoryId = null"
         tabindex="-1" aria-hidden="true" class="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0">
 
     <!-- Breadcrumb -->
@@ -126,8 +191,8 @@
 
     <form wire:submit="save">
         <!-- Tab Bar (scrollable di mobile) -->
-        <div class="relative mb-2 -mx-1">
-            <div class="navbar-scroll overflow-x-auto px-1">
+        <div class="sticky top-7 sm:top-5 z-30 mb-3">
+            <div x-ref="tabScroller" class="navbar-scroll overflow-x-auto px-1">
             <div class="inline-flex min-w-full sm:min-w-0 gap-1 rounded-lg bg-gray-100 dark:bg-gray-900/60 p-1" role="tablist">
                 @php
                     $tabs = [
@@ -391,7 +456,7 @@
                                                 class="{{ $paperTextareaCell }}"></textarea>
                                         </td>
                                         @php $documentation = $documentations->get($cat->id); @endphp
-                                        <td class="border border-gray-400 dark:border-gray-500 p-2 align-top" wire:key="documentation-{{ $cat->id }}">
+                                        <td class="relative border border-gray-400 dark:border-gray-500 p-2 align-top" wire:key="documentation-{{ $cat->id }}">
                                             @if($documentation?->file_status === \App\Enums\FileStatus::Completed)
                                                 <img src="{{ route('surveys.report.documentation', [$survey, \Illuminate\Support\Facades\Crypt::encryptString((string) $cat->id)]) }}"
                                                     alt="Dokumentasi {{ $cat->label }}" class="aspect-[3/2] w-full rounded-md object-cover">
@@ -424,6 +489,13 @@
                                                     <p class="mt-1 text-center text-xs text-red-600 dark:text-red-400" style="{{ $sans }}">Pemrosesan gagal. Silakan unggah ulang.</p>
                                                 @endif
                                             @endif
+                                            <div x-show="uploadingCategoryId === {{ $cat->id }}" x-cloak
+                                                class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-md bg-white/85 p-3 text-center dark:bg-gray-800/85"
+                                                style="{{ $sans }}">
+                                                <x-loading-spinner class="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                                                <span class="text-xs font-medium text-gray-600 dark:text-gray-300"
+                                                    x-text="pickerCategoryId === {{ $cat->id }} ? 'Menunggu file dipilih...' : 'Mengunggah foto...'"></span>
+                                            </div>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -689,6 +761,43 @@
                 Bagian ini hanya pratinjau — konten BAB III digenerate otomatis dari data penilaian survey. Gunakan tombol "Edit Data Survey" di bawah untuk mengubah nilai.
             </div>
 
+            @if($bab3Categories->isNotEmpty())
+                <div class="sticky top-[5.25rem] sm:top-[4.75rem] z-20 mb-4" style="{{ $sans }}">
+                    <div x-ref="bab3TabScroller" class="navbar-scroll overflow-x-auto px-1">
+                        <div class="inline-flex min-w-full gap-1 rounded-lg bg-gray-100/95 p-1 shadow-lg ring-1 ring-black/5 backdrop-blur dark:bg-gray-900/80 dark:ring-white/10">
+                            <button type="button" wire:key="bab3tab-all"
+                                @click="switchBab3Cat('all')"
+                                :aria-selected="bab3Cat === 'all'"
+                                :disabled="bab3Switching !== null"
+                                :class="bab3Cat === 'all'
+                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                                class="flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-wait">
+                                <span x-show="bab3Switching === 'all'" x-cloak class="h-3.5 w-3.5 shrink-0">
+                                    <x-loading-spinner size="sm" class="h-3.5 w-3.5 [&>div]:h-3.5 [&>div]:w-3.5 [&_svg]:h-3.5 [&_svg]:w-3.5" />
+                                </span>
+                                <span>Semua</span>
+                            </button>
+                            @foreach($bab3Categories as $catIndex => $cat)
+                                <button type="button" wire:key="bab3tab-{{ $cat->id }}"
+                                    @click="switchBab3Cat('{{ $cat->id }}')"
+                                    :aria-selected="bab3Cat === '{{ $cat->id }}'"
+                                    :disabled="bab3Switching !== null"
+                                    :class="bab3Cat === '{{ $cat->id }}'
+                                        ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                                    class="flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-wait">
+                                    <span x-show="bab3Switching === '{{ $cat->id }}'" x-cloak class="h-3.5 w-3.5 shrink-0">
+                                        <x-loading-spinner size="sm" class="h-3.5 w-3.5 [&>div]:h-3.5 [&>div]:w-3.5 [&_svg]:h-3.5 [&_svg]:w-3.5" />
+                                    </span>
+                                    <span>{{ to_roman($catIndex + 1) }} &middot; {{ $cat->label }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             <div class="{{ $sheet }}" style="{{ $times }}">
                 <div class="lg:ml-4 lg:-mr-4">
                 <h3 class="text-center text-lg font-bold tracking-wide">BAB III. PEMERIKSAAN KONDISI KAPAL</h3>
@@ -697,27 +806,23 @@
                     @php
                         $catAvg = $this->categoryAvg($cat);
                         $groups = $cat->subCategories->flatMap(fn ($sc) => $sc->itemGroups);
-                        $categorySlotCount = max(2, (int) $groups->map(function ($group) {
-                            if ($group->items->every(fn ($item) => $item->item_type === \App\Enums\SurveyItemType::Inventory)) {
-                                return 2;
-                            }
-
-                            return $group->items
-                                ->flatMap(fn ($item) => $item->score_labels ?? [])
-                                ->unique()
-                                ->count();
-                        })->max());
-                        $scoreWidth = 23 / $categorySlotCount;
+                        $categorySlotCount = 3;
                         $standardLabels = ['C' => 'Coating', 'V' => 'Visual', 'F' => 'Function', 'M' => 'Maintenance'];
                         $usedLabels = $groups->flatMap(fn ($group) => $group->items)
                             ->flatMap(fn ($item) => $item->score_labels ?? [])
                             ->unique();
+                        $hasLongLabels = $usedLabels->contains(fn ($label) => mb_strlen((string) $label) > 3);
+                        $colWidths = $hasLongLabels
+                            ? [7.75, 8.77, 3.76, 44.15, 8.50, 8.50, 9.50, 8.50]
+                            : [7.75, 8.77, 3.76, 43.15, 5.38, 5.67, 13.26, 11.69];
                         $legend = collect($standardLabels)
                             ->filter(fn ($description, $label) => $usedLabels->contains($label))
                             ->map(fn ($description, $label) => $label.'= '.$description)
                             ->implode('    ');
                     @endphp
-                    <section class="mt-8 first:mt-6" wire:key="bab3-cat-{{ $cat->id }}">
+                    <section class="mt-8 first:mt-6" wire:key="bab3-cat-{{ $cat->id }}"
+                        x-cloak
+                        x-show="bab3Cat === 'all' || bab3Cat === '{{ $cat->id }}'">
                         <h4 class="mb-1 font-bold uppercase">{{ $cat->label }}</h4>
                         @if($legend !== '')
                             <p class="mb-2 text-center font-bold">{{ $legend }}</p>
@@ -726,17 +831,12 @@
                         <div class="overflow-x-auto">
                             <table class="w-full min-w-[700px] table-fixed border-collapse border border-black dark:border-gray-400 text-[13px] leading-5">
                                 <colgroup>
-                                    <col style="width: 7%">
-                                    <col style="width: 9%">
-                                    <col style="width: 4%">
-                                    <col style="width: 44%">
-                                    @foreach(range(1, $categorySlotCount) as $slot)
-                                        <col style="width: {{ $scoreWidth }}%">
+                                    @foreach($colWidths as $colWidth)
+                                        <col style="width: {{ $colWidth }}%">
                                     @endforeach
-                                    <col style="width: 13%">
                                 </colgroup>
                                 <thead>
-                                    <tr class="bg-[#4472C4] text-white dark:bg-blue-700">
+                                    <tr class="bg-[#4285F4] text-white dark:bg-blue-700">
                                         <th class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">No.</th>
                                         <th colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400 px-2 py-1 text-center">Item</th>
                                         <th class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">Overall CAP Rating</th>
@@ -747,6 +847,12 @@
                                         <td class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">{{ to_roman($catIndex + 1) }}</td>
                                         <td colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400 px-2 py-1 uppercase">{{ $cat->label }} Overall CAP Rating</td>
                                         <td class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">{{ $catAvg !== null ? number_format($catAvg, 2) : '-' }}</td>
+                                    </tr>
+                                    <tr class="bg-[#808080]">
+                                        <td colspan="2" class="h-5 border border-black dark:border-gray-400"></td>
+                                        <td colspan="2" class="border border-black dark:border-gray-400"></td>
+                                        <td colspan="2" class="border border-black dark:border-gray-400"></td>
+                                        <td colspan="2" class="border border-black dark:border-gray-400"></td>
                                     </tr>
 
                                     @foreach($cat->subCategories as $scIndex => $sc)
@@ -767,23 +873,38 @@
                                                 if ($groupLabels->isEmpty()) {
                                                     $groupLabels = collect(['C', 'V']);
                                                 }
-                                                $slotLabels = $groupLabels->pad($categorySlotCount, null);
-                                                $notes = $groupNotes->get($ig->id);
+                                                $groupLabels = $groupLabels->take($categorySlotCount)->values();
+                                                $unusedSlots = $categorySlotCount - $groupLabels->count();
+                                                $notes = collect($groupNotes->get($ig->id) ?? [])->values();
+                                                while ($notes->count() < 2) {
+                                                    $notes->push(null);
+                                                }
                                             @endphp
                                             <tr class="font-bold" wire:key="bab3-ig-{{ $ig->id }}">
                                                 <td class="border border-black dark:border-gray-400"></td>
                                                 <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">{{ $scIndex + 1 }}.{{ $igIndex + 1 }}</td>
                                                 <td class="border border-black dark:border-gray-400"></td>
-                                                <td colspan="{{ 1 + $categorySlotCount }}" class="border border-black dark:border-gray-400 px-2 py-1 uppercase">{{ $ig->name }}</td>
+                                                <td class="border border-black dark:border-gray-400 px-2 py-1 uppercase">{{ $ig->name }}</td>
+                                                <td colspan="2" class="border border-black dark:border-gray-400"></td>
+                                                <td class="border border-black dark:border-gray-400"></td>
                                                 <td class="border border-black dark:border-gray-400 px-1.5 py-1 text-center">{{ $igAvg !== null ? number_format($igAvg, 2) : '-' }}</td>
                                             </tr>
 
                                             <tr class="bg-gray-50 dark:bg-gray-700/30 font-bold">
-                                                <td colspan="4" class="border border-black dark:border-gray-400"></td>
-                                                @foreach($slotLabels as $slotLabel)
-                                                    <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">{{ $slotLabel }}</td>
-                                                @endforeach
-                                                <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">{{ $isInventory ? '' : 'Avg' }}</td>
+                                                <td colspan="2" class="border border-black dark:border-gray-400"></td>
+                                                <td colspan="2" class="border border-black dark:border-gray-400"></td>
+                                                @if($isInventory)
+                                                    <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">{{ $groupLabels[0] }}</td>
+                                                    <td colspan="{{ $categorySlotCount }}" class="border border-black dark:border-gray-400 px-1 py-1 text-center">{{ $groupLabels[1] ?? '' }}</td>
+                                                @else
+                                                    @foreach($groupLabels as $groupLabel)
+                                                        <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">{{ $groupLabel }}</td>
+                                                    @endforeach
+                                                    <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">Avg</td>
+                                                    @for($unused = 0; $unused < $unusedSlots; $unused++)
+                                                        <td class="border border-black dark:border-gray-400"></td>
+                                                    @endfor
+                                                @endif
                                             </tr>
 
                                             @foreach($ig->items as $itemIndex => $item)
@@ -799,18 +920,21 @@
                                                             </span>
                                                         @endif
                                                     </td>
-                                                    @foreach($slotLabels as $slotIndex => $slotLabel)
-                                                        @php
-                                                            $score = $slotLabel ? ($response?->scores[$slotLabel] ?? null) : null;
-                                                            $slotValue = $isInventory
-                                                                ? ($slotIndex === 0 ? ($response?->qty ?? '-') : ($slotIndex === 1 ? ($response?->specification ?? '-') : ''))
-                                                                : ($slotLabel ? ($score !== null && $score !== '' ? $score : '-') : '');
-                                                        @endphp
-                                                        <td class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">{{ $slotValue }}</td>
-                                                    @endforeach
-                                                    <td class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">
-                                                        {{ $response?->avg_score !== null ? number_format((float) $response->avg_score, 2) : '-' }}
-                                                    </td>
+                                                    @if($isInventory)
+                                                        <td class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">{{ $response?->qty ?? '-' }}</td>
+                                                        <td colspan="{{ $categorySlotCount }}" class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">{{ $response?->specification ?? '-' }}</td>
+                                                    @else
+                                                        @foreach($groupLabels as $groupLabel)
+                                                            @php $score = $response?->scores[$groupLabel] ?? null; @endphp
+                                                            <td class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">{{ $score !== null && $score !== '' ? $score : '-' }}</td>
+                                                        @endforeach
+                                                        <td class="border border-black dark:border-gray-400 px-1 py-1 text-center align-top">
+                                                            {{ $response?->avg_score !== null ? number_format((float) $response->avg_score, 2) : '-' }}
+                                                        </td>
+                                                        @for($unused = 0; $unused < $unusedSlots; $unused++)
+                                                            <td class="border border-black dark:border-gray-400"></td>
+                                                        @endfor
+                                                    @endif
                                                 </tr>
                                             @endforeach
 
@@ -819,19 +943,21 @@
                                                 <td class="border border-black dark:border-gray-400 px-1 py-1 font-bold">Note:</td>
                                                 <td colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400"></td>
                                             </tr>
-                                            @forelse($notes ?? [] as $note)
-                                                <tr wire:key="bab3-note-{{ $note->id }}">
+                                            @foreach($notes as $noteIndex => $note)
+                                                <tr wire:key="bab3-note-{{ $ig->id }}-{{ $note?->id ?? 'empty-'.$noteIndex }}">
                                                     <td class="border border-black dark:border-gray-400"></td>
                                                     <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">-</td>
-                                                    <td colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400 px-2 py-1">{{ $note->note }}</td>
+                                                    <td colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400 px-2 py-1">{{ $note?->note }}</td>
                                                 </tr>
-                                            @empty
-                                                <tr>
-                                                    <td class="border border-black dark:border-gray-400"></td>
-                                                    <td class="border border-black dark:border-gray-400 px-1 py-1 text-center">-</td>
-                                                    <td colspan="{{ 3 + $categorySlotCount }}" class="border border-black dark:border-gray-400"></td>
-                                                </tr>
-                                            @endforelse
+                                            @endforeach
+                                            <tr>
+                                                <td colspan="2" class="border border-black dark:border-gray-400"></td>
+                                                <td colspan="2" class="border border-black dark:border-gray-400"></td>
+                                                <td class="border border-black dark:border-gray-400"></td>
+                                                <td class="border border-black dark:border-gray-400"></td>
+                                                <td class="border border-black dark:border-gray-400"></td>
+                                                <td class="border border-black dark:border-gray-400"></td>
+                                            </tr>
                                         @endforeach
                                     @endforeach
                                 </tbody>
@@ -891,29 +1017,49 @@
                     <div class="relative z-10 w-full max-w-3xl rounded-xl bg-white shadow-2xl dark:bg-gray-800"
                         x-data="{
                             cropper: null,
+                            ready: false,
+                            saving: false,
                             init() {
-                                this.$nextTick(() => {
-                                    this.cropper = new window.Cropper(this.$refs.cropImage, {
+                                const img = this.$refs.cropImage
+                                const start = () => {
+                                    this.cropper = new window.Cropper(img, {
                                         aspectRatio: 3 / 2,
                                         viewMode: 1,
                                         autoCropArea: 1,
                                         responsive: true,
                                         background: false,
                                     })
+                                    this.ready = true
+                                }
+                                this.$nextTick(() => {
+                                    if (img.complete && img.naturalWidth) start()
+                                    else img.addEventListener('load', start, { once: true })
                                 })
                             },
                             save() {
-                                const data = this.cropper.getData(true)
-                                $wire.set('cropData', data).then(() => $wire.saveDocumentation())
+                                if (this.saving || !this.cropper) return
+                                this.saving = true
+                                $wire.set('cropData', this.cropper.getData(true), false)
+                                $wire.saveDocumentation()
                             }
                         }">
                         <div class="border-b border-gray-200 px-4 py-4 dark:border-gray-700 sm:px-6">
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Atur Dokumentasi</h3>
                             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Geser dan perbesar gambar. Area crop dikunci landscape 3:2 agar konsisten di dokumen Word.</p>
                         </div>
-                        <div class="bg-gray-100 p-4 dark:bg-gray-900 sm:p-6">
+                        <div class="relative bg-gray-100 p-4 dark:bg-gray-900 sm:p-6" x-bind:class="{ 'min-h-[40vh] sm:min-h-[50vh]': !ready }">
                             <div class="mx-auto max-h-[60vh] overflow-hidden rounded-lg bg-black">
                                 <img x-ref="cropImage" src="{{ $documentationPhoto->temporaryUrl() }}" alt="Crop dokumentasi" class="block max-h-[60vh] w-full object-contain">
+                            </div>
+                            <div x-show="!ready" x-cloak
+                                class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-gray-100 dark:bg-gray-900">
+                                <x-loading-spinner class="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                                <span class="text-sm font-medium text-gray-600 dark:text-gray-300">Memuat foto...</span>
+                            </div>
+                            <div x-show="ready && saving" x-cloak
+                                class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-gray-100/85 dark:bg-gray-900/85">
+                                <x-loading-spinner class="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                                <span class="text-sm font-medium text-gray-600 dark:text-gray-300">Menyimpan foto...</span>
                             </div>
                         </div>
                         <div class="flex flex-col-reverse gap-3 border-t border-gray-200 px-4 py-4 dark:border-gray-700 sm:flex-row sm:justify-end sm:px-6">

@@ -98,6 +98,28 @@ class SurveyForm extends Component
 
             // Restore draft if exists (auto-recovery after reload)
             $this->hasDraft = $this->loadDraft();
+
+            // Deep-link kategori dari preview laporan/halaman detail (override tab draft)
+            $categoryParam = request()->query('category');
+            if ($categoryParam) {
+                try {
+                    $targetCat = $this->categories->firstWhere('id', Crypt::decryptString($categoryParam));
+                    if ($targetCat) {
+                        $this->activeCategory = $targetCat->id;
+                        $this->activeSubCategory = $targetCat->subCategories->first()?->id;
+
+                        $subParam = request()->query('sub');
+                        if ($subParam) {
+                            $targetSub = $targetCat->subCategories->firstWhere('id', Crypt::decryptString($subParam));
+                            if ($targetSub) {
+                                $this->activeSubCategory = $targetSub->id;
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Param tidak valid — pakai tab default/draft
+                }
+            }
         } else {
             $this->authorize('create', Survey::class);
             $this->survey_date = now()->format('Y-m-d');
@@ -483,7 +505,21 @@ class SurveyForm extends Component
                 $this->notifySuccess('Survey berhasil dibuat!');
             }
 
-            return $this->redirect(route('surveys.show', $survey), navigate: true);
+            // Deep-link kembali ke tab kategori/sub kategori yang sedang diedit
+            $params = [];
+            if ($this->activeCategory) {
+                $params['category'] = Crypt::encryptString((string) $this->activeCategory);
+            }
+            if ($this->activeSubCategory) {
+                $params['sub'] = Crypt::encryptString((string) $this->activeSubCategory);
+            }
+
+            $url = route('surveys.show', $survey);
+            if ($params) {
+                $url .= '?'.http_build_query($params);
+            }
+
+            return $this->redirect($url, navigate: true);
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {

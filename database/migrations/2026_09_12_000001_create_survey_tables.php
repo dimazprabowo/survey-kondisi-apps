@@ -205,6 +205,7 @@ return new class extends Migration
             $table->enum('file_status', ['processing', 'completed', 'failed'])->nullable();
             $table->text('file_error')->nullable();
             $table->timestamp('file_processed_at')->nullable();
+            $table->string('generator_version', 50)->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();

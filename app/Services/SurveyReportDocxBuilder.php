@@ -142,9 +142,30 @@ class SurveyReportDocxBuilder
             $xml = $this->replaceMarkerParagraph($xml, $marker, $blockXml);
         }
 
+        $this->validateXml($xml, 'word/document.xml');
         $zip->addFromString('word/document.xml', $xml);
         $this->enableFieldUpdates($zip);
         $zip->close();
+    }
+
+    protected function validateXml(string $xml, string $part): void
+    {
+        $previous = libxml_use_internal_errors(true);
+        libxml_clear_errors();
+        $document = new \DOMDocument;
+        $loaded = $document->loadXML($xml);
+        $errors = libxml_get_errors();
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        if (! $loaded || $errors !== []) {
+            $details = implode('; ', array_map(
+                fn (\LibXMLError $error) => trim($error->message).' (baris '.$error->line.')',
+                $errors
+            ));
+
+            throw new \RuntimeException('XML DOCX tidak valid pada '.$part.($details ? ': '.$details : '.'));
+        }
     }
 
     protected function enableFieldUpdates(\ZipArchive $zip): void
@@ -269,69 +290,84 @@ class SurveyReportDocxBuilder
         $responses = $data['responses'];
         $shipName = $data['ship']?->name ?? '-';
         $overall = $data['overallCap'];
-
-        // Layout dua kolom seperti template: separuh kategori kiri, sisanya kanan.
         $half = (int) ceil($categories->count() / 2);
-        $left = $categories->slice(0, $half)->values();
-        $right = $categories->slice($half)->values();
-
-        $leftXml = $this->buildBreakdownColumn($left, $responses, 0);
-        $rightXml = $this->buildBreakdownColumn($right, $responses, $half);
-
-        $overallRow = $this->tbl([82, 3, 15], [[
-            $this->tc($this->p('Overall CAP Rating Condition '.$shipName, ['bold' => true]), []),
-            $this->tc($this->p(':', ['bold' => true, 'jc' => 'center']), []),
-            $this->tc($this->p($overall !== null ? number_format($overall, 2) : '-', ['bold' => true, 'jc' => 'center']), []),
-        ]], [], ['borders' => false]);
+        $leftLines = $this->breakdownLines($categories->slice(0, $half)->values(), $responses, 0);
+        $rightLines = $this->breakdownLines($categories->slice($half)->values(), $responses, $half);
 
         $rows = [
-            [$this->tc($this->p('Overall CAP Rating Breakdown', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['span' => 2, 'shade' => '4472C4'])],
-            [$this->tc($overallRow, ['span' => 2])],
-            [$this->tc($this->p(''), ['span' => 2, 'shade' => '888888'])],
+            [$this->tc($this->p('Overall CAP Rating Breakdown', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['span' => 8, 'shade' => '4472C4'])],
             [
-                $this->tc($leftXml, []),
-                $this->tc($rightXml, []),
+                $this->tc($this->p('Overall CAP Rating Condition '.$shipName, ['bold' => true]), ['span' => 6]),
+                $this->tc($this->p(':', ['bold' => true, 'jc' => 'center']), []),
+                $this->tc($this->p($overall !== null ? number_format($overall, 2) : '-', ['bold' => true, 'jc' => 'right']), []),
             ],
+            [$this->tc($this->p(''), ['span' => 8, 'shade' => '888888'])],
         ];
 
-        return $this->tbl([50, 50], $rows, [0]);
+        $lineCount = max(count($leftLines), count($rightLines));
+        for ($index = 0; $index < $lineCount; $index++) {
+            $rows[] = array_merge(
+                $this->breakdownCells($leftLines[$index] ?? null),
+                $this->breakdownCells($rightLines[$index] ?? null)
+            );
+        }
+
+        return $this->tbl([4, 31, 3, 12, 4, 31, 3, 12], $rows, [0]);
     }
 
-    /**
-     * Konten satu kolom breakdown: judul kategori bold + daftar sub kategori.
-     */
-    protected function buildBreakdownColumn(Collection $categories, Collection $responses, int $startIndex): string
+    protected function breakdownLines(Collection $categories, Collection $responses, int $startIndex): array
     {
-        $rows = [];
-        foreach ($categories as $i => $cat) {
-            $catAvg = $this->surveyService->categoryAvg($cat, $responses);
-            $rows[] = [
-                $this->tc($this->p(($startIndex + $i + 1).'. '.$cat->label, ['bold' => true, 'bottomBorder' => true]), ['span' => 2]),
-                $this->tc($this->p(':', ['bold' => true, 'jc' => 'center', 'bottomBorder' => true]), []),
-                $this->tc($this->p($catAvg !== null ? number_format($catAvg, 2) : '-', ['jc' => 'right', 'bottomBorder' => true]), []),
+        $lines = [];
+        foreach ($categories as $index => $category) {
+            $categoryAvg = $this->surveyService->categoryAvg($category, $responses);
+            $lines[] = [
+                'type' => 'category',
+                'label' => ($startIndex + $index + 1).'. '.$category->label,
+                'value' => $categoryAvg !== null ? number_format($categoryAvg, 2) : '-',
             ];
-            foreach ($cat->subCategories as $sc) {
-                $scAvg = $this->surveyService->subCategoryAvg($sc, $responses);
-                $rows[] = [
-                    $this->tc($this->p('-', ['jc' => 'center']), []),
-                    $this->tc($this->p($sc->name), []),
-                    $this->tc($this->p(''), []),
-                    $this->tc($this->p($scAvg !== null ? number_format($scAvg, 2) : '-', ['jc' => 'right']), []),
+            foreach ($category->subCategories as $subCategory) {
+                $subCategoryAvg = $this->surveyService->subCategoryAvg($subCategory, $responses);
+                $lines[] = [
+                    'type' => 'sub_category',
+                    'label' => $subCategory->name,
+                    'value' => $subCategoryAvg !== null ? number_format($subCategoryAvg, 2) : '-',
                 ];
             }
         }
 
-        return $rows !== [] ? $this->tbl([7, 68, 5, 20], $rows, [], ['borders' => false]) : $this->p('');
+        return $lines;
+    }
+
+    protected function breakdownCells(?array $line): array
+    {
+        if ($line === null) {
+            return [$this->tc($this->p(''), ['span' => 4])];
+        }
+
+        if ($line['type'] === 'category') {
+            return [
+                $this->tc($this->p($line['label'], ['bold' => true, 'bottomBorder' => true]), ['span' => 2]),
+                $this->tc($this->p(':', ['bold' => true, 'jc' => 'center', 'bottomBorder' => true]), []),
+                $this->tc($this->p($line['value'], ['jc' => 'right', 'bottomBorder' => true]), []),
+            ];
+        }
+
+        return [
+            $this->tc($this->p('-', ['jc' => 'center']), []),
+            $this->tc($this->p($line['label']), []),
+            $this->tc($this->p(''), []),
+            $this->tc($this->p($line['value'], ['jc' => 'right']), []),
+        ];
     }
 
     protected function buildFindingsTable(array $data): string
     {
         $rows = [
             [
-                $this->tc($this->p('No.', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '5B9BD5']),
-                $this->tc($this->p('Item Pemeriksaan', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '5B9BD5']),
-                $this->tc($this->p('Keterangan', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '5B9BD5']),
-                $this->tc($this->p('Dokumentasi', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '5B9BD5']),
+                $this->tc($this->p('No.', ['bold' => true, 'jc' => 'center']), ['shade' => 'D9E2F3']),
+                $this->tc($this->p('Item Pemeriksaan', ['bold' => true, 'jc' => 'center']), ['shade' => 'D9E2F3']),
+                $this->tc($this->p('Keterangan', ['bold' => true, 'jc' => 'center']), ['shade' => 'D9E2F3']),
+                $this->tc($this->p('Dokumentasi', ['bold' => true, 'jc' => 'center']), ['shade' => 'D9E2F3']),
             ],
         ];
 
@@ -348,7 +384,7 @@ class SurveyReportDocxBuilder
             ];
         }
 
-        return $this->tbl([6, 18, 42, 34], $rows, [0]);
+        return $this->tbl([6, 16, 43, 35], $rows, [0]);
     }
 
     // -----------------------------------------------------------------
@@ -413,131 +449,142 @@ class SurveyReportDocxBuilder
         $xml = '';
 
         foreach ($data['categories'] as $catIndex => $cat) {
+            $maxLabels = 3;
+            $hasLongLabels = $cat->subCategories
+                ->flatMap(fn ($sc) => $sc->itemGroups)
+                ->flatMap(fn ($group) => $group->items)
+                ->flatMap(fn ($item) => $item->score_labels ?? [])
+                ->contains(fn ($label) => mb_strlen((string) $label) > 3);
+            $widths = $hasLongLabels
+                ? [7.75, 8.77, 3.76, 44.15, 8.50, 8.50, 9.50, 8.50]
+                : [7.75, 8.77, 3.76, 43.15, 5.38, 5.67, 13.26, 11.69];
+            $columnCount = count($widths);
             $catAvg = $this->surveyService->categoryAvg($cat, $responses);
-            $xml .= $this->p(strtoupper($cat->label), ['style' => 'Heading2']);
+            $rows = [[
+                $this->tc($this->p('No.', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '4285F4']),
+                $this->tc($this->p('Item', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['span' => $columnCount - 2, 'shade' => '4285F4']),
+                $this->tc($this->p('Overall CAP Rating', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '4285F4']),
+            ], [
+                $this->tc($this->p(to_roman($catIndex + 1), ['bold' => true, 'jc' => 'center']), []),
+                $this->tc($this->p(strtoupper($cat->label).' OVERALL CAP RATING', ['bold' => true]), ['span' => $columnCount - 2]),
+                $this->tc($this->p($catAvg !== null ? number_format($catAvg, 2) : '-', ['bold' => true, 'jc' => 'center']), []),
+            ], [
+                $this->tc($this->p(''), ['span' => 2, 'shade' => '808080']),
+                $this->tc($this->p(''), ['span' => 2, 'shade' => '808080']),
+                $this->tc($this->p(''), ['span' => 2, 'shade' => '808080']),
+                $this->tc($this->p(''), ['span' => 2, 'shade' => '808080']),
+            ]];
 
+            foreach ($cat->subCategories as $scIndex => $sc) {
+                $scAvg = $this->surveyService->subCategoryAvg($sc, $responses);
+                $rows[] = [
+                    $this->tc($this->p((string) ($scIndex + 1), ['bold' => true, 'jc' => 'center']), []),
+                    $this->tc($this->p($sc->name, ['bold' => true]), ['span' => $columnCount - 2]),
+                    $this->tc($this->p($scAvg !== null ? number_format($scAvg, 2) : '-', ['jc' => 'center']), []),
+                ];
+
+                foreach ($sc->itemGroups as $igIndex => $group) {
+                    $isInventory = $this->isInventoryGroup($group);
+                    $labels = $isInventory ? ['Qty', 'Specification'] : array_slice($this->groupScoreLabels($group), 0, $maxLabels);
+                    $unusedSlots = $maxLabels - count($labels);
+                    $groupAvg = $this->surveyService->itemGroupAvg($group, $responses);
+                    $rows[] = [
+                        $this->tc($this->p(''), []),
+                        $this->tc($this->p(($scIndex + 1).'.'.($igIndex + 1), ['bold' => true, 'jc' => 'center']), []),
+                        $this->tc($this->p(''), []),
+                        $this->tc($this->p(strtoupper($group->name), ['bold' => true]), []),
+                        $this->tc($this->p(''), ['span' => 2]),
+                        $this->tc($this->p(''), []),
+                        $this->tc($this->p($groupAvg !== null ? number_format($groupAvg, 2) : '-', ['jc' => 'center']), []),
+                    ];
+
+                    $labelCells = [
+                        $this->tc($this->p(''), ['span' => 2]),
+                        $this->tc($this->p(''), ['span' => 2]),
+                    ];
+                    if ($isInventory) {
+                        $labelCells[] = $this->tc($this->p($labels[0], ['bold' => true, 'jc' => 'center']), []);
+                        $labelCells[] = $this->tc($this->p($labels[1] ?? '', ['bold' => true, 'jc' => 'center']), ['span' => $maxLabels]);
+                    } else {
+                        foreach ($labels as $label) {
+                            $labelCells[] = $this->tc($this->p($label, ['bold' => true, 'jc' => 'center']), []);
+                        }
+                        $labelCells[] = $this->tc($this->p('Avg', ['bold' => true, 'jc' => 'center']), []);
+                        for ($unused = 0; $unused < $unusedSlots; $unused++) {
+                            $labelCells[] = $this->tc($this->p(''), []);
+                        }
+                    }
+                    $rows[] = $labelCells;
+
+                    foreach ($group->items as $itemIndex => $item) {
+                        $response = $responses->get($item->id);
+                        $itemName = $item->name.($item->has_date_fields ? $this->dateSuffix($response) : '');
+                        $cells = [
+                            $this->tc($this->p(''), ['span' => 2]),
+                            $this->tc($this->p(to_letter($itemIndex + 1), ['jc' => 'center']), []),
+                            $this->tc($this->p($itemName), []),
+                        ];
+                        if ($isInventory) {
+                            $qty = $response?->qty;
+                            $specification = $response?->specification;
+                            $cells[] = $this->tc($this->p($qty !== null && $qty !== '' ? (string) $qty : '-', ['jc' => 'center']), []);
+                            $cells[] = $this->tc($this->p($specification !== null && $specification !== '' ? (string) $specification : '-', ['jc' => 'center']), ['span' => $maxLabels]);
+                        } else {
+                            foreach ($labels as $label) {
+                                $value = $response?->scores[$label] ?? null;
+                                $cells[] = $this->tc($this->p($value !== null && $value !== '' ? (string) $value : '-', ['jc' => 'center']), []);
+                            }
+                            $cells[] = $this->tc($this->p(
+                                $response?->avg_score !== null ? number_format((float) $response->avg_score, 2) : '-',
+                                ['jc' => 'center']
+                            ), []);
+                            for ($unused = 0; $unused < $unusedSlots; $unused++) {
+                                $cells[] = $this->tc($this->p(''), []);
+                            }
+                        }
+                        $rows[] = $cells;
+                    }
+
+                    $remainingSpan = $columnCount - 2;
+                    $rows[] = [
+                        $this->tc($this->p(''), []),
+                        $this->tc($this->p('Note:', ['bold' => true]), []),
+                        $this->tc($this->p(''), ['span' => $remainingSpan]),
+                    ];
+                    $notes = $groupNotes->get($group->id)?->values()->all() ?? [];
+                    while (count($notes) < 2) {
+                        $notes[] = null;
+                    }
+                    foreach ($notes as $note) {
+                        $rows[] = [
+                            $this->tc($this->p(''), []),
+                            $this->tc($this->p('-', ['jc' => 'center']), []),
+                            $this->tc($this->p($note?->note ?? ''), ['span' => $remainingSpan]),
+                        ];
+                    }
+                    $rows[] = [
+                        $this->tc($this->p(''), ['span' => 2]),
+                        $this->tc($this->p(''), ['span' => 2]),
+                        $this->tc($this->p(''), []),
+                        $this->tc($this->p(''), []),
+                        $this->tc($this->p(''), []),
+                        $this->tc($this->p(''), []),
+                    ];
+                }
+            }
+
+            $xml .= $this->p(strtoupper($cat->label), ['style' => 'Heading2']);
             $legend = $this->scoreLegend($cat);
             if ($legend !== '') {
                 $xml .= $this->p($legend, ['bold' => true, 'jc' => 'center']);
             }
-
-            $summaryRows = [
-                [
-                    $this->tc($this->p('No.', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '4472C4']),
-                    $this->tc($this->p('Item', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '4472C4']),
-                    $this->tc($this->p('Overall CAP Rating', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['shade' => '4472C4']),
-                ],
-                [
-                    $this->tc($this->p(to_roman($catIndex + 1), ['bold' => true, 'jc' => 'center']), []),
-                    $this->tc($this->p(strtoupper($cat->label).' OVERALL CAP RATING', ['bold' => true]), []),
-                    $this->tc($this->p($catAvg !== null ? number_format($catAvg, 2) : '-', ['bold' => true, 'jc' => 'center']), []),
-                ],
-            ];
-
-            foreach ($cat->subCategories as $scIndex => $sc) {
-                $scAvg = $this->surveyService->subCategoryAvg($sc, $responses);
-                $summaryRows[] = [
-                    $this->tc($this->p((string) ($scIndex + 1), ['bold' => true, 'jc' => 'center']), []),
-                    $this->tc($this->p($sc->name, ['bold' => true]), []),
-                    $this->tc($this->p($scAvg !== null ? number_format($scAvg, 2) : '-', ['jc' => 'center']), []),
-                ];
-            }
-            $xml .= $this->tbl([7, 80, 13], $summaryRows, [0]);
-
-            foreach ($cat->subCategories as $scIndex => $sc) {
-                foreach ($sc->itemGroups as $igIndex => $ig) {
-                    $xml .= $this->buildBab3GroupTable(
-                        ($scIndex + 1).'.'.($igIndex + 1),
-                        $ig,
-                        $responses,
-                        $groupNotes
-                    );
-                }
-            }
-
-            $xml .= $this->p('');
+            $xml .= $this->tbl($widths, $rows, [0], [
+                'rowHeights' => [0 => 660, 1 => 405, 2 => 300],
+                'defaultRowHeight' => 315,
+            ]).$this->p('');
         }
 
         return $xml;
-    }
-
-    protected function buildBab3GroupTable(
-        string $number,
-        object $group,
-        Collection $responses,
-        Collection $groupNotes
-    ): string {
-        $isInventory = $this->isInventoryGroup($group);
-        $labels = $isInventory ? ['Qty', 'Specification'] : $this->groupScoreLabels($group);
-        $scoreWidth = 23 / count($labels);
-        $widths = array_merge([7, 9, 4, 44], array_fill(0, count($labels), $scoreWidth), [13]);
-        $remainingSpan = 3 + count($labels);
-        $groupAvg = $this->surveyService->itemGroupAvg($group, $responses);
-
-        $rows = [[
-            $this->tc($this->p(''), []),
-            $this->tc($this->p($number, ['bold' => true, 'jc' => 'center']), []),
-            $this->tc($this->p(''), []),
-            $this->tc($this->p(strtoupper($group->name), ['bold' => true]), ['span' => 1 + count($labels)]),
-            $this->tc($this->p($groupAvg !== null ? number_format($groupAvg, 2) : '-', ['jc' => 'center']), []),
-        ]];
-
-        $labelCells = [$this->tc($this->p(''), ['span' => 4])];
-        foreach ($labels as $label) {
-            $labelCells[] = $this->tc($this->p($label, ['bold' => true, 'jc' => 'center']), []);
-        }
-        $labelCells[] = $this->tc($this->p($isInventory ? '' : 'Avg', ['bold' => true, 'jc' => 'center']), []);
-        $rows[] = $labelCells;
-
-        foreach ($group->items as $itemIndex => $item) {
-            $response = $responses->get($item->id);
-            $itemName = $item->name.($item->has_date_fields ? $this->dateSuffix($response) : '');
-            $cells = [
-                $this->tc($this->p(''), ['span' => 2]),
-                $this->tc($this->p(to_letter($itemIndex + 1), ['jc' => 'center']), []),
-                $this->tc($this->p($itemName), []),
-            ];
-
-            if ($isInventory) {
-                $cells[] = $this->tc($this->p($response?->qty !== null ? (string) $response->qty : '-', ['jc' => 'center']), []);
-                $cells[] = $this->tc($this->p($response?->specification ?? '-'), []);
-            } else {
-                foreach ($labels as $label) {
-                    $score = $response?->scores[$label] ?? null;
-                    $cells[] = $this->tc($this->p($score !== null && $score !== '' ? (string) $score : '-', ['jc' => 'center']), []);
-                }
-            }
-
-            $cells[] = $this->tc($this->p(
-                $response?->avg_score !== null ? number_format((float) $response->avg_score, 2) : '-',
-                ['jc' => 'center']
-            ), []);
-            $rows[] = $cells;
-        }
-
-        $rows[] = [
-            $this->tc($this->p(''), []),
-            $this->tc($this->p('Note:', ['bold' => true]), []),
-            $this->tc($this->p(''), ['span' => $remainingSpan]),
-        ];
-        $notes = $groupNotes->get($group->id);
-        if ($notes && $notes->isNotEmpty()) {
-            foreach ($notes as $note) {
-                $rows[] = [
-                    $this->tc($this->p(''), []),
-                    $this->tc($this->p('-', ['jc' => 'center']), []),
-                    $this->tc($this->p($note->note), ['span' => $remainingSpan]),
-                ];
-            }
-        } else {
-            $rows[] = [
-                $this->tc($this->p(''), []),
-                $this->tc($this->p('-', ['jc' => 'center']), []),
-                $this->tc($this->p(''), ['span' => $remainingSpan]),
-            ];
-        }
-
-        return $this->tbl($widths, $rows);
     }
 
     protected function isInventoryGroup(object $group): bool
@@ -758,7 +805,9 @@ class SurveyReportDocxBuilder
         $name = 'Dokumentasi kategori '.$categoryId;
 
         return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing>'
-            .'<wp:inline distT="0" distB="0" distL="0" distR="0">'
+            .'<wp:inline xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+            .'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" '
+            .'distT="0" distB="0" distL="0" distR="0">'
             .'<wp:extent cx="'.$width.'" cy="'.$height.'"/>'
             .'<wp:docPr id="'.(10000 + $categoryId).'" name="'.$this->esc($name).'"/>'
             .'<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
@@ -781,6 +830,7 @@ class SurveyReportDocxBuilder
         if (! empty($opts['style'])) {
             $pPrInner .= '<w:pStyle w:val="'.$opts['style'].'"/>';
         }
+        $pPrInner .= '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>';
         if (! empty($opts['indent'])) {
             $pPrInner .= '<w:ind w:left="'.$opts['indent'].'"/>';
         }
@@ -794,7 +844,10 @@ class SurveyReportDocxBuilder
             $pPr = '<w:pPr>'.$pPrInner.'</w:pPr>';
         }
 
-        $rPr = '';
+        $rPr = '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>';
+        if (empty($opts['style'])) {
+            $rPr .= '<w:sz w:val="20"/><w:szCs w:val="20"/>';
+        }
         if (! empty($opts['bold'])) {
             $rPr .= '<w:b/><w:bCs/>';
         }
@@ -842,7 +895,7 @@ class SurveyReportDocxBuilder
      * @param  array<int>  $widthsPct  Lebar kolom dalam persen (total ~100)
      * @param  array<array<string>>  $rows  Tiap baris = daftar string <w:tc>
      * @param  array<int>  $headerRowIdx  Index baris yang ditandai header (repeat on page break)
-     * @param  array{borders?: bool}  $opts
+     * @param  array{borders?: bool, rowHeights?: array<int, int>, defaultRowHeight?: int}  $opts
      */
     protected function tbl(array $widthsPct, array $rows, array $headerRowIdx = [], array $opts = []): string
     {
@@ -854,9 +907,14 @@ class SurveyReportDocxBuilder
 
         $rowsXml = '';
         foreach ($rows as $i => $cells) {
-            $trPr = in_array($i, $headerRowIdx, true)
-                ? '<w:trPr><w:tblHeader/></w:trPr>'
-                : '';
+            $trPr = '';
+            $height = $opts['rowHeights'][$i] ?? $opts['defaultRowHeight'] ?? null;
+            if ($height || in_array($i, $headerRowIdx, true)) {
+                $trPr = '<w:trPr>'
+                    .($height ? '<w:trHeight w:val="'.$height.'"/>' : '')
+                    .(in_array($i, $headerRowIdx, true) ? '<w:tblHeader/>' : '')
+                    .'</w:trPr>';
+            }
             $rowsXml .= '<w:tr>'.$trPr.implode('', $cells).'</w:tr>';
         }
 
@@ -874,6 +932,8 @@ class SurveyReportDocxBuilder
             .'<w:tblPr><w:tblW w:w="5000" w:type="pct"/>'
             .$borders
             .'<w:tblLayout w:type="fixed"/>'
+            .'<w:tblCellMar><w:top w:w="15" w:type="dxa"/><w:bottom w:w="15" w:type="dxa"/></w:tblCellMar>'
+            .'<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>'
             .'</w:tblPr>'
             .'<w:tblGrid>'.$gridXml.'</w:tblGrid>'
             .$rowsXml

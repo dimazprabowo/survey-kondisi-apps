@@ -7,6 +7,7 @@ use App\Models\Survey;
 use App\Models\SurveyCategory;
 use App\Services\SurveyService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Facades\Crypt;
 use Livewire\Component;
 
 class SurveyShow extends Component
@@ -30,6 +31,28 @@ class SurveyShow extends Component
         $firstCat = $this->categories->first();
         $this->activeCategory = $firstCat?->id ?? 1;
         $this->activeSubCategory = $firstCat?->subCategories->first()?->id;
+
+        // Deep-link tab dari form edit (kembali ke kategori/sub yang sama)
+        $categoryParam = request()->query('category');
+        if ($categoryParam) {
+            try {
+                $targetCat = $this->categories->firstWhere('id', Crypt::decryptString($categoryParam));
+                if ($targetCat) {
+                    $this->activeCategory = $targetCat->id;
+                    $this->activeSubCategory = $targetCat->subCategories->first()?->id;
+
+                    $subParam = request()->query('sub');
+                    if ($subParam) {
+                        $targetSub = $targetCat->subCategories->firstWhere('id', Crypt::decryptString($subParam));
+                        if ($targetSub) {
+                            $this->activeSubCategory = $targetSub->id;
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                // Param tidak valid — pakai tab default
+            }
+        }
     }
 
     public function getCategoriesProperty()
@@ -104,7 +127,21 @@ class SurveyShow extends Component
     {
         $this->authorize('update', $this->survey);
 
-        return $this->redirect(route('surveys.edit', $this->survey), navigate: true);
+        // Deep-link ke tab kategori/sub kategori yang sedang dilihat
+        $params = [];
+        if ($this->activeCategory) {
+            $params['category'] = Crypt::encryptString((string) $this->activeCategory);
+        }
+        if ($this->activeSubCategory) {
+            $params['sub'] = Crypt::encryptString((string) $this->activeSubCategory);
+        }
+
+        $url = route('surveys.edit', $this->survey);
+        if ($params) {
+            $url .= '?'.http_build_query($params);
+        }
+
+        return $this->redirect($url, navigate: true);
     }
 
     public function openReport()

@@ -414,11 +414,13 @@
                                             <table class="min-w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
                                                 <colgroup>
                                                     <col class="w-10">
-                                                    <col>
                                                     @if($isInventoryGroup)
+                                                        {{-- Item dikunci persentase agar kolom Qty/Spesifikasi sejajar antar grup --}}
+                                                        <col class="w-[45%]">
                                                         <col class="w-24">
                                                         <col>
                                                     @else
+                                                        <col>
                                                         @foreach($scoreLabels as $label)
                                                             <col class="w-20">
                                                         @endforeach

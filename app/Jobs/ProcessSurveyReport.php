@@ -6,6 +6,7 @@ use App\Enums\FileStatus;
 use App\Models\SurveyReport;
 use App\Services\FileStorageService;
 use App\Services\SurveyReportDocxBuilder;
+use App\Services\SurveyReportService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -62,6 +63,7 @@ class ProcessSurveyReport implements ShouldQueue
                 'file_status' => FileStatus::Completed,
                 'file_error' => null,
                 'file_processed_at' => now(),
+                'generator_version' => SurveyReportService::GENERATOR_VERSION,
             ]);
         } catch (Throwable $e) {
             Log::error('Gagal generate laporan survey', [

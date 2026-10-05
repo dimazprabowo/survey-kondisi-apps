@@ -13,6 +13,7 @@ use App\Services\SurveyReportService;
 use App\Services\SurveyService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -63,6 +64,9 @@ class ReportEditor extends Component
     public $documentationPhoto;
 
     public ?int $documentationCategoryId = null;
+
+    // Kategori BAB III yang sedang dilihat di preview (disinkron dari Alpine, deferred)
+    public $previewCategoryId = null;
 
     public array $cropData = [];
 
@@ -255,12 +259,22 @@ class ReportEditor extends Component
     {
         $this->authorize('update', $this->survey);
 
-        return $this->redirect(route('surveys.edit', $this->survey), navigate: true);
+        $url = route('surveys.edit', $this->survey);
+        if ($this->previewCategoryId) {
+            $url .= '?category='.urlencode(Crypt::encryptString((string) $this->previewCategoryId));
+        }
+
+        return $this->redirect($url, navigate: true);
     }
 
     public function updatedDocumentationPhoto(): void
     {
-        $this->validateOnly('documentationPhoto');
+        try {
+            $this->validateOnly('documentationPhoto');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->dispatch('documentation-photo-invalid');
+            throw $e;
+        }
         $this->showCropModal = true;
         $this->dispatch('documentation-photo-ready');
     }

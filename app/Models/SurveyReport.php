@@ -33,6 +33,7 @@ class SurveyReport extends Model
         'file_status',
         'file_error',
         'file_processed_at',
+        'generator_version',
     ];
 
     protected $casts = [

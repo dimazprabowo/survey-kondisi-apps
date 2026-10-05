@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\DB;
 
 class SurveyReportService
 {
+    public const GENERATOR_VERSION = '2026-10-report-v4';
+
     public function __construct(protected SurveyService $surveyService) {}
 
     /**
@@ -34,6 +36,10 @@ class SurveyReportService
 
             if ($report->wasRecentlyCreated) {
                 $this->seedDefaultSections($report, $survey);
+            } elseif ($report->file_status === FileStatus::Completed
+                && $report->generator_version !== self::GENERATOR_VERSION) {
+                $this->markGeneratedFileOutdated($report);
+                $report->save();
             }
 
             return $report;
@@ -42,7 +48,11 @@ class SurveyReportService
 
     public function updateMeta(SurveyReport $report, array $data): SurveyReport
     {
-        $report->update($data);
+        $report->fill($data);
+        if ($report->isDirty()) {
+            $this->markGeneratedFileOutdated($report);
+        }
+        $report->save();
 
         return $report;
     }
@@ -53,11 +63,19 @@ class SurveyReportService
     public function saveSections(SurveyReport $report, array $sections): void
     {
         DB::transaction(function () use ($report, $sections) {
+            $changed = false;
             foreach ($sections as $key => $content) {
-                $report->sections()->updateOrCreate(
-                    ['key' => $key],
-                    ['content' => $content]
-                );
+                $section = $report->sections()->firstOrNew(['key' => $key]);
+                $section->content = $content;
+                if ($section->isDirty()) {
+                    $section->save();
+                    $changed = true;
+                }
+            }
+
+            if ($changed) {
+                $this->markGeneratedFileOutdated($report);
+                $report->save();
             }
         });
     }
@@ -87,14 +105,20 @@ class SurveyReportService
         $temp = $storage->storeTemp($photo, 'survey-report-documentations');
 
         try {
-            $documentation = DB::transaction(fn () => $report->documentations()->updateOrCreate(
-                ['survey_category_id' => $categoryId],
-                [
-                    'file_status' => FileStatus::Processing,
-                    'file_error' => null,
-                    'crop_data' => $cropData,
-                ]
-            ));
+            $documentation = DB::transaction(function () use ($report, $categoryId, $cropData) {
+                $documentation = $report->documentations()->updateOrCreate(
+                    ['survey_category_id' => $categoryId],
+                    [
+                        'file_status' => FileStatus::Processing,
+                        'file_error' => null,
+                        'crop_data' => $cropData,
+                    ]
+                );
+                $this->markGeneratedFileOutdated($report);
+                $report->save();
+
+                return $documentation;
+            });
 
             ProcessSurveyReportDocumentation::dispatch($documentation->id, $temp['path'], $cropData);
 
@@ -108,9 +132,20 @@ class SurveyReportService
     public function deleteDocumentation(SurveyReportDocumentation $documentation): void
     {
         DB::transaction(function () use ($documentation) {
+            $report = $documentation->report;
             app(FileStorageService::class)->delete($documentation->file_path);
             $documentation->delete();
+            $this->markGeneratedFileOutdated($report);
+            $report->save();
         });
+    }
+
+    protected function markGeneratedFileOutdated(SurveyReport $report): void
+    {
+        $report->file_status = null;
+        $report->file_error = null;
+        $report->file_processed_at = null;
+        $report->generator_version = null;
     }
 
     /**

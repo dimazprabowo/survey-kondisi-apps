@@ -131,6 +131,44 @@ class SurveyReportTest extends TestCase
         );
     }
 
+    public function test_versi_generator_lama_dinonaktifkan_saat_editor_dibuka(): void
+    {
+        $survey = $this->createSurvey();
+        $service = new SurveyReportService(new SurveyService);
+        $report = $service->getOrCreate($survey);
+        $report->update([
+            'file_status' => FileStatus::Completed,
+            'generator_version' => 'versi-lama',
+            'file_path' => 'testing/survey-reports/versi-lama.docx',
+            'file_processed_at' => now(),
+        ]);
+
+        $refreshedReport = $service->getOrCreate($survey);
+
+        $this->assertNull($refreshedReport->file_status);
+        $this->assertNull($refreshedReport->generator_version);
+    }
+
+    public function test_perubahan_report_menonaktifkan_file_generate_lama(): void
+    {
+        $survey = $this->createSurvey();
+        $service = new SurveyReportService(new SurveyService);
+        $report = $service->getOrCreate($survey);
+        $report->update([
+            'file_status' => FileStatus::Completed,
+            'file_path' => 'testing/survey-reports/report-lama.docx',
+            'file_processed_at' => now(),
+        ]);
+
+        $service->updateMeta($report, ['report_title' => 'Judul Baru']);
+        $this->assertNull($report->fresh()->file_status);
+
+        $report->update(['file_status' => FileStatus::Completed, 'file_processed_at' => now()]);
+        $service->saveSections($report, ['executive_summary' => 'Ringkasan yang berubah']);
+        $this->assertNull($report->fresh()->file_status);
+        $this->assertSame('testing/survey-reports/report-lama.docx', $report->fresh()->file_path);
+    }
+
     public function test_benchmark_chart_endpoint_terauthorize_dan_mengembalikan_png(): void
     {
         $survey = $this->createSurvey();
@@ -196,7 +234,12 @@ class SurveyReportTest extends TestCase
         ]);
         $text = html_entity_decode(strip_tags($xml));
 
-        $this->assertSame(3, substr_count($xml, '<w:tbl>'));
+        $this->assertSame(1, substr_count($xml, '<w:tbl>'));
+        $this->assertSame(8, substr_count($xml, '<w:gridCol'));
+        $this->assertStringContainsString('<w:shd w:val="clear" w:color="auto" w:fill="4285F4"/>', $xml);
+        $this->assertStringContainsString('<w:trHeight w:val="660"/><w:tblHeader/>', $xml);
+        $this->assertStringContainsString('<w:trHeight w:val="405"/>', $xml);
+        $this->assertStringContainsString('<w:trHeight w:val="300"/>', $xml);
         $this->assertStringContainsString('HULL AND CONSTRUCTION', $text);
         $firstGroupStart = strpos($xml, 'BOTTOM TOP/SIDE SHELL');
         $secondGroupStart = strpos($xml, 'PUMP GROUP');
@@ -237,6 +280,8 @@ class SurveyReportTest extends TestCase
             'overallCap' => 3.5,
         ]);
 
+        $this->assertSame(1, substr_count($xml, '<w:tbl>'));
+        $this->assertSame(8, substr_count($xml, '<w:gridCol'));
         foreach (range(1, 7) as $number) {
             $this->assertStringContainsString('>'.$number.'. Category '.$number.'</w:t>', $xml);
         }
@@ -317,6 +362,30 @@ class SurveyReportTest extends TestCase
         $this->assertStringStartsWith('testing/survey-report-documentations/', $documentation->file_path);
     }
 
+    public function test_xml_gambar_dokumentasi_mendeklarasikan_namespace_drawingml(): void
+    {
+        $builder = app(SurveyReportDocxBuilder::class);
+        $method = new \ReflectionMethod($builder, 'imageDrawing');
+        $drawing = $method->invoke($builder, 'rId999', 1001);
+        $xml = '<root '
+            .'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            .'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+            .'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            .$drawing.'</root>';
+
+        $previous = libxml_use_internal_errors(true);
+        libxml_clear_errors();
+        $document = new \DOMDocument;
+        $this->assertTrue($document->loadXML($xml));
+        $errors = libxml_get_errors();
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        $this->assertSame([], $errors);
+        $this->assertStringContainsString('xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"', $drawing);
+        $this->assertStringContainsString('xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"', $drawing);
+    }
+
     public function test_docx_hasil_generate_lengkap_dan_tanpa_placeholder_tersisa(): void
     {
         $survey = $this->createSurvey();
@@ -349,6 +418,9 @@ class SurveyReportTest extends TestCase
             }
             $this->assertStringContainsString('CATEGORY', $xml);
             $this->assertStringContainsString('CAP SCORE', $xml);
+            $this->assertStringContainsString('Item Pemeriksaan', $xml);
+            $this->assertStringContainsString('Keterangan', $xml);
+            $this->assertStringContainsString('Dokumentasi', $xml);
         } finally {
             if (is_file($path)) {
                 unlink($path);
