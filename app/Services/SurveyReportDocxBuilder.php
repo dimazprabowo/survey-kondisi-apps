@@ -454,7 +454,14 @@ class SurveyReportDocxBuilder
             ],
         ];
 
-        foreach ($data['ship']?->certificates ?? [] as $cert) {
+        $certs = $data['ship']?->certificates ?? collect();
+        if ($certs->isEmpty()) {
+            $rows[] = [
+                $this->tc($this->p('Belum ada data sertifikat status class', ['jc' => 'center', 'italic' => true, 'color' => '595959']), ['span' => 5]),
+            ];
+        }
+
+        foreach ($certs as $cert) {
             $rows[] = [
                 $this->tc($this->p($cert->certificate_type), []),
                 $this->tc($this->p($cert->last_date?->format('d/m/Y') ?? '', ['jc' => 'center']), []),

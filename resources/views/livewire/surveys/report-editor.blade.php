@@ -733,7 +733,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="5" class="border border-gray-400 dark:border-gray-500 px-2 py-3 text-center text-gray-400 dark:text-gray-500">
+                                        <td colspan="5" class="border border-gray-400 dark:border-gray-500 px-2 py-3 text-center italic text-gray-500 dark:text-gray-400">
                                             Belum ada data sertifikat status class
                                         </td>
                                     </tr>
