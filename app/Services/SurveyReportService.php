@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 
 class SurveyReportService
 {
-    public const GENERATOR_VERSION = '2026-10-report-v4';
+    public const GENERATOR_VERSION = '2026-10-report-v27';
 
     public function __construct(protected SurveyService $surveyService) {}
 
@@ -192,7 +192,7 @@ class SurveyReportService
                         [
                             'name' => 'Kondisi Retak/Crack dan Deformasi pada Konstruksi, Perpipaan, Plat dan Peralatan deck lainnya',
                             'scores' => [
-                                'Terdapat kerusakan peralatan, perpipaan, crack dan deformasi yang signifikan',
+                                'Terdapat kerusakan peralatan,perpipaan, crack dan deformasi yang signifikan',
                                 'Terdapat spot crack, deformasi serta kerusakan peralatan dan perpipaan',
                                 'Terdapat area crack, deformasi dan kerusakan peralatan, perpipaan tingkat rendah',
                                 'Tidak terdapat kerusakan peralatan, perpipaan ataupun crack dan deformasi pada spot area sesuai dengan kondisi baru',
@@ -200,12 +200,7 @@ class SurveyReportService
                         ],
                         [
                             'name' => 'Kondisi Ruang-ruangan Kapal',
-                            'scores' => [
-                                'Terdapat kerusakan secara signifikan',
-                                'Terdapat spot kerusakan pada item dan komponen',
-                                'Terdapat kerusakan pada item dan komponen tingkat rendah',
-                                'Tidak terdapat kerusakan item dan komponen serta dalam kondisi baru',
-                            ],
+                            'scores' => ['', '', '', ''],
                         ],
                         [
                             'name' => 'Kondisi Sistim Permesinan Kapal & Permesinan Geladak',
@@ -240,11 +235,11 @@ class SurveyReportService
                     'code' => 'F',
                     'criteria' => [
                         [
-                            'name' => 'Sistem Permesinan Kapal dan Permesinan Geladak',
+                            'name' => 'Sistim Permesinan Kapal dan Permesinan Geladak',
                             'scores' => [
                                 'Terdapat kerusakan komponen secara signifikan dan tidak berfungsi',
                                 'Terdapat spot kerusakan pada komponen permesinan',
-                                'Terdapat penurunan performa pada komponen permesinan dan berfungsi',
+                                'Terdapat penurunan peforma pada komponen permesinan dan berfungsi',
                                 'Berfungsi dengan baik sesuai dengan kondisi baru',
                             ],
                         ],
@@ -253,7 +248,7 @@ class SurveyReportService
                             'scores' => [
                                 'Terdapat kerusakan pada item dan komponen secara signifikan dan tidak berfungsi',
                                 'Terdapat kerusakan pada item dan komponen',
-                                'Berfungsi dan terdapat penurunan performa',
+                                'Berfungsi dan terdapat penurunan peforma',
                                 'Berfungsi dengan baik sesuai dengan kondisi baru',
                             ],
                         ],
@@ -262,7 +257,7 @@ class SurveyReportService
                             'scores' => [
                                 'Tidak berfungsi dan terdapat kerusakan secara signifikan',
                                 'Tidak berfungsi secara optimal dan terdapat kerusakan komponen peralatan',
-                                'Berfungsi secara optimal dan terdapat penurunan performa',
+                                'Berfungsi secara optimal dan terdapat penurunan peforma',
                                 'Berfungsi dengan baik sesuai dengan kondisi baru',
                             ],
                         ],
@@ -272,12 +267,20 @@ class SurveyReportService
                     'code' => 'M',
                     'criteria' => [
                         [
-                            'name' => 'Dokumen Kapal — Semua sertifikat fisik dan dokumen dalam bentuk hard copy / soft copy wajib ada di atas kapal',
+                            'name' => 'Dokumen Kapal',
                             'scores' => [
                                 'Sertifikat telah melewati masa berlaku',
                                 'Masa berlaku sertifikat sisa 1 bulan mendekati tanggal masa berlaku',
                                 'Masa berlaku sertifikat sisa 3 bulan mendekati tanggal masa berlaku',
                                 'Masa berlaku sertifikat masih aktif',
+                            ],
+                            // Baris kedua "Dokumen Kapal" di master (vMerge):
+                            // score 1 teks sendiri, score 2-4 digabung satu sel (colspan 3).
+                            'extra_rows' => [
+                                [
+                                    'Semua sertifikat fisik dan dokumen dalam bentuk hard copy / soft copy tidak ada.',
+                                    ['text' => 'Semua sertifikat fisik dan dokumen dalam hard / soft copy wajib ada di atas kapal', 'colspan' => 3],
+                                ],
                             ],
                         ],
                         [
@@ -318,6 +321,14 @@ class SurveyReportService
             ->groupBy('survey_item_group_id');
 
         $sections = $report->sections->keyBy('key');
+
+        // Report yang di-seed dengan format narasi lama dinormalisasi ke
+        // format master — hanya di memori (konten hasil edit user tidak tersentuh).
+        $execSection = $sections->get('executive_summary');
+        if ($execSection && trim((string) $execSection->content) === $this->executiveSummaryLegacyDefault($survey)) {
+            $execSection->content = $this->executiveSummaryDefault($survey);
+        }
+
         $documentations = $report->documentations()
             ->where('file_status', FileStatus::Completed)
             ->get()
@@ -383,6 +394,48 @@ class SurveyReportService
     }
 
     /**
+     * Narasi executive summary sesuai template Word master ASDP.
+     */
+    protected function executiveSummaryDefault(Survey $survey): string
+    {
+        $shipName = $survey->ship?->name ?? 'kapal';
+        $dateStr = $survey->survey_date?->translatedFormat('d F Y') ?? '-';
+        $location = $survey->location;
+
+        return implode("\n", [
+            "Pemeriksaan dan penilaian pada kapal {$shipName} dilaksanakan pada tanggal {$dateStr}".($location ? " di {$location}" : '').' dengan kondisi kapal operasional. Survei kondisi ini dilaksanakan untuk mengevaluasi aspek legalitas, konstruksi, sistem permesinan, navigasi dan komunikasi, serta sistem keselamatan kapal. Hasil survei disusun dalam satu laporan yang akan dijadikan sebagai bahan pertimbangan teknis bagi PT ASDP Indonesia Ferry.',
+            'Penilaian kondisi kapal dilakukan menggunakan metodologi Condition Assessment Program (CAP) dengan parameter mengacu pada standar CAP milik BKI (Biro Klasifikasi Indonesia). Hasil penilaian disajikan dalam bentuk peringkat kondisi (CAP rating) dengan skala 1 hingga 4, di mana nilai 1 menunjukkan kondisi terendah dan nilai 4 menunjukkan kondisi tertinggi. Cakupan pemeriksaan dalam survei ini meliputi tujuh kelompok besar, yaitu:',
+        ]);
+    }
+
+    /**
+     * Format narasi lama — dipakai hanya untuk mendeteksi section yang masih
+     * berisi default lama agar dinormalisasi saat generate DOCX.
+     */
+    protected function executiveSummaryLegacyDefault(Survey $survey): string
+    {
+        $shipName = $survey->ship?->name ?? 'kapal';
+        $dateStr = $survey->survey_date?->translatedFormat('d F Y');
+        $location = $survey->location;
+
+        return implode("\n", array_filter([
+            "Pemeriksaan dan penilaian pada kapal {$shipName} dilaksanakan pada tanggal {$dateStr}".($location ? " di {$location}" : '').'. Survei kondisi ini dilaksanakan untuk mengevaluasi aspek legalitas, konstruksi, sistem permesinan, navigasi dan komunikasi, serta sistem keselamatan kapal. Hasil survei disusun dalam satu laporan yang akan dijadikan sebagai bahan pertimbangan teknis.',
+            'Penilaian kondisi kapal dilakukan menggunakan metodologi Condition Assessment Program (CAP) dengan parameter mengacu pada standar CAP milik BKI (Biro Klasifikasi Indonesia). Hasil penilaian disajikan dalam bentuk peringkat kondisi (CAP rating) dengan skala 1 hingga 4, di mana nilai 1 menunjukkan kondisi terendah dan nilai 4 menunjukkan kondisi tertinggi.',
+        ]));
+    }
+
+    /**
+     * Daftar standar CAP BAB I — satu item per baris dengan nomor,
+     * sesuai tampilan list bernomor di template Word master.
+     */
+    protected function capStandardsDefault(): string
+    {
+        return collect($this->capReference()['standards'])
+            ->map(fn ($standard, $i) => ($i + 1).'. '.$standard)
+            ->implode("\n");
+    }
+
+    /**
      * Konten default per section saat report pertama dibuat.
      * finding_{catId} diisi gabungan group notes kategori tsb sebagai draf awal.
      */
@@ -394,16 +447,9 @@ class SurveyReportService
             ->get()
             ->groupBy('survey_item_group_id');
 
-        $shipName = $survey->ship?->name ?? 'kapal';
-        $dateStr = $survey->survey_date?->translatedFormat('d F Y');
-        $location = $survey->location;
-
         $defaults = [
-            'executive_summary' => implode("\n", array_filter([
-                "Pemeriksaan dan penilaian pada kapal {$shipName} dilaksanakan pada tanggal {$dateStr}".($location ? " di {$location}" : '').'. Survei kondisi ini dilaksanakan untuk mengevaluasi aspek legalitas, konstruksi, sistem permesinan, navigasi dan komunikasi, serta sistem keselamatan kapal. Hasil survei disusun dalam satu laporan yang akan dijadikan sebagai bahan pertimbangan teknis.',
-                'Penilaian kondisi kapal dilakukan menggunakan metodologi Condition Assessment Program (CAP) dengan parameter mengacu pada standar CAP milik BKI (Biro Klasifikasi Indonesia). Hasil penilaian disajikan dalam bentuk peringkat kondisi (CAP rating) dengan skala 1 hingga 4, di mana nilai 1 menunjukkan kondisi terendah dan nilai 4 menunjukkan kondisi tertinggi.',
-            ])),
-            'general' => 'Tujuan dari dilaksanakan survey kondisi ini adalah melakukan kegiatan Survey kondisi mencakup aspek legalitas kapal, konstruksi kapal, sistim kapal, navigasi komunikasi kapal dan sistim keselamatan kapal. Hasil dari survey akan dijadikan menjadi satu laporan yang akan dijadikan sebagai pertimbangan teknis.',
+            'executive_summary' => $this->executiveSummaryDefault($survey),
+            'cap_standards' => $this->capStandardsDefault(),
             'memoranda' => 'N/A',
         ];
 

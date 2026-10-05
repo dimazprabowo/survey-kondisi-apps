@@ -30,14 +30,6 @@ class ReportEditor extends Component
 
     public $report_title;
 
-    public $contract_agreement_no;
-
-    public $contract_agreement_date;
-
-    public $contract_appointment_no;
-
-    public $contract_appointment_date;
-
     public $approval_place;
 
     public $approval_date;
@@ -50,7 +42,7 @@ class ReportEditor extends Component
 
     /**
      * Konten narasi per section: key => string.
-     * Key tetap: executive_summary, general, memoranda.
+     * Key tetap: executive_summary, cap_standards, memoranda.
      * Key dinamis: finding_{catId}, saran_{catId}.
      */
     public array $sectionContent = [];
@@ -88,11 +80,8 @@ class ReportEditor extends Component
 
         $this->fill($this->report->only([
             'report_number', 'report_title',
-            'contract_agreement_no', 'contract_appointment_no',
             'approval_place', 'approver_name', 'inspector_1', 'inspector_2',
         ]));
-        $this->contract_agreement_date = $this->report->contract_agreement_date?->format('Y-m-d');
-        $this->contract_appointment_date = $this->report->contract_appointment_date?->format('Y-m-d');
         $this->approval_date = $this->report->approval_date?->format('Y-m-d');
 
         $this->sectionContent = $this->report->sections
@@ -109,10 +98,6 @@ class ReportEditor extends Component
         return [
             'report_number' => ['required', 'string', 'max:255'],
             'report_title' => ['required', 'string', 'max:255'],
-            'contract_agreement_no' => ['nullable', 'string', 'max:255'],
-            'contract_agreement_date' => ['nullable', 'date'],
-            'contract_appointment_no' => ['nullable', 'string', 'max:255'],
-            'contract_appointment_date' => ['nullable', 'date'],
             'approval_place' => ['nullable', 'string', 'max:255'],
             'approval_date' => ['nullable', 'date'],
             'approver_name' => ['nullable', 'string', 'max:255'],
@@ -133,17 +118,13 @@ class ReportEditor extends Component
         $attrs = [
             'report_number' => 'nomor laporan',
             'report_title' => 'judul laporan',
-            'contract_agreement_no' => 'nomor surat perjanjian',
-            'contract_agreement_date' => 'tanggal surat perjanjian',
-            'contract_appointment_no' => 'nomor surat penunjukan',
-            'contract_appointment_date' => 'tanggal surat penunjukan',
             'approval_place' => 'tempat pengesahan',
             'approval_date' => 'tanggal pengesahan',
             'approver_name' => 'nama penyetuju',
             'inspector_1' => 'inspector 1',
             'inspector_2' => 'inspector 2',
             'sectionContent.executive_summary' => 'executive summary',
-            'sectionContent.general' => 'narasi BAB I',
+            'sectionContent.cap_standards' => 'daftar standar CAP',
             'sectionContent.memoranda' => 'memoranda',
         ];
 
@@ -173,10 +154,6 @@ class ReportEditor extends Component
             $service->updateMeta($this->report, [
                 'report_number' => $this->report_number,
                 'report_title' => $this->report_title,
-                'contract_agreement_no' => $this->contract_agreement_no ?: null,
-                'contract_agreement_date' => $this->contract_agreement_date ?: null,
-                'contract_appointment_no' => $this->contract_appointment_no ?: null,
-                'contract_appointment_date' => $this->contract_appointment_date ?: null,
                 'approval_place' => $this->approval_place ?: null,
                 'approval_date' => $this->approval_date ?: null,
                 'approver_name' => $this->approver_name ?: null,

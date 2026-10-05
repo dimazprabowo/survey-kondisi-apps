@@ -87,6 +87,20 @@ button, a, [role="button"], label[for], select, summary {
     }
 }
 
+/* Indeterminate progress bar — strip berjalan kiri→kanan terus selama proses latar belakang */
+.progress-indeterminate {
+    animation: progress-indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes progress-indeterminate {
+    0% {
+        transform: translateX(-105%);
+    }
+    100% {
+        transform: translateX(305%);
+    }
+}
+
 /* Navbar Horizontal Scroll */
 .navbar-scroll {
     scrollbar-width: none;

@@ -18,10 +18,6 @@ class SurveyReport extends Model
         'survey_id',
         'report_number',
         'report_title',
-        'contract_agreement_no',
-        'contract_agreement_date',
-        'contract_appointment_no',
-        'contract_appointment_date',
         'approval_place',
         'approval_date',
         'approver_name',
@@ -37,8 +33,6 @@ class SurveyReport extends Model
     ];
 
     protected $casts = [
-        'contract_agreement_date' => 'date',
-        'contract_appointment_date' => 'date',
         'approval_date' => 'date',
         'file_status' => FileStatus::class,
         'file_processed_at' => 'datetime',

@@ -247,8 +247,7 @@ class SurveyReportDocxBuilder
             'exec_summary' => $this->buildExecSummary($data),
             'cap_breakdown' => $this->buildCapBreakdown($data),
             'temuan_table' => $this->buildFindingsTable($data),
-            'bab1_contract' => $this->buildContractParagraph($data),
-            'bab1_general' => $this->buildParagraphs($this->section($data, 'general')),
+            'bab1_standards' => $this->buildBab1Standards($data),
             'status_class_table' => $this->buildStatusClassTable($data),
             'memoranda' => $this->buildParagraphs($this->section($data, 'memoranda')),
             'bab3' => $this->buildBab3($data),
@@ -262,23 +261,36 @@ class SurveyReportDocxBuilder
 
     protected function buildExecSummary(array $data): string
     {
-        $xml = $this->buildParagraphs($this->section($data, 'executive_summary'));
+        // Halaman executive summary: jarak antar baris 1.5, Garamond 12pt
+        $xml = $this->buildParagraphs($this->section($data, 'executive_summary'), [
+            'line' => 360, 'size' => 24, 'italicPhrases' => ['Condition Assessment Program'],
+        ]);
 
-        // Daftar kategori sebagai daftar bernomor (roman sesuai tampilan report)
-        $i = 0;
-        foreach ($data['categories'] as $cat) {
-            $xml .= $this->p(($i + 1).'. '.$cat->label, ['indent' => 360]);
-            $i++;
+        // Daftar kategori: bullet rata kiri (numId 11 = Symbol dot di template)
+        // dalam 2 kolom tak terlihat, seperti layout section 2-kolom pada master.
+        $categories = $data['categories'];
+        $half = (int) ceil($categories->count() / 2);
+        $bullet = fn ($cat) => $this->p($cat->label, ['numId' => 11, 'line' => 360, 'size' => 24, 'jc' => 'left']);
+        $xml .= $this->tbl([50, 50], [[
+            $this->tc($categories->slice(0, $half)->map($bullet)->implode(''), []),
+            $this->tc($categories->slice($half)->map($bullet)->implode(''), []),
+        ]], [], ['borders' => false]);
+
+        // Kalimat pembuka tabel breakdown — mulai halaman baru seperti master;
+        // "Overall CAP Rating" dan "Overall CAP Rating sebesar X,XX" bold sesuai master.
+        $boldPhrases = ['Overall CAP Rating'];
+        if ($data['overallCap'] !== null) {
+            array_unshift($boldPhrases, 'Overall CAP Rating sebesar '.number_format($data['overallCap'], 2));
         }
-
-        // Kalimat pembuka tabel breakdown
+        $xml .= '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
         $xml .= $this->p(
             'Tabel berikut menyajikan rincian Overall CAP Rating hasil survei kondisi kapal '
             .($data['ship']?->name ?? '-').', yang diperoleh dari rata-rata penilaian pada komponen pemeriksaan utama.'
             .($data['overallCap'] !== null
                 ? ' Berdasarkan hasil penilaian, kapal ini memperoleh Overall CAP Rating sebesar '
                     .number_format($data['overallCap'], 2).'. Adapun rincian penilaian sebagai berikut:'
-                : '')
+                : ''),
+            ['line' => 360, 'size' => 24, 'boldPhrases' => $boldPhrases]
         );
 
         return $xml;
@@ -293,26 +305,39 @@ class SurveyReportDocxBuilder
         $half = (int) ceil($categories->count() / 2);
         $leftLines = $this->breakdownLines($categories->slice(0, $half)->values(), $responses, 0);
         $rightLines = $this->breakdownLines($categories->slice($half)->values(), $responses, $half);
-
-        $rows = [
-            [$this->tc($this->p('Overall CAP Rating Breakdown', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['span' => 8, 'shade' => '4472C4'])],
+        // Skema border master: tanpa tblBorders — hanya frame luar (per-cell
+        // tcBorders) + garis bawah double di bawah baris kategori.
+        // Header (3 baris) tetap satu tabel 9 kolom seperti master.
+        $headerRows = [
+            [$this->tc($this->bp('Overall CAP Rating Breakdown', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['span' => 9, 'shade' => '4472C4', 'vAlign' => 'center', 'borders' => ['top' => 'single', 'left' => 'single', 'right' => 'single']])],
             [
-                $this->tc($this->p('Overall CAP Rating Condition '.$shipName, ['bold' => true]), ['span' => 6]),
-                $this->tc($this->p(':', ['bold' => true, 'jc' => 'center']), []),
-                $this->tc($this->p($overall !== null ? number_format($overall, 2) : '-', ['bold' => true, 'jc' => 'right']), []),
+                $this->tc($this->bp('Overall CAP Rating Condition '.$shipName, ['bold' => true]), ['span' => 7, 'vAlign' => 'center', 'borders' => ['left' => 'single']]),
+                $this->tc($this->bp(':', ['bold' => true, 'jc' => 'center']), ['vAlign' => 'center']),
+                $this->tc($this->bp($overall !== null ? number_format($overall, 2) : '-', ['bold' => true, 'jc' => 'right']), ['vAlign' => 'center', 'borders' => ['right' => 'single']]),
             ],
-            [$this->tc($this->p(''), ['span' => 8, 'shade' => '888888'])],
+            [$this->tc($this->bp(''), ['span' => 9, 'shade' => '888888', 'borders' => ['left' => 'single', 'right' => 'single']])],
         ];
+        $xml = $this->tbl([4, 30, 3, 11, 4, 4, 30, 3, 11], $headerRows, [0], [
+            'borders' => false,
+            'rowHeights' => [0 => 460, 1 => 460, 2 => 300],
+        ]);
 
-        $lineCount = max(count($leftLines), count($rightLines));
-        for ($index = 0; $index < $lineCount; $index++) {
-            $rows[] = array_merge(
-                $this->breakdownCells($leftLines[$index] ?? null),
-                $this->breakdownCells($rightLines[$index] ?? null)
-            );
-        }
+        // Dua kolom sebagai tabel independen (nested): tinggi baris tiap kolom
+        // tidak saling memengaruhi — menghindari jarak palsu antar sub-kategori
+        // saat salah satu kolom lebih panjang. Frame luar digambar di sel wrapper.
+        // (9638*0.48 - margin sel ~216) => 4400 twips untuk tabel nested.
+        $columnTable = fn ($lines) => $this->tbl(
+            [4, 30, 3, 11],
+            array_map(fn ($line) => $this->breakdownCells($line), $lines),
+            [],
+            ['borders' => false, 'totalWidth' => 4400]
+        ).$this->bp('');
 
-        return $this->tbl([4, 31, 3, 12, 4, 31, 3, 12], $rows, [0]);
+        return $xml.$this->tbl([48, 4, 48], [[
+            $this->tc($columnTable($leftLines), ['borders' => ['left' => 'single', 'bottom' => 'single']]),
+            $this->tc($this->bp(''), ['borders' => ['bottom' => 'single']]),
+            $this->tc($columnTable($rightLines), ['borders' => ['right' => 'single', 'bottom' => 'single']]),
+        ]], [], ['borders' => false]);
     }
 
     protected function breakdownLines(Collection $categories, Collection $responses, int $startIndex): array
@@ -324,6 +349,9 @@ class SurveyReportDocxBuilder
                 'type' => 'category',
                 'label' => ($startIndex + $index + 1).'. '.$category->label,
                 'value' => $categoryAvg !== null ? number_format($categoryAvg, 2) : '-',
+                // Spasi atas untuk kategori kedua dst per kolom (mis. "2. RAMP")
+                // agar tidak mepet sub-kategori sebelumnya.
+                'spaced' => $index > 0,
             ];
             foreach ($category->subCategories as $subCategory) {
                 $subCategoryAvg = $this->surveyService->subCategoryAvg($subCategory, $responses);
@@ -338,25 +366,30 @@ class SurveyReportDocxBuilder
         return $lines;
     }
 
-    protected function breakdownCells(?array $line): array
+    /**
+     * Sel untuk satu baris breakdown di dalam kolom independen. Border per
+     * master: hanya garis bawah double di baris kategori — frame luar
+     * digambar oleh sel wrapper di buildCapBreakdown().
+     */
+    protected function breakdownCells(array $line): array
     {
-        if ($line === null) {
-            return [$this->tc($this->p(''), ['span' => 4])];
-        }
+        $opt = fn (string $bottom = 'nil') => $bottom === 'nil' ? [] : ['borders' => ['bottom' => $bottom]];
 
         if ($line['type'] === 'category') {
+            $before = ! empty($line['spaced']) ? 240 : 0;
+
             return [
-                $this->tc($this->p($line['label'], ['bold' => true, 'bottomBorder' => true]), ['span' => 2]),
-                $this->tc($this->p(':', ['bold' => true, 'jc' => 'center', 'bottomBorder' => true]), []),
-                $this->tc($this->p($line['value'], ['jc' => 'right', 'bottomBorder' => true]), []),
+                $this->tc($this->bp($line['label'], ['bold' => true, 'jc' => 'left', 'spacingBefore' => $before]), ['span' => 2] + $opt('double')),
+                $this->tc($this->bp(':', ['bold' => true, 'jc' => 'center', 'spacingBefore' => $before]), $opt('double')),
+                $this->tc($this->bp($line['value'], ['jc' => 'right', 'spacingBefore' => $before]), $opt('double')),
             ];
         }
 
         return [
-            $this->tc($this->p('-', ['jc' => 'center']), []),
-            $this->tc($this->p($line['label']), []),
-            $this->tc($this->p(''), []),
-            $this->tc($this->p($line['value'], ['jc' => 'right']), []),
+            $this->tc($this->bp('-', ['jc' => 'center']), []),
+            $this->tc($this->bp($line['label'], ['jc' => 'left']), []),
+            $this->tc($this->bp(''), []),
+            $this->tc($this->bp($line['value'], ['jc' => 'right']), []),
         ];
     }
 
@@ -378,7 +411,7 @@ class SurveyReportDocxBuilder
             $relationshipId = $data['documentationRelationships'][$cat->id] ?? null;
             $rows[] = [
                 $this->tc($this->p((string) $i, ['jc' => 'center']), []),
-                $this->tc($this->p($cat->label), []),
+                $this->tc($this->p($cat->label, ['jc' => 'left']), []),
                 $this->tc($this->buildParagraphs($content ?: '-'), []),
                 $this->tc($relationshipId ? $this->imageDrawing($relationshipId, $cat->id) : $this->p(''), ['vAlign' => 'center']),
             ];
@@ -391,26 +424,22 @@ class SurveyReportDocxBuilder
     //  Blok: BAB I & BAB II
     // -----------------------------------------------------------------
 
-    protected function buildContractParagraph(array $data): string
+    /**
+     * Daftar standar CAP BAB I — satu item per baris pada section
+     * 'cap_standards', dirender sebagai list bernomor (ListParagraph +
+     * numId 10 + spacing before=0) mengikuti gaya paragraf master.
+     * Prefix nomor manual ("1. ", "2) ") di-strip agar tidak dobel dengan
+     * auto-numbering Word.
+     */
+    protected function buildBab1Standards(array $data): string
     {
-        $report = $data['report'];
+        $content = preg_replace('/^\s*\d+[.)]\s*/m', '', $this->section($data, 'cap_standards'));
 
-        $agreement = $report->contract_agreement_no
-            ? 'Surat Perjanjian Nomor. '.$report->contract_agreement_no
-                .($report->contract_agreement_date ? ' tanggal '.$report->contract_agreement_date->translatedFormat('d F Y') : '')
-            : null;
-        $appointment = $report->contract_appointment_no
-            ? 'Surat Penunjukan Pelaksanaan Pekerjaan Nomor. '.$report->contract_appointment_no
-                .($report->contract_appointment_date ? ' tanggal '.$report->contract_appointment_date->translatedFormat('d F Y') : '')
-            : null;
-
-        $refs = implode('; dan ', array_filter([$agreement, $appointment]));
-        $title = $report->report_title ? ' tentang Pekerjaan '.$report->report_title.'.' : '.';
-
-        return $this->p(
-            ($refs ? 'Sesuai dengan '.$refs : 'Sesuai dengan dokumen kontrak terkait')
-            .' kepada PT. Biro Klasifikasi Indonesia (Persero) – SBU Marine Services Jakarta'.$title
-        );
+        return $this->buildParagraphs($content, [
+            'style' => 'ListParagraph',
+            'numId' => 10,
+            'rawSpacing' => '<w:spacing w:before="0"/>',
+        ]);
     }
 
     protected function buildStatusClassTable(array $data): string
@@ -788,20 +817,21 @@ class SurveyReportDocxBuilder
     /**
      * Paragraf multi-baris: tiap baris -> satu <w:p>. Kosong -> satu <w:p> kosong.
      */
-    protected function buildParagraphs(string $content): string
+    protected function buildParagraphs(string $content, array $opts = []): string
     {
         $lines = preg_split('/\r?\n/', trim($content));
         if ($lines === false || $lines === ['']) {
-            return $this->p('');
+            return $this->p('', $opts);
         }
 
-        return implode('', array_map(fn ($line) => $this->p(trim($line)), $lines));
+        return implode('', array_map(fn ($line) => $this->p(trim($line), $opts), $lines));
     }
 
     protected function imageDrawing(string $relationshipId, int $categoryId): string
     {
-        $width = 2286000;
-        $height = 1524000;
+        // Muat di kolom Dokumentasi (~3373 twips): 3000x2000 twips, rasio 3:2
+        $width = 1905000;
+        $height = 1270000;
         $name = 'Dokumentasi kategori '.$categoryId;
 
         return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing>'
@@ -820,33 +850,94 @@ class SurveyReportDocxBuilder
     }
 
     /**
+     * Paragraf khusus tabel Overall CAP Rating Breakdown — font 11pt.
+     */
+    protected function bp(string $text, array $opts = []): string
+    {
+        return $this->p($text, ['size' => 22] + $opts);
+    }
+
+    /**
      * Satu paragraf <w:p>.
-     * opts: bold, italic, color, jc (center/right/both), style (pStyle), indent (twips).
+     * opts: bold, italic, color, jc (center/right/both), style (pStyle), indent (twips),
+     *       line (w:line twips, 240=single 360=1.5), spacingBefore (twips),
+     *       size (w:sz half-points, 20=10pt 24=12pt), numId (list numbering),
+     *       italicPhrases/boldPhrases (array frasa yang di-render sebagai run
+     *       italic/bold tersendiri).
      */
     protected function p(string $text, array $opts = []): string
     {
-        $pPr = '';
         $pPrInner = '';
         if (! empty($opts['style'])) {
             $pPrInner .= '<w:pStyle w:val="'.$opts['style'].'"/>';
         }
-        $pPrInner .= '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>';
-        if (! empty($opts['indent'])) {
+        if (! empty($opts['numId'])) {
+            $pPrInner .= '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="'.(int) $opts['numId'].'"/></w:numPr>';
+        }
+        if (isset($opts['rawSpacing'])) {
+            $pPrInner .= $opts['rawSpacing'];
+        } else {
+            $pPrInner .= '<w:spacing w:after="0" w:line="'.(int) ($opts['line'] ?? 240).'" w:lineRule="auto"'
+                .(! empty($opts['spacingBefore']) ? ' w:before="'.$opts['spacingBefore'].'"' : '')
+                .'/>';
+        }
+        if (isset($opts['indent'])) {
             $pPrInner .= '<w:ind w:left="'.$opts['indent'].'"/>';
         }
         if (! empty($opts['jc'])) {
             $pPrInner .= '<w:jc w:val="'.$opts['jc'].'"/>';
         }
-        if (! empty($opts['bottomBorder'])) {
-            $pPrInner .= '<w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="666666"/></w:pBdr>';
-        }
-        if ($pPrInner !== '') {
-            $pPr = '<w:pPr>'.$pPrInner.'</w:pPr>';
+        $pPr = $pPrInner !== '' ? '<w:pPr>'.$pPrInner.'</w:pPr>' : '';
+
+        $runs = '';
+        foreach ($this->runs($text, $opts) as [$runText, $runOpts]) {
+            $runs .= '<w:r>'.$this->rPr($runOpts).'<w:t xml:space="preserve">'.$this->esc($runText).'</w:t></w:r>';
         }
 
-        $rPr = '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>';
+        return '<w:p>'.$pPr.$runs.'</w:p>';
+    }
+
+    /**
+     * Pecah teks menjadi [teks, opts] per run — frasa dalam `italicPhrases`/
+     * `boldPhrases` menjadi run tersendiri dengan format aktif. Frasa terpanjang
+     * didahulukan agar frasa yang menjadi prefix frasa lain tidak bentrok.
+     */
+    protected function runs(string $text, array $opts): array
+    {
+        $phrases = [];
+        foreach ((array) ($opts['italicPhrases'] ?? []) as $phrase) {
+            $phrases[$phrase]['italic'] = true;
+        }
+        foreach ((array) ($opts['boldPhrases'] ?? []) as $phrase) {
+            $phrases[$phrase]['bold'] = true;
+        }
+        if ($phrases === [] || $text === '') {
+            return [[$text, $opts]];
+        }
+
+        $keys = array_keys($phrases);
+        usort($keys, fn ($a, $b) => strlen($b) <=> strlen($a));
+        $pattern = '/('.implode('|', array_map(fn ($phrase) => preg_quote($phrase, '/'), $keys)).')/';
+        $runs = [];
+        foreach (preg_split($pattern, $text, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [] as $part) {
+            if ($part === '') {
+                continue;
+            }
+            $runs[] = [$part, isset($phrases[$part]) ? $phrases[$part] + $opts : $opts];
+        }
+
+        return $runs ?: [[$text, $opts]];
+    }
+
+    /**
+     * Run properties <w:rPr> dari opts paragraf.
+     */
+    protected function rPr(array $opts): string
+    {
+        $rPr = '<w:rFonts w:ascii="Garamond" w:hAnsi="Garamond" w:eastAsia="Garamond" w:cs="Garamond"/>';
         if (empty($opts['style'])) {
-            $rPr .= '<w:sz w:val="20"/><w:szCs w:val="20"/>';
+            $size = (int) ($opts['size'] ?? 20);
+            $rPr .= '<w:sz w:val="'.$size.'"/><w:szCs w:val="'.$size.'"/>';
         }
         if (! empty($opts['bold'])) {
             $rPr .= '<w:b/><w:bCs/>';
@@ -857,21 +948,29 @@ class SurveyReportDocxBuilder
         if (! empty($opts['color'])) {
             $rPr .= '<w:color w:val="'.$opts['color'].'"/>';
         }
-        if ($rPr !== '') {
-            $rPr = '<w:rPr>'.$rPr.'</w:rPr>';
-        }
 
-        return '<w:p>'.$pPr.'<w:r>'.$rPr.'<w:t xml:space="preserve">'.$this->esc($text).'</w:t></w:r></w:p>';
+        return '<w:rPr>'.$rPr.'</w:rPr>';
     }
 
     /**
-     * Sel tabel <w:tc>. opts: span (gridSpan), shade (hex fill), width (pct*50).
+     * Sel tabel <w:tc>. opts: span (gridSpan), shade (hex fill), vAlign,
+     * borders (array side => 'single'|'double'; sisi tak disebut = nil).
      */
     protected function tc(string $innerXml, array $opts = []): string
     {
         $tcPr = '';
         if (! empty($opts['span']) && $opts['span'] > 1) {
             $tcPr .= '<w:gridSpan w:val="'.$opts['span'].'"/>';
+        }
+        if (! empty($opts['borders'])) {
+            $bordersXml = '';
+            foreach (['top', 'left', 'bottom', 'right'] as $side) {
+                $val = $opts['borders'][$side] ?? 'nil';
+                $bordersXml .= $val === 'nil'
+                    ? '<w:'.$side.' w:val="nil"/>'
+                    : '<w:'.$side.' w:val="'.$val.'" w:sz="'.($val === 'double' ? 6 : 4).'" w:space="0" w:color="000000"/>';
+            }
+            $tcPr .= '<w:tcBorders>'.$bordersXml.'</w:tcBorders>';
         }
         if (! empty($opts['shade'])) {
             $tcPr .= '<w:shd w:val="clear" w:color="auto" w:fill="'.$opts['shade'].'"/>';
@@ -895,13 +994,14 @@ class SurveyReportDocxBuilder
      * @param  array<int>  $widthsPct  Lebar kolom dalam persen (total ~100)
      * @param  array<array<string>>  $rows  Tiap baris = daftar string <w:tc>
      * @param  array<int>  $headerRowIdx  Index baris yang ditandai header (repeat on page break)
-     * @param  array{borders?: bool, rowHeights?: array<int, int>, defaultRowHeight?: int}  $opts
+     * @param  array{borders?: bool, rowHeights?: array<int, int>, defaultRowHeight?: int, totalWidth?: int}  $opts
      */
     protected function tbl(array $widthsPct, array $rows, array $headerRowIdx = [], array $opts = []): string
     {
         $total = array_sum($widthsPct);
+        $totalWidth = (int) ($opts['totalWidth'] ?? 9638);
         $gridXml = implode('', array_map(
-            fn ($w) => '<w:gridCol w:w="'.(int) round($w / max(1, $total) * 9638).'"/>',
+            fn ($w) => '<w:gridCol w:w="'.(int) round($w / max(1, $total) * $totalWidth).'"/>',
             $widthsPct
         ));
 

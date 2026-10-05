@@ -186,13 +186,9 @@ return new class extends Migration
         Schema::create('survey_reports', function (Blueprint $table) {
             $table->id();
             $table->foreignId('survey_id')->unique()->constrained()->cascadeOnDelete();
-            // Meta laporan (cover, lembar pengesahan, referensi kontrak)
+            // Meta laporan (cover, lembar pengesahan)
             $table->string('report_number')->nullable();
             $table->string('report_title')->nullable();
-            $table->string('contract_agreement_no')->nullable();
-            $table->date('contract_agreement_date')->nullable();
-            $table->string('contract_appointment_no')->nullable();
-            $table->date('contract_appointment_date')->nullable();
             $table->string('approval_place')->nullable();
             $table->date('approval_date')->nullable();
             $table->string('approver_name')->nullable();
@@ -214,7 +210,7 @@ return new class extends Migration
         });
 
         // 8. Survey report sections — blok narasi editable per section laporan
-        //    key: executive_summary | general | memoranda | finding_{catId} | saran_{catId}
+        //    key: executive_summary | cap_standards | memoranda | finding_{catId} | saran_{catId}
         Schema::create('survey_report_sections', function (Blueprint $table) {
             $table->id();
             $table->foreignId('survey_report_id')->constrained()->cascadeOnDelete();

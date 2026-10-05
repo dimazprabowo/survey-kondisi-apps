@@ -280,8 +280,9 @@ class SurveyReportTest extends TestCase
             'overallCap' => 3.5,
         ]);
 
-        $this->assertSame(1, substr_count($xml, '<w:tbl>'));
-        $this->assertSame(8, substr_count($xml, '<w:gridCol'));
+        // Header 9 kolom + wrapper 3 kolom berisi 2 tabel nested @4 kolom
+        $this->assertSame(4, substr_count($xml, '<w:tbl>'));
+        $this->assertSame(20, substr_count($xml, '<w:gridCol'));
         foreach (range(1, 7) as $number) {
             $this->assertStringContainsString('>'.$number.'. Category '.$number.'</w:t>', $xml);
         }

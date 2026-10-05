@@ -71,22 +71,87 @@ $clearNode = function (DOMElement $node): void {
     }
 };
 
-/** Buat paragraf berisi satu run teks. */
-$makeP = function (string $text) use ($doc, $W): DOMElement {
-    $p = $doc->createElementNS($W, 'w:p');
+/** Paragraf pertama dalam sebuah sel <w:tc>. */
+$firstP = function (DOMElement $tc): ?DOMElement {
+    foreach ($tc->childNodes as $c) {
+        if ($c instanceof DOMElement && $c->localName === 'p') {
+            return $c;
+        }
+    }
+
+    return null;
+};
+
+/**
+ * Ganti teks sebuah paragraf menjadi placeholder TANPA menghapus
+ * w:pPr paragraf dan w:rPr run pertama — alignment, spacing, indent,
+ * dan format font asli master tetap terjaga.
+ */
+$setTextKeepPr = function (DOMElement $p, string $text) use ($doc, $W): void {
+    $rPr = null;
+    foreach ($p->getElementsByTagNameNS($W, 'r') as $r) {
+        foreach ($r->childNodes as $ch) {
+            if ($ch instanceof DOMElement && $ch->localName === 'rPr') {
+                $rPr = $ch->cloneNode(true);
+                break 2;
+            }
+        }
+    }
+    foreach (iterator_to_array($p->childNodes) as $ch) {
+        if ($ch instanceof DOMElement && $ch->localName === 'pPr') {
+            continue;
+        }
+        $p->removeChild($ch);
+    }
     $r = $doc->createElementNS($W, 'w:r');
+    if ($rPr) {
+        $r->appendChild($rPr);
+    }
     $t = $doc->createElementNS($W, 'w:t', $text);
     $t->setAttribute('xml:space', 'preserve');
     $r->appendChild($t);
     $p->appendChild($r);
-
-    return $p;
 };
 
-/** Ganti seluruh isi sel dengan satu paragraf teks. */
-$setCellText = function (DOMElement $tc, string $text) use ($clearNode, $makeP): void {
-    $clearNode($tc);
-    $tc->appendChild($makeP($text));
+/** Terapkan line spacing (w:line + w:lineRule=auto) ke semua paragraf dalam node. */
+$applyLine = function (DOMElement $node, int $line) use ($doc, $W): void {
+    // Urutan valid w:pPr: spacing harus sebelum ind/jc/rPr
+    $afterSpacing = ['ind', 'contextualSpacing', 'mirrorIndents', 'suppressOverlap',
+        'jc', 'textDirection', 'textAlignment', 'textboxTightWrap', 'outlineLvl',
+        'divId', 'cnfStyle', 'rPr', 'sectPr', 'pPrChange'];
+    foreach ($node->getElementsByTagNameNS($W, 'p') as $p) {
+        $pPr = null;
+        foreach ($p->childNodes as $ch) {
+            if ($ch instanceof DOMElement && $ch->localName === 'pPr') {
+                $pPr = $ch;
+                break;
+            }
+        }
+        if (! $pPr) {
+            $pPr = $doc->createElementNS($W, 'w:pPr');
+            $p->insertBefore($pPr, $p->firstChild);
+        }
+        $spacing = null;
+        foreach ($pPr->childNodes as $ch) {
+            if ($ch instanceof DOMElement && $ch->localName === 'spacing') {
+                $spacing = $ch;
+                break;
+            }
+        }
+        if (! $spacing) {
+            $spacing = $doc->createElementNS($W, 'w:spacing');
+            $anchor = null;
+            foreach ($pPr->childNodes as $ch) {
+                if ($ch instanceof DOMElement && in_array($ch->localName, $afterSpacing, true)) {
+                    $anchor = $ch;
+                    break;
+                }
+            }
+            $pPr->insertBefore($spacing, $anchor);
+        }
+        $spacing->setAttributeNS($W, 'w:line', (string) $line);
+        $spacing->setAttributeNS($W, 'w:lineRule', 'auto');
+    }
 };
 
 /** Ganti seluruh isi paragraf dengan satu run teks. */
@@ -126,8 +191,8 @@ $pengesahanMap = [
 
 foreach ($xp->query('./w:tr', $children[18]) as $tr) {
     $cells = $rowCells($tr);
-    if (count($cells) >= 3 && isset($pengesahanMap[$cellText($cells[0])])) {
-        $setCellText($cells[2], $pengesahanMap[$cellText($cells[0])]);
+    if (count($cells) >= 3 && isset($pengesahanMap[$cellText($cells[0])]) && ($vp = $firstP($cells[2]))) {
+        $setTextKeepPr($vp, $pengesahanMap[$cellText($cells[0])]);
     }
 }
 
@@ -135,19 +200,38 @@ foreach ($xp->query('./w:tr', $children[18]) as $tr) {
 // 2. Tabel tanda tangan lembar pengesahan (child 20)
 //    Diproses SEBELUM replace global "x..." agar x's nama approver
 //    tidak tertukar dengan ${report_no}.
+//    Teks diganti DI DALAM paragraf aslinya (setTextKeepPr) agar
+//    alignment center, indent, dan format font master tetap terjaga —
+//    serta paragraf spacer ruang tanda tangan tidak ikut terhapus.
 // ---------------------------------------------------------------------
-foreach ($xp->query('.//w:tc', $children[20]) as $tc) {
-    $text = $cellText($tc);
+$placed = [];
+foreach ($xp->query('.//w:p', $children[20]) as $p) {
+    $text = trim(preg_replace('/\s+/', ' ', $p->textContent));
+    $key = null;
     if (str_contains($text, 'dd/mm/')) {
-        $setCellText($tc, '${approval_place_date}');
+        $key = 'approval_place_date';
     } elseif ($text === 'Inspector 1') {
-        $setCellText($tc, '${inspector_1}');
+        $key = 'inspector_1';
     } elseif ($text === 'Inspector 2') {
-        $setCellText($tc, '${inspector_2}');
+        $key = 'inspector_2';
     } elseif (preg_match('/^x+(\s+x+)*$/', $text)) {
         // Baris "xxxxxxx xxxxx" = nama penandatangan (Kepala Cabang)
-        $setCellText($tc, '${approver_name}');
+        $key = 'approver_name';
     }
+    if ($key === null) {
+        continue;
+    }
+    // Placeholder hanya di paragraf pertama yang cocok; paragraf
+    // x-cadangan berikutnya dikosongkan agar nama tidak terduplikasi.
+    $setTextKeepPr($p, ($placed[$key] ?? false) ? '' : '${'.$key.'}');
+    $placed[$key] = true;
+}
+
+// ---------------------------------------------------------------------
+// 2b. Lembar pengesahan (child 11..20) — jarak antar baris single (1.0)
+// ---------------------------------------------------------------------
+foreach (range(11, 20) as $i) {
+    $applyLine($children[$i], 240);
 }
 
 // ---------------------------------------------------------------------
@@ -161,6 +245,9 @@ foreach ($xp->query('//w:t') as $t) {
         $t->textContent = '${report_no}';
     } elseif ($text === 'EXAMPLE') {
         $t->textContent = '${ship_name}';
+    } elseif (str_contains($text, 'posisi EXAMPLE terhadap')) {
+        // Kalimat caption grafik benchmark mengandung nama kapal contoh
+        $t->textContent = str_replace('EXAMPLE', '${ship_name}', $text);
     } elseif ($text === 'xxxxxx') {
         // "No: xxxxxx" pada lembar pengesahan
         $t->textContent = '${report_no}';
@@ -175,10 +262,24 @@ foreach ($xp->query('//w:t') as $t) {
 
 // ---------------------------------------------------------------------
 // 4. Executive Summary — narasi + daftar kategori + lead-in + tabel CAP
-//    (child 23..36) diganti marker ${exec_summary} lalu ${cap_breakdown}
+//    (child 23..36) diganti marker ${exec_summary} lalu ${cap_breakdown}.
+//    PENTING: child 25 memuat w:sectPr section ASDP (headerReference
+//    rId14-17 = header/footer berlogo ASDP + footer2). SectPr dipindah ke
+//    paragraf baru setelah marker agar header/footer ASDP tetap dipakai
+//    mulai EXECUTIVE SUMMARY sampai akhir dokumen (body-end sectPr
+//    mewarisi header section ini).
 // ---------------------------------------------------------------------
+$sectPrExec = $xp->query('./w:pPr/w:sectPr', $children[25])->item(0);
+
 $body->insertBefore($markerP('exec_summary'), $children[23]);
 $body->insertBefore($markerP('cap_breakdown'), $children[23]);
+if ($sectPrExec) {
+    $pBreak = $doc->createElementNS($W, 'w:p');
+    $pBreakPr = $doc->createElementNS($W, 'w:pPr');
+    $pBreakPr->appendChild($sectPrExec);
+    $pBreak->appendChild($pBreakPr);
+    $body->insertBefore($pBreak, $children[23]);
+}
 foreach (range(23, 36) as $i) {
     $body->removeChild($children[$i]);
 }
@@ -195,13 +296,77 @@ $body->insertBefore($markerP('temuan_table'), $children[47]);
 $body->removeChild($children[47]);
 
 // ---------------------------------------------------------------------
-// 7. BAB I — paragraf kontrak (54) + narasi umum (55-56)
+// 7. BAB I — paragraf kontrak (54), narasi umum (55), dan CAP intro (56)
+//    adalah teks tetap master — dipertahankan verbatim. Daftar standar
+//    CAP (57-60) diganti marker ${bab1_standards}.
 // ---------------------------------------------------------------------
-$body->insertBefore($markerP('bab1_contract'), $children[54]);
-$body->insertBefore($markerP('bab1_general'), $children[54]);
-foreach ([54, 55, 56] as $i) {
+$body->insertBefore($markerP('bab1_standards'), $children[57]);
+foreach (range(57, 60) as $i) {
     $body->removeChild($children[$i]);
 }
+
+// ---------------------------------------------------------------------
+// 7b. Perbaiki border "nil" pada tabel CAP (child 61 & 64):
+//     - right=nil pada sel terakhir baris (tepi kanan tabel kosong)
+//     - bottom=nil pada sel penutup vMerge / baris terakhir (garis
+//       bawah sel merged hilang — mis. bawah kolom CATEGORY "F")
+// ---------------------------------------------------------------------
+$fixCapTableBorders = function (DOMElement $tbl) use ($W, $rowCells): void {
+    $gridCount = $tbl->getElementsByTagNameNS($W, 'gridCol')->length;
+    $rows = [];
+    foreach ($tbl->childNodes as $c) {
+        if ($c instanceof DOMElement && $c->localName === 'tr') {
+            $rows[] = $c;
+        }
+    }
+    $fixBorder = function (?DOMElement $b) use ($W): void {
+        $b->setAttributeNS($W, 'w:val', 'single');
+        $b->setAttributeNS($W, 'w:sz', '4');
+        $b->setAttributeNS($W, 'w:space', '0');
+        $b->setAttributeNS($W, 'w:color', '000000');
+    };
+    foreach ($rows as $ri => $tr) {
+        $col = 0;
+        foreach ($rowCells($tr) as $tc) {
+            $tcPr = $tc->getElementsByTagNameNS($W, 'tcPr')->item(0);
+            $gs = $tcPr?->getElementsByTagNameNS($W, 'gridSpan')->item(0);
+            $span = $gs ? (int) $gs->getAttributeNS($W, 'val') : 1;
+            $tb = $tcPr?->getElementsByTagNameNS($W, 'tcBorders')->item(0);
+            if ($tb) {
+                $right = $tb->getElementsByTagNameNS($W, 'right')->item(0);
+                if ($right?->getAttributeNS($W, 'val') === 'nil' && $col + $span === $gridCount) {
+                    $fixBorder($right);
+                }
+                $bottom = $tb->getElementsByTagNameNS($W, 'bottom')->item(0);
+                if ($bottom?->getAttributeNS($W, 'val') === 'nil') {
+                    // Merge lanjut bila sel di kolom sama pada baris
+                    // berikutnya adalah vMerge continuation.
+                    $mergeContinues = false;
+                    if (isset($rows[$ri + 1])) {
+                        $ncol = 0;
+                        foreach ($rowCells($rows[$ri + 1]) as $ntc) {
+                            $npr = $ntc->getElementsByTagNameNS($W, 'tcPr')->item(0);
+                            $ngs = $npr?->getElementsByTagNameNS($W, 'gridSpan')->item(0);
+                            $nspan = $ngs ? (int) $ngs->getAttributeNS($W, 'val') : 1;
+                            if ($ncol === $col) {
+                                $nvm = $npr?->getElementsByTagNameNS($W, 'vMerge')->item(0);
+                                $mergeContinues = $nvm && $nvm->getAttributeNS($W, 'val') !== 'restart';
+                                break;
+                            }
+                            $ncol += $nspan;
+                        }
+                    }
+                    if (! $mergeContinues) {
+                        $fixBorder($bottom);
+                    }
+                }
+            }
+            $col += $span;
+        }
+    }
+};
+$fixCapTableBorders($children[61]);
+$fixCapTableBorders($children[64]);
 
 // ---------------------------------------------------------------------
 // 8. BAB II — tabel Ship Particulars (child 68): label -> ${sp_*}
@@ -232,8 +397,8 @@ $particularsMap = [
 
 foreach ($xp->query('./w:tr', $children[68]) as $tr) {
     $cells = $rowCells($tr);
-    if (count($cells) >= 3 && isset($particularsMap[$cellText($cells[0])])) {
-        $setCellText($cells[2], $particularsMap[$cellText($cells[0])]);
+    if (count($cells) >= 3 && isset($particularsMap[$cellText($cells[0])]) && ($vp = $firstP($cells[2]))) {
+        $setTextKeepPr($vp, $particularsMap[$cellText($cells[0])]);
     }
 }
 
@@ -287,9 +452,29 @@ $in = new ZipArchive;
 $in->open($source);
 for ($i = 0; $i < $in->numFiles; $i++) {
     $name = $in->getNameIndex($i);
-    $out->addFromString($name, $name === 'word/document.xml'
-        ? $newXml
-        : $in->getFromName($name));
+    $content = $name === 'word/document.xml' ? $newXml : $in->getFromName($name);
+
+    // Daftar isi adalah TOC field — minta Word update field saat dokumen
+    // dibuka agar nomor halaman tidak basi (semua "1" hasil generate).
+    // w:updateFields wajib di akhir sequence CT_Settings — sebelum
+    // hdrShapeDefaults/footnotePr/endnotePr/compat/docVars/rsids.
+    if ($name === 'word/settings.xml' && ! str_contains($content, 'updateFields')) {
+        foreach (['hdrShapeDefaults', 'footnotePr', 'endnotePr', 'compat', 'docVars', 'rsids'] as $anchor) {
+            if (str_contains($content, '<w:'.$anchor)) {
+                $content = preg_replace(
+                    '/<w:'.$anchor.'\b/',
+                    '<w:updateFields w:val="true"/>$0',
+                    $content, 1
+                );
+                break;
+            }
+        }
+        if (! str_contains($content, 'updateFields')) {
+            $content = str_replace('</w:settings>', '<w:updateFields w:val="true"/></w:settings>', $content);
+        }
+    }
+
+    $out->addFromString($name, $content);
 }
 $in->close();
 $out->close();
@@ -299,7 +484,7 @@ rename($tmpTarget, $target);
 $check = file_get_contents('zip://'.realpath($target).'#word/document.xml');
 $markers = ['report_no', 'ship_name', 'report_title', 'approval_place_date', 'approver_name',
     'inspector_1', 'inspector_2', 'exec_summary', 'cap_breakdown', 'benchmark_chart',
-    'temuan_table', 'bab1_contract', 'bab1_general', 'status_class_table', 'memoranda',
+    'temuan_table', 'bab1_standards', 'status_class_table', 'memoranda',
     'bab3', 'bab4', 'sp_name', 'sp_main_engine', 'sp_aux_power'];
 $missing = array_filter($markers, fn ($m) => ! str_contains($check, '${'.$m.'}'));
 

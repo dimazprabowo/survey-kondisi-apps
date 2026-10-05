@@ -104,7 +104,7 @@
         $ship = $survey->ship;
         $canvas = 'rounded-xl bg-gray-200/70 dark:bg-gray-950/60 border border-gray-200 dark:border-gray-800 p-2 sm:p-5 lg:p-8';
         $sheet = 'mx-auto w-full max-w-4xl rounded-sm bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 px-5 py-8 sm:px-10 sm:py-10 lg:px-16 lg:py-14 text-[15px] leading-7 text-gray-900 dark:text-gray-100';
-        $times = "font-family:'Times New Roman',Times,serif";
+        $times = "font-family:Garamond,'Times New Roman',serif";
         $sans = 'font-family:ui-sans-serif,system-ui,sans-serif';
         $paperInput = 'bg-transparent border-0 border-b border-dashed border-gray-300 dark:border-gray-600 rounded-none px-1 py-0.5 text-[15px] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-0';
         $paperTextarea = 'w-full bg-transparent border border-dashed border-transparent rounded-md px-2 py-1.5 text-[15px] leading-7 text-justify text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-400 dark:focus:border-blue-500 focus:ring-0 resize-none overflow-hidden min-h-40';
@@ -184,7 +184,7 @@
                 </div>
             </div>
             <div class="h-1 overflow-hidden bg-blue-100 dark:bg-blue-950">
-                <div class="h-full w-1/3 animate-pulse rounded-r-full bg-blue-500"></div>
+                <div class="progress-indeterminate h-full w-1/3 rounded-full bg-blue-500"></div>
             </div>
         </div>
     @endif
@@ -259,7 +259,7 @@
             </div>
 
             <!-- Sheet 2: Lembar Pengesahan -->
-            <div class="{{ $sheet }} mt-4 sm:mt-6" style="{{ $times }}">
+            <div class="{{ $sheet }} mt-4 sm:mt-6 leading-tight" style="{{ $times }}">
                 <div class="text-center">
                     <p class="text-lg font-bold underline underline-offset-4">LEMBAR PENGESAHAN</p>
                     <p class="mt-2 font-bold">LAPORAN AKHIR</p>
@@ -288,7 +288,7 @@
                     </tbody>
                 </table>
 
-                <div class="mt-14 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-12 text-center">
+                <div class="mt-14 grid grid-cols-1 sm:grid-cols-[5fr_7fr] gap-x-6 gap-y-12 text-center">
                     <div>
                         <p>Mengetahui,</p>
                         <p>PT. Biro Klasifikasi Indonesia (Persero)</p>
@@ -337,36 +337,49 @@
 
         <!-- ================= Tab: Executive Summary ================= -->
         <div x-show="tab === 'exec'" x-cloak x-transition.opacity.duration.100ms wire:key="panel-exec" class="{{ $canvas }}">
-            <div class="{{ $sheet }}" style="{{ $times }}">
+            <div class="{{ $sheet }} leading-normal" style="{{ $times }}">
                 <h3 class="text-center text-lg font-bold tracking-wide">EXECUTIVE SUMMARY</h3>
                 <x-input-label for="executive_summary" value="Narasi Executive Summary" class="sr-only" />
                 <textarea wire:model="sectionContent.executive_summary" id="executive_summary" rows="6"
                     x-data="{{ $fitJs }}" x-init="$nextTick(() => fit())" x-on:input="fit()" x-on:report-tab-changed.window="$nextTick(() => fit())"
                     placeholder="Ringkasan pelaksanaan survey dan metodologi CAP"
-                    class="{{ $paperTextarea }} mt-6"></textarea>
+                    class="{{ $paperTextarea }} mt-6 !text-base"></textarea>
                 <x-input-error :messages="$errors->get('sectionContent.executive_summary')" class="mt-1" />
+                <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Istilah <em>Condition Assessment Program</em> otomatis dicetak miring pada dokumen.</p>
 
                 <!-- Preview blok otomatis: daftar kategori + CAP breakdown + benchmark -->
                 <div class="{{ $autoZone }}">
                     <span class="{{ $autoTag }}" style="{{ $sans }}">Otomatis dari data survey</span>
-                    @foreach($bab3Categories as $catIndex => $cat)
-                        <p class="pl-2">{{ $catIndex + 1 }}. {{ $cat->label }}</p>
-                    @endforeach
+                    @php $catHalf = (int) ceil(max($bab3Categories->count(), 1) / 2); @endphp
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+                        <div>
+                            @foreach($bab3Categories->slice(0, $catHalf) as $cat)
+                                <p class="text-base"><span class="inline-block w-4">&middot;</span>{{ $cat->label }}</p>
+                            @endforeach
+                        </div>
+                        <div>
+                            @foreach($bab3Categories->slice($catHalf) as $cat)
+                                <p class="text-base"><span class="inline-block w-4">&middot;</span>{{ $cat->label }}</p>
+                            @endforeach
+                        </div>
+                    </div>
 
-                    <p class="mt-3 text-justify">
-                        Tabel berikut menyajikan rincian Overall CAP Rating hasil survei kondisi kapal
+                    <p class="mt-8 pt-6 border-t border-dashed border-gray-300 dark:border-gray-600 text-justify text-base">
+                        Tabel berikut menyajikan rincian <span class="font-bold">Overall CAP Rating</span>
+                        hasil survei kondisi kapal
                         {{ $ship?->name ?? '-' }}, yang diperoleh dari rata-rata penilaian pada komponen
                         pemeriksaan utama.
                         @php $overallCap = $this->overallAvg($bab3Categories); @endphp
                         @if($overallCap !== null)
-                            Berdasarkan hasil penilaian, kapal ini memperoleh Overall CAP Rating sebesar
-                            {{ number_format($overallCap, 2) }}. Adapun rincian penilaian sebagai berikut:
+                            Berdasarkan hasil penilaian, kapal ini memperoleh
+                            <span class="font-bold">Overall CAP Rating sebesar {{ number_format($overallCap, 2) }}</span>.
+                            Adapun rincian penilaian sebagai berikut:
                         @endif
                     </p>
 
-                    <div class="mt-2 overflow-hidden border border-gray-500 dark:border-gray-400">
-                        <div class="bg-[#4472C4] px-3 py-2 text-center font-bold text-white">Overall CAP Rating Breakdown</div>
-                        <div class="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 px-3 py-2 font-bold">
+                    <div class="mt-2 overflow-hidden border border-gray-500 dark:border-gray-400 text-sm">
+                        <div class="bg-[#4472C4] px-3 py-3 flex items-center justify-center text-center font-bold text-white">Overall CAP Rating Breakdown</div>
+                        <div class="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 px-3 py-3 font-bold">
                             <span>Overall CAP Rating Condition {{ $ship?->name }}</span>
                             <span>:</span>
                             <span>{{ $overallCap !== null ? number_format($overallCap, 2) : '-' }}</span>
@@ -378,7 +391,8 @@
                                 <div class="min-w-0">
                                     @foreach($colCats as $i => $cat)
                                         @php $catAvg = $this->categoryAvg($cat); @endphp
-                                        <div class="mb-4 break-inside-avoid">
+                                        {{-- Spasi ekstra antar kategori agar tidak mepet sub-kategori sebelumnya --}}
+                                        <div class="{{ $i > 0 ? 'mt-2 ' : '' }}mb-4 break-inside-avoid">
                                             <div class="grid grid-cols-[1fr_auto_auto] items-end gap-x-2 border-b-2 border-gray-500 pb-0.5 font-bold">
                                                 <span>{{ ($colIndex === 0 ? 0 : $half) + $i + 1 }}. {{ $cat->label }}</span>
                                                 <span>:</span>
@@ -560,52 +574,22 @@
             <div class="{{ $sheet }}" style="{{ $times }}">
                 <h3 class="text-center text-lg font-bold tracking-wide">BAB I. UMUM/GENERAL</h3>
 
-                <p class="mt-6 text-justify leading-8">
-                    Sesuai dengan Surat Perjanjian Nomor.
-                    <span class="inline-block w-44 align-baseline">
-                        <x-input-label for="contract_agreement_no" value="Nomor Surat Perjanjian" class="sr-only" />
-                        <input wire:model="contract_agreement_no" id="contract_agreement_no" type="text"
-                            class="{{ $paperInput }} w-full" placeholder="Nomor perjanjian">
-                    </span>
-                    tanggal
-                    <x-input-label for="contract_agreement_date" value="Tanggal Surat Perjanjian" class="sr-only" />
-                    <input wire:model="contract_agreement_date" id="contract_agreement_date" type="date"
-                        class="{{ $paperInput }} inline w-40 align-baseline">
-                    ; dan Surat Penunjukan Pelaksanaan Pekerjaan Nomor.
-                    <span class="inline-block w-44 align-baseline">
-                        <x-input-label for="contract_appointment_no" value="Nomor Surat Penunjukan" class="sr-only" />
-                        <input wire:model="contract_appointment_no" id="contract_appointment_no" type="text"
-                            class="{{ $paperInput }} w-full" placeholder="Nomor penunjukan">
-                    </span>
-                    tanggal
-                    <x-input-label for="contract_appointment_date" value="Tanggal Surat Penunjukan" class="sr-only" />
-                    <input wire:model="contract_appointment_date" id="contract_appointment_date" type="date"
-                        class="{{ $paperInput }} inline w-40 align-baseline">
-                    kepada PT. Biro Klasifikasi Indonesia (Persero) – SBU Marine Services Jakarta
-                    tentang Pekerjaan &ldquo;{{ $report_title ?: '—' }}&rdquo;.
-                </p>
-                <div class="mt-1 space-y-1" style="{{ $sans }}">
-                    <x-input-error :messages="$errors->get('contract_agreement_no')" />
-                    <x-input-error :messages="$errors->get('contract_agreement_date')" />
-                    <x-input-error :messages="$errors->get('contract_appointment_no')" />
-                    <x-input-error :messages="$errors->get('contract_appointment_date')" />
+                <div class="{{ $autoZone }} mt-6">
+                    <span class="{{ $autoTag }}" style="{{ $sans }}">Konten tetap dari master Word</span>
+                    <p class="text-justify">Sesuai dengan Surat Perjanjian Nomor. Sperj.338/UM.301/ASDP-2025 tanggal 30 April 2025; dan Surat Penunjukan Pelaksana Pekerjaan Nomor.1051/SP3/PBJ/III/ASDP-2025 tanggal 11 Maret 2025 kepada PT. Biro Klasifikasi Indonesia (Persero) – SBU Marine Services Jakarta tentang Pekerjaan Jasa Konsultansi Assessment Kondisi Teknis Kapal PT. ASDP Indonesia Ferry (Persero).</p>
+                    <p class="mt-3 text-justify">Tujuan dari dilaksanakan survey kondisi ini adalah melakukan kegiatan Survey kondisi mencakup aspek legalitas kapal, konstruksi kapal, sistim kapal, navigasi komunikasi kapal dan sistim keselamatan kapal. Hasil dari survey akan dijadikan menjadi satu laporan yang akan dijadikan sebagai pertimbangan teknis bagi pihak PT ASDP Indonesia Ferry.</p>
+                    <p class="mt-3 text-justify">{{ $capReference['introduction'] }}</p>
                 </div>
 
-                <x-input-label for="general" value="Narasi Umum" class="sr-only" />
-                <textarea wire:model="sectionContent.general" id="general" rows="8"
+                <x-input-label for="cap_standards" value="Daftar Standar CAP" class="sr-only" />
+                <textarea wire:model="sectionContent.cap_standards" id="cap_standards" rows="4"
                     x-data="{{ $fitJs }}" x-init="$nextTick(() => fit())" x-on:input="fit()" x-on:report-tab-changed.window="$nextTick(() => fit())"
-                    placeholder="Narasi tujuan dan ruang lingkup survey kondisi"
+                    placeholder="Satu standar per baris, contoh: 1. BKI – CAP"
                     class="{{ $paperTextarea }} mt-4"></textarea>
-                <x-input-error :messages="$errors->get('sectionContent.general')" class="mt-1" />
+                <x-input-error :messages="$errors->get('sectionContent.cap_standards')" class="mt-1" />
 
                 <div class="{{ $autoZone }} mt-8">
                     <span class="{{ $autoTag }}" style="{{ $sans }}">Konten tetap dari master Word</span>
-                    <p class="text-justify">{{ $capReference['introduction'] }}</p>
-                    <ol class="mt-4 list-decimal space-y-0.5 pl-8">
-                        @foreach($capReference['standards'] as $standard)
-                            <li>{{ $standard }}</li>
-                        @endforeach
-                    </ol>
                     <div class="mt-4 overflow-x-auto">
                         <table class="w-full min-w-[720px] table-fixed border-collapse border border-gray-500 text-xs leading-5 dark:border-gray-400">
                             <colgroup>
@@ -616,7 +600,7 @@
                                 <col style="width: 15%">
                                 <col style="width: 15%">
                             </colgroup>
-                            <thead class="bg-[#4472C4] text-white">
+                            <thead class="bg-[#C9DAF8] text-gray-900">
                                 <tr>
                                     <th rowspan="2" class="border border-gray-500 px-2 py-1 align-middle">CATEGORY</th>
                                     <th rowspan="2" class="border border-gray-500 px-2 py-1 align-middle">CRITERIA / ITEM</th>
@@ -629,20 +613,47 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($capReference['categories'] as $capCategory)
+                                @foreach($capReference['categories'] as $catIndex => $capCategory)
+                                    @php
+                                        // Baris per kategori = total baris semua kriteria (termasuk
+                                        // extra_rows seperti "Dokumen Kapal" di master)
+                                        $catRowCount = array_sum(array_map(
+                                            fn ($c) => 1 + count($c['extra_rows'] ?? []),
+                                            $capCategory['criteria']
+                                        ));
+                                    @endphp
                                     @foreach($capCategory['criteria'] as $criterionIndex => $criterion)
+                                        @php $criterionRowSpan = 1 + count($criterion['extra_rows'] ?? []); @endphp
                                         <tr>
                                             @if($criterionIndex === 0)
-                                                <td rowspan="{{ count($capCategory['criteria']) }}" class="border border-gray-500 px-2 py-1 text-center align-middle font-bold">
+                                                <td rowspan="{{ $catRowCount }}" class="border border-gray-500 bg-[#C9DAF8] px-2 py-1 text-center align-middle font-bold text-gray-900">
                                                     {{ $capCategory['code'] }}
                                                 </td>
                                             @endif
-                                            <td class="border border-gray-500 px-2 py-1 align-top">{{ $criterion['name'] }}</td>
+                                            <td @if($criterionRowSpan > 1) rowspan="{{ $criterionRowSpan }}" @endif class="border border-gray-500 px-2 py-1 align-top">{{ $criterion['name'] }}</td>
                                             @foreach($criterion['scores'] as $scoreDescription)
                                                 <td class="border border-gray-500 px-2 py-1 align-top">{{ $scoreDescription }}</td>
                                             @endforeach
                                         </tr>
+                                        @foreach($criterion['extra_rows'] ?? [] as $extraRow)
+                                            <tr>
+                                                @foreach($extraRow as $extraCell)
+                                                    @php
+                                                        $extraText = is_array($extraCell) ? ($extraCell['text'] ?? '') : $extraCell;
+                                                        $extraColspan = is_array($extraCell) ? (int) ($extraCell['colspan'] ?? 1) : 1;
+                                                    @endphp
+                                                    <td @if($extraColspan > 1) colspan="{{ $extraColspan }}" @endif class="border border-gray-500 px-2 py-1 align-top">{{ $extraText }}</td>
+                                                @endforeach
+                                            </tr>
+                                        @endforeach
                                     @endforeach
+                                    {{-- Baris pemisah antar kategori — sesuai master: kolom CATEGORY biru, sisanya abu --}}
+                                    @if($catIndex < count($capReference['categories']) - 1)
+                                        <tr>
+                                            <td class="border border-gray-500 bg-[#C9DAF8] p-0 text-[0] leading-none" style="height: 10px">&nbsp;</td>
+                                            <td colspan="5" class="border border-gray-500 bg-[#D9D9D9] p-0 text-[0] leading-none" style="height: 10px">&nbsp;</td>
+                                        </tr>
+                                    @endif
                                 @endforeach
                             </tbody>
                         </table>
