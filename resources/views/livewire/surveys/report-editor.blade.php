@@ -166,7 +166,7 @@
     </div>
 
     @if($report->file_status === \App\Enums\FileStatus::Processing)
-        <div wire:poll.3s="refreshStatus" class="mb-6 overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm dark:border-blue-800 dark:bg-gray-800">
+        <div wire:poll.3s.preserve-scroll="refreshStatus" class="mb-6 overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm dark:border-blue-800 dark:bg-gray-800">
             <div class="flex items-center gap-3 px-4 py-3 sm:px-5">
                 <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/30">
                     <svg class="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -186,7 +186,7 @@
         </div>
     @endif
 
-    <form wire:submit="save">
+    <form wire:submit.preserve-scroll="save">
         <!-- Tab Bar (scrollable di mobile) -->
         <div class="sticky top-7 sm:top-5 z-30 mb-3">
             <div x-ref="tabScroller" class="navbar-scroll overflow-x-auto px-1">
@@ -476,12 +476,12 @@
                                                         <x-loading-button type="button"
                                                             x-on:click="openDocumentationPicker({{ $cat->id }})"
                                                             wire:key="btn-replace-documentation-{{ $cat->id }}" variant="icon-blue" icon="edit" title="Ganti foto" />
-                                                        <x-loading-button type="button" wire:click="confirmDeleteDocumentation({{ $documentation->id }})" target="confirmDeleteDocumentation({{ $documentation->id }})"
+                                                        <x-loading-button type="button" wire:click.preserve-scroll="confirmDeleteDocumentation({{ $documentation->id }})" target="confirmDeleteDocumentation({{ $documentation->id }})"
                                                             wire:key="btn-delete-documentation-{{ $cat->id }}" variant="icon-red" icon="delete" title="Hapus foto" />
                                                     </div>
                                                 @endcan
                                             @elseif($documentation?->file_status === \App\Enums\FileStatus::Processing)
-                                                <div wire:poll.3s="refreshStatus" class="flex aspect-[3/2] items-center justify-center rounded-md border border-dashed border-amber-300 bg-amber-50 text-center text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300" style="{{ $sans }}">
+                                                <div wire:poll.3s.preserve-scroll="refreshStatus" class="flex aspect-[3/2] items-center justify-center rounded-md border border-dashed border-amber-300 bg-amber-50 text-center text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300" style="{{ $sans }}">
                                                     <span>Foto sedang diproses...</span>
                                                 </div>
                                             @else
@@ -1077,7 +1077,7 @@
                             </div>
                         </div>
                         <div class="flex flex-col-reverse gap-3 border-t border-gray-200 px-4 py-4 dark:border-gray-700 sm:flex-row sm:justify-end sm:px-6">
-                            <x-cancel-button type="button" wire:click="cancelDocumentationCrop" target="cancelDocumentationCrop" label="Batal" class="w-full sm:w-auto" />
+                            <x-cancel-button type="button" wire:click.preserve-scroll="cancelDocumentationCrop" target="cancelDocumentationCrop" label="Batal" class="w-full sm:w-auto" />
                             <x-loading-button type="button" x-on:click="save" target="saveDocumentation" variant="primary" size="lg"
                                 loadingText="Mengunggah..." icon="check" class="w-full sm:w-auto">
                                 Gunakan Gambar
@@ -1102,7 +1102,7 @@
                 <x-cancel-button wire:click="back" target="back" label="Kembali" class="w-full sm:w-auto" />
                 <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                     @if($report->file_status === \App\Enums\FileStatus::Completed)
-                        <x-loading-button type="button" wire:click="download" target="download" variant="success" size="lg"
+                        <x-loading-button type="button" wire:click.preserve-scroll="download" target="download" variant="success" size="lg"
                             loadingText="Mengunduh..." icon="download" class="w-full sm:w-auto">
                             Download DOCX
                         </x-loading-button>
@@ -1112,7 +1112,7 @@
                         Simpan
                     </x-loading-button>
                     @can('survey_reports_generate')
-                        <x-loading-button type="button" wire:click="generate" target="generate" variant="primary" size="lg"
+                        <x-loading-button type="button" wire:click.preserve-scroll="generate" target="generate" variant="primary" size="lg"
                             loadingText="Memproses..." class="w-full sm:w-auto"
                             :loading="$report->file_status === \App\Enums\FileStatus::Processing"
                             :disabled="$report->file_status === \App\Enums\FileStatus::Processing">

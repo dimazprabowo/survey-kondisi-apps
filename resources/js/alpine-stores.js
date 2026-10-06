@@ -119,8 +119,25 @@ document.addEventListener('alpine:init', () => {
         el._autogrowResize = resize;
         el.addEventListener('input', resize);
         window.addEventListener('report-tab-changed', () => requestAnimationFrame(resize));
-        // double rAF agar layout & font sudah settle sebelum ukur scrollHeight
+        // double rAF agar layout sudah settle sebelum ukur scrollHeight
         requestAnimationFrame(() => requestAnimationFrame(resize));
+        // Ukur ulang setelah webfont & stylesheet selesai dimuat — penting di
+        // first load (cold cache) di mana rAF di atas bisa berjalan sebelum
+        // font siap, sehingga scrollHeight terukur dengan font fallback.
+        document.fonts?.ready.then(resize);
+        if (document.readyState !== 'complete') {
+            window.addEventListener('load', resize, { once: true });
+        }
+        // Textarea w-full: resize window mengubah lebar → wrap & scrollHeight
+        // berubah. Throttle via rAF agar tidak reflow tiap pixel drag.
+        let resizeRaf = null;
+        window.addEventListener('resize', () => {
+            if (resizeRaf) return;
+            resizeRaf = requestAnimationFrame(() => {
+                resizeRaf = null;
+                resize();
+            });
+        });
     });
 });
 
@@ -133,6 +150,17 @@ document.addEventListener('livewire:init', () => {
         if (el.nodeType !== Node.ELEMENT_NODE) return;
         if (el.tagName === 'TEXTAREA' && el._autogrowResize) el._autogrowResize();
         el.querySelectorAll?.('textarea').forEach(t => t._autogrowResize?.());
+    });
+
+    /**
+     * x-cloak hanya relevan sebelum Alpine init pertama kali. HTML hasil render
+     * server selalu membawa x-cloak lagi; tanpa hook ini morph me-sync atribut
+     * tersebut ke elemen yang sudah dikelola x-show → seluruh elemen ber-x-cloak
+     * sesaat display:none → tinggi dokumen kolaps → browser me-reset scroll ke
+     * atas. Strip x-cloak dari node target agar tidak pernah ditambahkan ulang.
+     */
+    Livewire.hook('morph.updating', ({ toEl }) => {
+        toEl.removeAttribute?.('x-cloak');
     });
 });
 
