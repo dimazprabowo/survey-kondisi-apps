@@ -409,11 +409,12 @@ class SurveyReportDocxBuilder
             $i++;
             $content = $this->section($data, 'finding_'.$cat->id);
             $relationshipId = $data['documentationRelationships'][$cat->id] ?? null;
+            $cropData = ($data['documentations'][$cat->id] ?? null)?->crop_data;
             $rows[] = [
                 $this->tc($this->p((string) $i, ['jc' => 'center']), []),
                 $this->tc($this->p($cat->label, ['jc' => 'left']), []),
                 $this->tc($this->buildParagraphs($content ?: '-'), []),
-                $this->tc($relationshipId ? $this->imageDrawing($relationshipId, $cat->id) : $this->p(''), ['vAlign' => 'center']),
+                $this->tc($relationshipId ? $this->imageDrawing($relationshipId, $cat->id, $cropData) : $this->p(''), ['vAlign' => 'center']),
             ];
         }
 
@@ -616,16 +617,25 @@ class SurveyReportDocxBuilder
                 }
             }
 
-            $xml .= $tp(strtoupper($cat->label), ['style' => 'Heading2', 'line' => 360]);
+            // Kategori ke-2 dst mulai di halaman baru; kategori pertama tetap
+            // menyambung heading "BAB III." (yang sudah pageBreakBefore sendiri).
+            $xml .= $tp(strtoupper($cat->label), ['style' => 'Heading2', 'line' => 360, 'pageBreakBefore' => $catIndex > 0]);
+            $specTables = $this->bab3SpecTables($cat, 'before');
+            $xml .= $specTables;
             $legend = $this->scoreLegend($cat);
+            // Master memberi page break setelah tabel spesifikasi, sehingga
+            // legend "V= Visual F= Function" + tabel CAP mulai di halaman baru.
             if ($legend !== '') {
-                $xml .= $tp($legend, ['bold' => true, 'jc' => 'center', 'line' => 360]);
+                $xml .= $tp($legend, ['bold' => true, 'jc' => 'center', 'line' => 360, 'pageBreakBefore' => $specTables !== '']);
+            } elseif ($specTables !== '') {
+                $xml .= $tp('', ['pageBreakBefore' => true]);
             }
             $xml .= $this->tbl($widths, $rows, [0], [
                 'rowHeights' => [0 => 660, 1 => 405] + array_fill_keys($grayRowIndexes, 300),
                 'defaultRowHeight' => 315,
                 'frameOnly' => true,
             ]).$tp('');
+            $xml .= $this->bab3SpecTables($cat, 'after');
         }
 
         return $xml;
@@ -634,6 +644,216 @@ class SurveyReportDocxBuilder
     protected function isInventoryGroup(object $group): bool
     {
         return $group->items->every(fn ($item) => $item->item_type === SurveyItemType::Inventory);
+    }
+
+    /**
+     * Tabel isian statis BAB III yang ada di master tapi tidak berasal dari
+     * struktur survey — dicocokkan via keyword pada label kategori. Sel data
+     * sengaja kosong karena diisi manual di Word. $position: 'before' =
+     * sebelum legend + tabel CAP, 'after' = setelah tabel CAP.
+     */
+    protected function bab3SpecTables(object $cat, string $position): string
+    {
+        $label = strtoupper((string) $cat->label);
+        $key = match (true) {
+            str_contains($label, 'ENGINE') => 'engine',
+            str_contains($label, 'BRIDGE') => 'bridge',
+            str_contains($label, 'SAFETY') => 'safety',
+            default => null,
+        };
+
+        return match ([$key, $position]) {
+            ['engine', 'before'] => $this->engineGeneralSpecTable().$this->engineFocTable(),
+            ['engine', 'after'] => $this->enginePumpsTable(),
+            ['bridge', 'before'] => $this->navigationSpecTable(),
+            ['safety', 'before'] => $this->safetyEquipmentTable(),
+            default => '',
+        };
+    }
+
+    /**
+     * Engine Room — "General Specification": spesifikasi ME P/S + AE 1-3.
+     * Master: header biru 5B9BD5, font 11pt.
+     */
+    protected function engineGeneralSpecTable(): string
+    {
+        $tp = fn (string $text, array $opts = []): string => $this->p($text, $opts + ['size' => 22]);
+        $hdr = fn (string $text): string => $this->tc(
+            $tp($text, ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']),
+            ['shade' => '5B9BD5', 'noWrap' => true]
+        );
+
+        $rows = [
+            [$this->tc($tp('General Specification', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['span' => 7, 'shade' => '5B9BD5'])],
+            [$hdr('No'), $hdr('Specification'), $hdr('Main Engine (P)'), $hdr('Main Engine (S)'), $hdr('Auxiliary Engine 1'), $hdr('Auxiliary Engine 2'), $hdr('Auxiliary Engine 3')],
+        ];
+
+        $specs = ['Merk', 'Manufacture', 'Type', 'Model', 'Serial Number', 'Speed (Rpm) Max', 'Speed (Rpm) Applicable', 'Maximum Continuous Rating (MCR)', 'Number of Cylinder', 'Year Build', 'Total Running Hours'];
+        foreach ($specs as $i => $spec) {
+            $rows[] = [
+                $this->tc($tp((string) ($i + 1), ['jc' => 'center']), ['noWrap' => true]),
+                $this->tc($tp($spec), []),
+                $this->tc($tp(''), []),
+                $this->tc($tp(''), []),
+                $this->tc($tp(''), []),
+                $this->tc($tp(''), []),
+                $this->tc($tp(''), []),
+            ];
+        }
+
+        return $this->tbl([5.41, 14.84, 15.88, 15.98, 15.98, 15.98, 15.94], $rows, [0, 1]).$this->p('');
+    }
+
+    /**
+     * Engine Room — "Fuel Oil Consumption (FOC)": Speed/FOC per kondisi
+     * Idle/Slow/Service/Full untuk ME PS/SB + AE 1-3. Font 11pt.
+     */
+    protected function engineFocTable(): string
+    {
+        $tp = fn (string $text, array $opts = []): string => $this->p($text, $opts + ['size' => 22]);
+        $hdr = fn (string $text, array $tcOpts = []): string => $this->tc(
+            $tp($text, ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']),
+            $tcOpts + ['shade' => '5B9BD5', 'noWrap' => true]
+        );
+
+        $rows = [
+            [$this->tc($tp('Fuel Oil Consumption (FOC)', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['span' => 10, 'shade' => '5B9BD5'])],
+            [
+                $hdr('No', ['vMerge' => 'restart']),
+                $hdr('Item', ['vMerge' => 'restart']),
+                $hdr('Idle', ['span' => 2]),
+                $hdr('Slow', ['span' => 2]),
+                $hdr('Service', ['span' => 2]),
+                $hdr('Full', ['span' => 2]),
+            ],
+            [
+                $this->tc($tp(''), ['vMerge' => 'continue', 'shade' => '5B9BD5']),
+                $this->tc($tp(''), ['vMerge' => 'continue', 'shade' => '5B9BD5']),
+                $hdr('Speed'), $hdr('FOC'), $hdr('Speed'), $hdr('FOC'), $hdr('Speed'), $hdr('FOC'), $hdr('Speed'), $hdr('FOC'),
+            ],
+        ];
+
+        foreach (['ME PS', 'ME SB', 'AE 1', 'AE 2', 'AE 3'] as $i => $item) {
+            $rows[] = array_merge([
+                $this->tc($tp((string) ($i + 1), ['jc' => 'center']), ['noWrap' => true]),
+                $this->tc($tp($item), []),
+            ], array_map(fn () => $this->tc($tp(''), []), range(1, 8)));
+        }
+
+        return $this->tbl([9.57, 17, 8.86, 9.5, 9.74, 8.62, 9.14, 9.22, 10.02, 8.34], $rows, [0, 1, 2]).$this->p('');
+    }
+
+    /**
+     * Engine Room — daftar Pumps: lembar isian Merk/Type/Capacity/Qty/Remark.
+     * Master: tanpa shading, header bold, font 11pt. Posisi setelah tabel CAP.
+     */
+    protected function enginePumpsTable(): string
+    {
+        $tp = fn (string $text, array $opts = []): string => $this->p($text, $opts + ['size' => 22]);
+        $hdr = fn (string $text): string => $this->tc(
+            $tp($text, ['bold' => true, 'jc' => 'center']),
+            ['noWrap' => true]
+        );
+
+        $rows = [
+            [$hdr('No'), $hdr('Pumps'), $hdr('Merk'), $hdr('Type'), $hdr('Capacity(Kw)'), $hdr('Quantity'), $hdr('Remark')],
+        ];
+
+        $pumps = ['FO Pump', 'Fire Pump', 'SW Air Cond. Pump', 'Sewage Pump', 'Emergency Bilge Pump', 'Bilge Pump', 'FW Press. Set. Pump', 'GS / Fire Pump', 'LO Priming Pump', 'SW Pump', 'LO Stbd Gear Box Pump', 'Emgcy SW Cooling Pump', 'FO Transfer Pump', 'LO Transfer Pump', 'ME FW Cooling Pump', 'Dirty Oil Pump', 'Ballast Pump', 'SW Press Set Pump', 'Oily Water Separator', 'Steering Gear', 'Air Compressor', 'Air reservoir', 'Bow Thruster'];
+        foreach ($pumps as $i => $pump) {
+            $rows[] = [
+                $this->tc($tp((string) ($i + 1), ['jc' => 'center']), ['noWrap' => true]),
+                $this->tc($tp($pump), []),
+                $this->tc($tp(''), []),
+                $this->tc($tp(''), []),
+                $this->tc($tp(''), []),
+                $this->tc($tp(''), []),
+                $this->tc($tp(''), []),
+            ];
+        }
+
+        return $this->tbl([7.02, 29.44, 15.56, 10.44, 11.48, 12.52, 13.54], $rows, [0]).$this->p('');
+    }
+
+    /**
+     * Bridge — "Navigation & Communication Specification": isian Qty +
+     * Specification per item, digrup Navigation / Communication Equipment.
+     * Master: header biru 4285F4, font 10pt.
+     */
+    protected function navigationSpecTable(): string
+    {
+        $tp = fn (string $text, array $opts = []): string => $this->p($text, $opts + ['size' => 20]);
+        $hdr = fn (string $text, array $tcOpts = []): string => $this->tc(
+            $tp($text, ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']),
+            $tcOpts + ['shade' => '4285F4', 'noWrap' => true]
+        );
+
+        $rows = [
+            [$this->tc($tp('Navigation & Communication Specification', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['span' => 4, 'shade' => '4285F4'])],
+            [$hdr('No.'), $hdr('Item'), $hdr('Qty'), $hdr('Specification')],
+        ];
+
+        $groups = [
+            'Navigation Equipment' => ['Radar', 'GPS', 'Echosounder', 'Anemometer', 'AIS', 'Gyro Compass', 'Magnetic Compass', 'ECDIS', 'Autopilot', 'Steering Wheel', 'Bow Thruster Control Stand', 'Throttle', 'Navigation Light Control Panel', 'BNWAS'],
+            'Communication Equipment' => ['Navtex Receiver', 'GMDSS', 'MF/HF', 'VHF', 'Handy Talky', 'Public Addresser', 'Sound Power Telephone', 'Electrical/Air Horn', 'Weather Fax', 'Inmarsat'],
+        ];
+        foreach ($groups as $group => $items) {
+            $rows[] = [
+                $this->tc($tp(''), []),
+                $this->tc($tp($group, ['bold' => true, 'jc' => 'center']), []),
+                $this->tc($tp(''), []),
+                $this->tc($tp(''), []),
+            ];
+            foreach ($items as $i => $item) {
+                $rows[] = [
+                    $this->tc($tp((string) ($i + 1), ['jc' => 'center']), ['noWrap' => true]),
+                    $this->tc($tp($item), []),
+                    $this->tc($tp(''), []),
+                    $this->tc($tp(''), []),
+                ];
+            }
+        }
+
+        return $this->tbl([6.96, 54.46, 11.84, 26.73], $rows, [0, 1]).$this->p('');
+    }
+
+    /**
+     * Ship Safety — "Life Saving Appliance & Fire Fighting Appliance
+     * Equipment": isian Qty per item, digrup LSA / FFA. Font 10pt.
+     */
+    protected function safetyEquipmentTable(): string
+    {
+        $tp = fn (string $text, array $opts = []): string => $this->p($text, $opts + ['size' => 20]);
+        $hdr = fn (string $text, array $tcOpts = []): string => $this->tc(
+            $tp($text, ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']),
+            $tcOpts + ['shade' => '4285F4', 'noWrap' => true]
+        );
+
+        $rows = [
+            [$this->tc($tp('Life Saving Appliance & Fire Fighting Appliance Equipment', ['bold' => true, 'jc' => 'center', 'color' => 'FFFFFF']), ['span' => 3, 'shade' => '4285F4'])],
+            [$hdr('No.'), $hdr('Item'), $hdr('Qty')],
+        ];
+
+        $groups = [
+            'Life Saving Appliance Equipment' => ['HRU', 'ILR', 'Life line Throwing', 'Rocket Parachute', 'Smoke Signal', 'Hand Flare', 'EEBD (Emergency Escape Breathing Device)', 'EPIRB (Emergency Position-Indicating Radio Beacon)', 'SART (Search and Rescue Transponder)', 'Life Buoy with Line or Light', 'Life Jacket', 'Rescue Boat', 'Davit Rescue Boat', 'Escape Route', 'Muster Station'],
+            'Fire Fighting Appliance Equipment' => ['Portable CO2 Fire Extinguisher', 'Portable Foam Fire Extinguisher', 'Fire Box, Hose, and Nozzle', 'Fire Blanket', 'Fireman Outfit', 'SOPEP', 'SCBA (Self-Contained Breathing Apparatus)', 'Smoke Detector', 'Heat Detector', 'Sprinkler', 'Emergency Fire Pump', 'Hydrant', 'Fixed CO2 System', 'International Shore Connection'],
+        ];
+        foreach ($groups as $group => $items) {
+            $rows[] = [
+                $this->tc($tp(''), []),
+                $this->tc($tp($group, ['bold' => true, 'jc' => 'center']), []),
+                $this->tc($tp(''), []),
+            ];
+            foreach ($items as $i => $item) {
+                $rows[] = [
+                    $this->tc($tp((string) ($i + 1), ['jc' => 'center']), ['noWrap' => true]),
+                    $this->tc($tp($item), []),
+                    $this->tc($tp(''), []),
+                ];
+            }
+        }
+
+        return $this->tbl([6.96, 66.22, 26.82], $rows, [0, 1]).$this->p('');
     }
 
     protected function groupScoreLabels(object $group): array
@@ -847,12 +1067,13 @@ class SurveyReportDocxBuilder
         return implode('', array_map(fn ($line) => $this->p(trim($line), $opts), $lines));
     }
 
-    protected function imageDrawing(string $relationshipId, int $categoryId): string
+    protected function imageDrawing(string $relationshipId, int $categoryId, ?array $cropData = null): string
     {
-        // Muat di kolom Dokumentasi (~3373 twips): 3000x2000 twips, rasio 3:2
+        // Muat di kolom Dokumentasi: frame persegi 1:1 (~5.3 cm).
         $width = 1905000;
-        $height = 1270000;
+        $height = 1905000;
         $name = 'Dokumentasi kategori '.$categoryId;
+        $srcRect = $this->squareSrcRect($cropData);
 
         return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing>'
             .'<wp:inline xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
@@ -863,10 +1084,31 @@ class SurveyReportDocxBuilder
             .'<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
             .'<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
             .'<pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="'.$this->esc($name).'"/><pic:cNvPicPr/></pic:nvPicPr>'
-            .'<pic:blipFill><a:blip r:embed="'.$relationshipId.'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+            .'<pic:blipFill><a:blip r:embed="'.$relationshipId.'"/>'.$srcRect.'<a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
             .'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'.$width.'" cy="'.$height.'"/></a:xfrm>'
             .'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>'
             .'</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+    }
+
+    /**
+     * Hitung <a:srcRect> center-crop ke rasio 1:1 dari dimensi crop tersimpan,
+     * supaya foto lama 3:2 tetap proporsional di frame persegi tanpa upload
+     * ulang. Nilai srcRect dalam 1/1000 persen dari dimensi sumber; foto yang
+     * sudah square tidak di-crop.
+     */
+    protected function squareSrcRect(?array $cropData): string
+    {
+        $w = (float) ($cropData['width'] ?? 0);
+        $h = (float) ($cropData['height'] ?? 0);
+        if ($w <= 0 || $h <= 0 || abs($w - $h) <= 0.01 * $w) {
+            return '';
+        }
+        // Potong sisi yang lebih panjang secara simetris (center crop).
+        $trim = (int) round((1 - min($w, $h) / max($w, $h)) / 2 * 100000);
+
+        return $w > $h
+            ? '<a:srcRect l="'.$trim.'" r="'.$trim.'"/>'
+            : '<a:srcRect t="'.$trim.'" b="'.$trim.'"/>';
     }
 
     /**
@@ -882,6 +1124,7 @@ class SurveyReportDocxBuilder
      * opts: bold, italic, color, jc (center/right/both), style (pStyle), indent (twips),
      *       line (w:line twips, 240=single 360=1.5), spacingBefore (twips),
      *       size (w:sz half-points, 20=10pt 24=12pt), numId (list numbering),
+     *       pageBreakBefore (paragraf mulai di halaman baru),
      *       italicPhrases/boldPhrases (array frasa yang di-render sebagai run
      *       italic/bold tersendiri).
      */
@@ -890,6 +1133,9 @@ class SurveyReportDocxBuilder
         $pPrInner = '';
         if (! empty($opts['style'])) {
             $pPrInner .= '<w:pStyle w:val="'.$opts['style'].'"/>';
+        }
+        if (! empty($opts['pageBreakBefore'])) {
+            $pPrInner .= '<w:pageBreakBefore/>';
         }
         if (! empty($opts['numId'])) {
             $pPrInner .= '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="'.(int) $opts['numId'].'"/></w:numPr>';
@@ -973,15 +1219,18 @@ class SurveyReportDocxBuilder
     }
 
     /**
-     * Sel tabel <w:tc>. opts: span (gridSpan), shade (hex fill), vAlign
-     * (default 'center' — teks selalu di tengah vertikal),
-     * borders (array side => 'single'|'double'; sisi tak disebut = nil).
+     * Sel tabel <w:tc>. opts: span (gridSpan), vMerge ('restart'|'continue'),
+     * shade (hex fill), vAlign (default 'center' — teks selalu di tengah
+     * vertikal), borders (array side => 'single'|'double'; sisi tak disebut = nil).
      */
     protected function tc(string $innerXml, array $opts = []): string
     {
         $tcPr = '';
         if (! empty($opts['span']) && $opts['span'] > 1) {
             $tcPr .= '<w:gridSpan w:val="'.$opts['span'].'"/>';
+        }
+        if (! empty($opts['vMerge'])) {
+            $tcPr .= $opts['vMerge'] === 'restart' ? '<w:vMerge w:val="restart"/>' : '<w:vMerge/>';
         }
         if (! empty($opts['borders'])) {
             $bordersXml = '';

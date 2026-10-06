@@ -449,9 +449,9 @@
                             <thead>
                                 <tr class="bg-[#D9E2F3] dark:bg-blue-900/30">
                                     <th class="w-12 border border-gray-400 dark:border-gray-500 px-2 py-1 text-center font-bold">No.</th>
-                                    <th class="w-56 border border-gray-400 dark:border-gray-500 px-2 py-1 text-center font-bold">Item Pemeriksaan</th>
+                                    <th class="w-36 border border-gray-400 dark:border-gray-500 px-2 py-1 text-center font-bold">Item Pemeriksaan</th>
                                     <th class="border border-gray-400 dark:border-gray-500 px-2 py-1 text-center font-bold">Keterangan</th>
-                                    <th class="w-64 border border-gray-400 dark:border-gray-500 px-2 py-1 text-center font-bold">Dokumentasi</th>
+                                    <th class="w-44 border border-gray-400 dark:border-gray-500 px-2 py-1 text-center font-bold">Dokumentasi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -470,7 +470,7 @@
                                         <td class="relative border border-gray-400 dark:border-gray-500 p-2 align-middle" wire:key="documentation-{{ $cat->id }}">
                                             @if($documentation?->file_status === \App\Enums\FileStatus::Completed)
                                                 <img src="{{ route('surveys.report.documentation', [$survey, \Illuminate\Support\Facades\Crypt::encryptString((string) $cat->id)]) }}"
-                                                    alt="Dokumentasi {{ $cat->label }}" class="aspect-[3/2] w-full rounded-md object-cover">
+                                                    alt="Dokumentasi {{ $cat->label }}" class="aspect-square w-full rounded-md object-cover">
                                                 @can('survey_reports_update')
                                                     <div class="mt-2 flex flex-wrap justify-center gap-2" style="{{ $sans }}">
                                                         <x-loading-button type="button"
@@ -481,11 +481,11 @@
                                                     </div>
                                                 @endcan
                                             @elseif($documentation?->file_status === \App\Enums\FileStatus::Processing)
-                                                <div wire:poll.3s.preserve-scroll="refreshStatus" class="flex aspect-[3/2] items-center justify-center rounded-md border border-dashed border-amber-300 bg-amber-50 text-center text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300" style="{{ $sans }}">
+                                                <div wire:poll.3s.preserve-scroll="refreshStatus" class="flex aspect-square items-center justify-center rounded-md border border-dashed border-amber-300 bg-amber-50 text-center text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300" style="{{ $sans }}">
                                                     <span>Foto sedang diproses...</span>
                                                 </div>
                                             @else
-                                                <div class="flex aspect-[3/2] flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50 px-3 text-center dark:border-gray-600 dark:bg-gray-700/30" style="{{ $sans }}">
+                                                <div class="flex aspect-square flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50 px-3 text-center dark:border-gray-600 dark:bg-gray-700/30" style="{{ $sans }}">
                                                     <x-icon name="plus" class="h-7 w-7 text-gray-400" />
                                                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Foto utama kategori</p>
                                                     @can('survey_reports_update')
@@ -1037,7 +1037,7 @@
                                 const img = this.$refs.cropImage
                                 const start = () => {
                                     this.cropper = new window.Cropper(img, {
-                                        aspectRatio: 3 / 2,
+                                        aspectRatio: 1 / 1,
                                         viewMode: 1,
                                         autoCropArea: 1,
                                         responsive: true,
@@ -1059,7 +1059,7 @@
                         }">
                         <div class="border-b border-gray-200 px-4 py-4 dark:border-gray-700 sm:px-6">
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Atur Dokumentasi</h3>
-                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Geser dan perbesar gambar. Area crop dikunci landscape 3:2 agar konsisten di dokumen Word.</p>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Geser dan perbesar gambar. Area crop dikunci persegi 1:1 agar konsisten di dokumen Word.</p>
                         </div>
                         <div class="relative bg-gray-100 p-4 dark:bg-gray-900 sm:p-6" x-bind:class="{ 'min-h-[40vh] sm:min-h-[50vh]': !ready }">
                             <div class="mx-auto max-h-[60vh] overflow-hidden rounded-lg bg-black">

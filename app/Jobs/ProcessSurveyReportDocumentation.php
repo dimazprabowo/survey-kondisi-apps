@@ -48,7 +48,7 @@ class ProcessSurveyReportDocumentation implements ShouldQueue
 
             $encoded = $image
                 ->crop($width, $height, $x, $y)
-                ->scaleDown(width: 1600, height: 1067)
+                ->scaleDown(width: 1200, height: 1200)
                 ->toJpeg(82);
 
             $shipName = $documentation->report?->survey?->ship?->name ?? 'kapal';
