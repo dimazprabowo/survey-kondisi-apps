@@ -77,7 +77,13 @@ class SurveyTemplatesExport implements FromQuery, ShouldAutoSize, WithHeadings, 
     public function styles(Worksheet $sheet): array
     {
         return [
-            1 => ['font' => ['bold' => true]],
+            1 => [
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                'fill' => [
+                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => '2563EB'],
+                ],
+            ],
         ];
     }
 }

@@ -1,4 +1,7 @@
 <div>
+    @php
+        $canExport = auth()->user()->can('surveys_export_excel') || auth()->user()->can('surveys_export_pdf');
+    @endphp
     <div class="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
         <!-- Search -->
         <div class="flex-1 w-full sm:w-auto">
@@ -32,6 +35,14 @@
 
         <!-- Action Buttons -->
         <div class="flex items-center gap-2 w-full sm:w-auto">
+            @if($canExport && count($selected))
+                <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                    {{ count($selected) }} dipilih
+                    <x-loading-button type="button" wire:click="clearSelection" target="clearSelection"
+                        variant="icon-gray" icon="close" iconClass="w-3.5 h-3.5" wire:key="btn-clear-selection"
+                        title="Hapus pilihan" />
+                </span>
+            @endif
             @can('surveys_export_excel')
                 <x-loading-button wire:click="exportExcel" target="exportExcel" variant="success" size="md" loadingText="Exporting..." title="Export Excel" icon="excel">
                     Excel
@@ -55,6 +66,13 @@
             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                     <tr>
+                        @if($canExport)
+                            <th class="w-12 px-4 py-3 text-center">
+                                <input type="checkbox" wire:model.live="selectAll"
+                                    aria-label="Pilih semua survey di halaman ini"
+                                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800">
+                            </th>
+                        @endif
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nomor Survey</th>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Kapal</th>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Template</th>
@@ -68,6 +86,13 @@
                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     @forelse($surveys as $survey)
                         <tr wire:key="row-{{ $survey->id }}" class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                            @if($canExport)
+                                <td class="w-12 px-4 py-4 text-center">
+                                    <input type="checkbox" wire:model.live="selected" value="{{ $survey->id }}"
+                                        aria-label="Pilih survey {{ $survey->survey_number }}"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800">
+                                </td>
+                            @endif
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $survey->survey_number }}</div>
                                 @if($survey->location)
@@ -132,7 +157,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-6 py-12 text-center">
+                            <td colspan="{{ $canExport ? 9 : 8 }}" class="px-6 py-12 text-center">
                                 <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                                 </svg>

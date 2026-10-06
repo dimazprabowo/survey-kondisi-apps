@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 
 class SurveyReportService
 {
-    public const GENERATOR_VERSION = '2026-10-report-v36';
+    public const GENERATOR_VERSION = '2026-10-report-v37';
 
     public function __construct(protected SurveyService $surveyService) {}
 

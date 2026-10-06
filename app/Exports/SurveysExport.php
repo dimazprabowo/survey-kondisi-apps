@@ -22,11 +22,14 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
 
     protected ?int $shipId;
 
-    public function __construct(?string $search = null, ?string $statusFilter = null, ?int $shipId = null)
+    protected array $selectedIds;
+
+    public function __construct(?string $search = null, ?string $statusFilter = null, ?int $shipId = null, array $selectedIds = [])
     {
         $this->search = $search;
         $this->statusFilter = $statusFilter;
         $this->shipId = $shipId;
+        $this->selectedIds = $selectedIds;
     }
 
     public function query()
@@ -51,6 +54,10 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
 
         if ($this->shipId) {
             $query->where('ship_id', $this->shipId);
+        }
+
+        if ($this->selectedIds !== []) {
+            $query->whereIn('id', $this->selectedIds);
         }
 
         return $query->latest('survey_date');
@@ -95,7 +102,13 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
     public function styles(Worksheet $sheet): array
     {
         return [
-            1 => ['font' => ['bold' => true]],
+            1 => [
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                'fill' => [
+                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => '2563EB'],
+                ],
+            ],
         ];
     }
 }

@@ -32,12 +32,12 @@ class SurveyPolicy
         return $user->can('surveys_delete');
     }
 
-    public function exportExcel(User $user, Survey $survey): bool
+    public function exportExcel(User $user): bool
     {
         return $user->can('surveys_export_excel');
     }
 
-    public function exportPdf(User $user, Survey $survey): bool
+    public function exportPdf(User $user): bool
     {
         return $user->can('surveys_export_pdf');
     }

@@ -91,27 +91,42 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <x-input-label for="loa" value="Length Overall (LOA)" />
-                        <x-text-input wire:model="loa" id="loa" type="text" class="mt-1 block w-full" placeholder="Contoh: 43,35" />
+                        <div class="relative mt-1">
+                            <x-text-input wire:model="loa" id="loa" type="text" class="block w-full pr-9" placeholder="Contoh: 43,35" />
+                            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500 dark:text-gray-400">m</span>
+                        </div>
                         <x-input-error :messages="$errors->get('loa')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="lpp" value="Length Between Perpendiculars (LPP)" />
-                        <x-text-input wire:model="lpp" id="lpp" type="text" class="mt-1 block w-full" placeholder="Contoh: 38,50" />
+                        <div class="relative mt-1">
+                            <x-text-input wire:model="lpp" id="lpp" type="text" class="block w-full pr-9" placeholder="Contoh: 38,50" />
+                            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500 dark:text-gray-400">m</span>
+                        </div>
                         <x-input-error :messages="$errors->get('lpp')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="breadth" value="Breadth (B)" />
-                        <x-text-input wire:model="breadth" id="breadth" type="text" class="mt-1 block w-full" placeholder="Contoh: 12,00" />
+                        <div class="relative mt-1">
+                            <x-text-input wire:model="breadth" id="breadth" type="text" class="block w-full pr-9" placeholder="Contoh: 12,00" />
+                            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500 dark:text-gray-400">m</span>
+                        </div>
                         <x-input-error :messages="$errors->get('breadth')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="depth" value="Tinggi (Depth)" />
-                        <x-text-input wire:model="depth" id="depth" type="text" class="mt-1 block w-full" placeholder="Contoh: 03,00" />
+                        <div class="relative mt-1">
+                            <x-text-input wire:model="depth" id="depth" type="text" class="block w-full pr-9" placeholder="Contoh: 03,00" />
+                            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500 dark:text-gray-400">m</span>
+                        </div>
                         <x-input-error :messages="$errors->get('depth')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="draft" value="Draft" />
-                        <x-text-input wire:model="draft" id="draft" type="text" class="mt-1 block w-full" placeholder="Contoh: 02,00" />
+                        <div class="relative mt-1">
+                            <x-text-input wire:model="draft" id="draft" type="text" class="block w-full pr-9" placeholder="Contoh: 02,00" />
+                            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500 dark:text-gray-400">m</span>
+                        </div>
                         <x-input-error :messages="$errors->get('draft')" class="mt-2" />
                     </div>
                     <div>

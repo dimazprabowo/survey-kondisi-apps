@@ -79,6 +79,22 @@ class Ship extends Model
         return $this->year_built ? (int) now()->format('Y') - $this->year_built : null;
     }
 
+    /**
+     * Format dimensi (loa/lpp/breadth/depth/draft) dengan satuan "m".
+     * Menormalkan data lama yang masih membawa suffix "m" agar tidak dobel.
+     * Return null bila kosong — caller yang memutuskan fallback ('-' dll).
+     */
+    public function formattedDimension(string $attribute): ?string
+    {
+        $value = trim((string) ($this->{$attribute} ?? ''));
+
+        if ($value === '') {
+            return null;
+        }
+
+        return rtrim((string) preg_replace('/\s*m$/i', '', $value)).' m';
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

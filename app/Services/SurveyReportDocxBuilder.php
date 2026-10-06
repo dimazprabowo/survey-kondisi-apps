@@ -70,9 +70,9 @@ class SurveyReportDocxBuilder
         $tp->setValue('ship_type', $ship?->ship_type ?? '-');
 
         // Lembar pengesahan — ringkasan dimensi kapal + tanda tangan
-        $tp->setValue('loa', $ship?->loa ?? '-');
-        $tp->setValue('breadth', $ship?->breadth ?? '-');
-        $tp->setValue('draft', $ship?->draft ?? '-');
+        $tp->setValue('loa', $ship?->formattedDimension('loa') ?? '-');
+        $tp->setValue('breadth', $ship?->formattedDimension('breadth') ?? '-');
+        $tp->setValue('draft', $ship?->formattedDimension('draft') ?? '-');
         $tp->setValue('approval_place_date', $this->approvalPlaceDate($report));
         $tp->setValue('approver_name', $report->approver_name ?? '-');
         $tp->setValue('inspector_1', $report->inspector_1 ?? '-');
@@ -88,11 +88,11 @@ class SurveyReportDocxBuilder
         $tp->setValue('sp_builder', $ship?->builder ?? '-');
         $tp->setValue('sp_port_registry', $ship?->port_of_registry ?? '-');
         $tp->setValue('sp_hull_material', $ship?->hull_material ?? '-');
-        $tp->setValue('sp_loa', $ship?->loa ?? '-');
-        $tp->setValue('sp_lpp', $ship?->lpp ?? '-');
-        $tp->setValue('sp_breadth', $ship?->breadth ?? '-');
-        $tp->setValue('sp_depth', $ship?->depth ?? '-');
-        $tp->setValue('sp_draft', $ship?->draft ?? '-');
+        $tp->setValue('sp_loa', $ship?->formattedDimension('loa') ?? '-');
+        $tp->setValue('sp_lpp', $ship?->formattedDimension('lpp') ?? '-');
+        $tp->setValue('sp_breadth', $ship?->formattedDimension('breadth') ?? '-');
+        $tp->setValue('sp_depth', $ship?->formattedDimension('depth') ?? '-');
+        $tp->setValue('sp_draft', $ship?->formattedDimension('draft') ?? '-');
         $tp->setValue('sp_dwt', $ship?->dwt ?? '-');
         $tp->setValue('sp_class', $ship?->class_name ?? '-');
         $tp->setValue('sp_class_notations', $ship?->class_notations ?? '-');

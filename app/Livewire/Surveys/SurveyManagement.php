@@ -35,6 +35,12 @@ class SurveyManagement extends Component
 
     public bool $showTemplateModal = false;
 
+    /** ID survey yang dicentang untuk export (persist antar halaman). */
+    public array $selected = [];
+
+    /** State checkbox "pilih semua" di header — dihitung ulang di render(). */
+    public bool $selectAll = false;
+
     public function mount()
     {
         $this->authorize('viewAny', Survey::class);
@@ -106,6 +112,27 @@ class SurveyManagement extends Component
         }
     }
 
+    /**
+     * Centang/hapus centang semua baris di halaman saat ini.
+     */
+    public function updatedSelectAll(bool $value)
+    {
+        $pageIds = app(SurveyService::class)->getFiltered(
+            $this->search,
+            $this->statusFilter,
+            $this->shipFilter ? (int) $this->shipFilter : null
+        )->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
+
+        $this->selected = $value
+            ? array_values(array_unique(array_merge($this->selected, $pageIds)))
+            : array_values(array_diff($this->selected, $pageIds));
+    }
+
+    public function clearSelection()
+    {
+        $this->selected = [];
+    }
+
     public function exportExcel()
     {
         $this->authorize('exportExcel', Survey::class);
@@ -113,7 +140,8 @@ class SurveyManagement extends Component
         return (new SurveysExport(
             $this->search,
             $this->statusFilter,
-            $this->shipFilter ? (int) $this->shipFilter : null
+            $this->shipFilter ? (int) $this->shipFilter : null,
+            array_map('intval', $this->selected)
         ))->download('survey-'.now()->format('Y-m-d-His').'.xlsx');
     }
 
@@ -135,6 +163,7 @@ class SurveyManagement extends Component
             })
             ->when($this->statusFilter !== null && $this->statusFilter !== '', fn ($q) => $q->where('status', $this->statusFilter))
             ->when($this->shipFilter, fn ($q) => $q->where('ship_id', (int) $this->shipFilter))
+            ->when($this->selected !== [], fn ($q) => $q->whereIn('id', array_map('intval', $this->selected)))
             ->latest('survey_date')
             ->get();
 
@@ -208,6 +237,11 @@ class SurveyManagement extends Component
             $this->shipFilter ? (int) $this->shipFilter : null,
             15
         );
+
+        // Checkbox header checked hanya jika SEMUA baris halaman ini tercentang —
+        // dihitung ulang tiap render agar uncheck manual ikut tersinkron.
+        $pageIds = $surveys->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
+        $this->selectAll = $pageIds !== [] && array_diff($pageIds, $this->selected) === [];
 
         return view('livewire.surveys.survey-management', compact('surveys'));
     }

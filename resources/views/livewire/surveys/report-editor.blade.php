@@ -272,9 +272,9 @@
                         @foreach([
                             ['NAMA KAPAL', $ship?->name],
                             ['TIPE KAPAL', $ship?->ship_type],
-                            ['LOA', $ship?->loa ? $ship->loa.' M' : null],
-                            ['BREADTH', $ship?->breadth ? $ship->breadth.' M' : null],
-                            ['DRAFT', $ship?->draft ? $ship->draft.' M' : null],
+                            ['LOA', $ship?->formattedDimension('loa')],
+                            ['BREADTH', $ship?->formattedDimension('breadth')],
+                            ['DRAFT', $ship?->formattedDimension('draft')],
                         ] as [$plabel, $pval])
                             <tr>
                                 <td class="w-44 pr-4 py-0.5 align-middle font-medium">{{ $plabel }}</td>
@@ -681,11 +681,11 @@
                                     ['Builder', $ship?->builder],
                                     ['Port Register', $ship?->port_of_registry],
                                     ['Material of Hull', $ship?->hull_material],
-                                    ['Length (LoA)', $ship?->loa ? $ship->loa.' m' : null],
-                                    ['Lenght (LPP)', $ship?->lpp ? $ship->lpp.' m' : null],
-                                    ['Breadth (B)', $ship?->breadth ? $ship->breadth.' m' : null],
-                                    ['Tinggi (Height)', $ship?->depth ? $ship->depth.' m' : null],
-                                    ['Draft', $ship?->draft ? $ship->draft.' m' : null],
+                                    ['Length (LoA)', $ship?->formattedDimension('loa')],
+                                    ['Lenght (LPP)', $ship?->formattedDimension('lpp')],
+                                    ['Breadth (B)', $ship?->formattedDimension('breadth')],
+                                    ['Tinggi (Height)', $ship?->formattedDimension('depth')],
+                                    ['Draft', $ship?->formattedDimension('draft')],
                                     ['DWT', $ship?->dwt],
                                     ['Class', $ship?->class_name],
                                     ['Class Notations', $ship?->class_notations],
