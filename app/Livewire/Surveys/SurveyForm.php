@@ -60,8 +60,30 @@ class SurveyForm extends Component
     // Working copy struktur survey (snapshot) — sumber tunggal render & hapus node
     public array $structureTree = ['categories' => []];
 
-    // Mode hapus struktur (kategori/sub/grup/item) — toggle di header
+    // Mode edit struktur (kategori/sub/grup/item) — toggle di header
     public bool $editStructure = false;
+
+    // State modal editor node struktur (tambah/ubah) — diisi saat
+    // openAddNode/openEditNode, di-reset oleh resetNodeModal.
+    public string $nodeModalMode = 'add';
+
+    public string $nodeLevel = 'item';
+
+    public ?int $nodeParentId = null;
+
+    public ?int $nodeId = null;
+
+    public string $nodeName = '';
+
+    public string $nodeItemType = 'score';
+
+    public string $nodeScoreLabels = 'C, V';
+
+    public bool $nodeHasDateFields = false;
+
+    // Tipe & label skor item terkunci saat grup sudah berisi item lain —
+    // render tabel (HTML & DOCX) menentukan tipe kolom dari item pertama.
+    public bool $nodeTypeLocked = false;
 
     // Per-request cache index hierarki struktur (tidak diserialisasi Livewire)
     protected ?array $structureIndexCache = null;
@@ -545,15 +567,418 @@ class SurveyForm extends Component
     }
 
     /**
-     * Toggle mode hapus struktur (kategori/sub kategori/grup item/item).
+     * Toggle mode edit struktur (kategori/sub kategori/grup item/item).
      * Sengaja tidak persist di session — selalu mulai nonaktif demi keamanan.
      */
     public function toggleEditStructure()
     {
         $this->editStructure = ! $this->editStructure;
         $this->notifyInfo($this->editStructure
-            ? 'Mode hapus struktur aktif. Hapus node via ikon tempat sampah.'
-            : 'Mode hapus struktur nonaktif.');
+            ? 'Mode edit struktur aktif. Tambah, ubah nama, atau hapus node — tersimpan saat survey disimpan.'
+            : 'Mode edit struktur nonaktif.');
+    }
+
+    /**
+     * Buka modal tambah node struktur (kategori/sub kategori/grup item/item).
+     */
+    public function openAddNode(string $level, $parentId = null): void
+    {
+        if (! $this->editStructure) {
+            return;
+        }
+
+        $this->resetNodeModal();
+        $this->nodeModalMode = 'add';
+        $this->nodeLevel = $level;
+        $this->nodeParentId = $parentId === null ? null : (int) $parentId;
+
+        // Item baru di grup yang sudah berisi mewarisi tipe & label skor grup.
+        if ($level === 'item' && $this->nodeParentId) {
+            $group = $this->findNodeByLevel('item_group', $this->nodeParentId);
+            $firstItem = $group['items'][0] ?? null;
+            if ($firstItem) {
+                $this->nodeTypeLocked = true;
+                $this->nodeItemType = $firstItem['item_type'] ?? 'score';
+                $this->nodeScoreLabels = implode(', ', $firstItem['score_labels'] ?? ['C', 'V']);
+            }
+        }
+
+        $this->dispatch('open-modal', 'survey-node-modal');
+    }
+
+    /**
+     * Buka modal ubah node struktur (nama/label; untuk item juga tipe & opsinya).
+     */
+    public function openEditNode(string $level, $id): void
+    {
+        if (! $this->editStructure) {
+            return;
+        }
+
+        $node = $this->findNodeByLevel($level, (int) $id);
+        if (! $node) {
+            return;
+        }
+
+        $this->resetNodeModal();
+        $this->nodeModalMode = 'edit';
+        $this->nodeLevel = $level;
+        $this->nodeId = (int) $id;
+        $this->nodeName = (string) ($node['label'] ?? $node['name'] ?? '');
+
+        if ($level === 'item') {
+            $this->nodeItemType = $node['item_type'] ?? 'score';
+            $this->nodeScoreLabels = implode(', ', $node['score_labels'] ?? ['C', 'V']);
+            $this->nodeHasDateFields = (bool) ($node['has_date_fields'] ?? false);
+
+            // Tipe/label terkunci bila item berbagi grup dengan item lain.
+            $group = $this->findGroupOfItem((int) $id);
+            $this->nodeTypeLocked = count($group['items'] ?? []) > 1;
+        }
+
+        $this->dispatch('open-modal', 'survey-node-modal');
+    }
+
+    /**
+     * Simpan node struktur dari modal — tambah baru atau update node lama.
+     */
+    public function saveNode(): void
+    {
+        if (! $this->editStructure) {
+            $this->dispatch('close-modal', 'survey-node-modal');
+
+            return;
+        }
+
+        $rules = ['nodeName' => 'required|string|max:255'];
+        if ($this->nodeLevel === 'item' && ! $this->nodeTypeLocked) {
+            $rules['nodeItemType'] = 'required|in:'.implode(',', \App\Enums\SurveyItemType::values());
+            if ($this->nodeItemType === \App\Enums\SurveyItemType::Score->value) {
+                $rules['nodeScoreLabels'] = 'required|string|max:120';
+            }
+        }
+
+        try {
+            $this->validate($rules, [], [
+                'nodeName' => 'nama',
+                'nodeItemType' => 'tipe item',
+                'nodeScoreLabels' => 'label skor',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->notifyValidationError($e);
+
+            throw $e;
+        }
+
+        $this->nodeModalMode === 'add'
+            ? $this->addStructureNode()
+            : $this->updateStructureNode();
+
+        $this->structureIndexCache = null;
+        $this->resetNodeModal();
+        $this->dispatch('close-modal', 'survey-node-modal');
+        $this->dispatch('structure-node-saved');
+        $this->notifyInfo('Struktur diperbarui — perubahan tersimpan permanen saat survey disimpan.');
+    }
+
+    public function closeNodeModal(): void
+    {
+        $this->resetNodeModal();
+        $this->dispatch('close-modal', 'survey-node-modal');
+    }
+
+    /**
+     * Tambah node baru ke working copy struktur (id sintetis unik per survey).
+     */
+    protected function addStructureNode(): void
+    {
+        $this->structureTree['categories'] ??= [];
+
+        $id = $this->nextNodeId();
+        $name = trim($this->nodeName);
+
+        match ($this->nodeLevel) {
+            'category' => $this->structureTree['categories'][] = [
+                'id' => $id, 'label' => $name, 'order_num' => 0, 'subCategories' => [],
+            ],
+            'sub_category' => $this->appendChildNode('category', $this->nodeParentId, [
+                'id' => $id, 'name' => $name, 'order_num' => 0, 'itemGroups' => [],
+            ]),
+            'item_group' => $this->appendChildNode('sub_category', $this->nodeParentId, [
+                'id' => $id, 'name' => $name, 'order_num' => 0, 'items' => [],
+            ]),
+            'item' => $this->appendChildNode('item_group', $this->nodeParentId, $this->buildItemNode($id, $name)),
+            default => null,
+        };
+
+        $this->structureTree['categories'] = $this->renumberNodes($this->structureTree['categories']);
+
+        // Fokuskan tab ke node baru agar langsung terlihat.
+        if ($this->nodeLevel === 'category') {
+            $this->activeCategory = $id;
+            $this->activeSubCategory = null;
+        } elseif ($this->nodeLevel === 'sub_category') {
+            $this->activeCategory = $this->nodeParentId;
+            $this->activeSubCategory = $id;
+        }
+    }
+
+    /**
+     * Update node struktur: rename label/name; untuk item juga tipe & opsinya
+     * (tipe/label hanya bisa diubah bila tidak terkunci oleh grup).
+     */
+    protected function updateStructureNode(): void
+    {
+        $name = trim($this->nodeName);
+
+        if ($this->nodeLevel !== 'item') {
+            $this->updateNodeFields($this->nodeLevel, $this->nodeId, [
+                $this->nodeLevel === 'category' ? 'label' : 'name' => $name,
+            ]);
+
+            return;
+        }
+
+        $fields = ['name' => $name];
+
+        if (! $this->nodeTypeLocked) {
+            $isScore = $this->nodeItemType === \App\Enums\SurveyItemType::Score->value;
+            $labels = $isScore ? $this->parseScoreLabels($this->nodeScoreLabels) : [];
+
+            $fields['item_type'] = $this->nodeItemType;
+            $fields['score_labels'] = $labels;
+            $fields['has_date_fields'] = $isScore ? $this->nodeHasDateFields : false;
+
+            // Re-align response agar sesuai tipe & label skor baru.
+            $this->responses[$this->nodeId] = $this->realignItemResponse(
+                $this->responses[$this->nodeId] ?? [],
+                $this->nodeItemType,
+                $labels
+            );
+        } elseif (($this->findNodeByLevel('item', $this->nodeId)['item_type'] ?? null) === 'score') {
+            // Tipe terkunci — has_date_fields tetap bisa diubah pada item skor.
+            $fields['has_date_fields'] = $this->nodeHasDateFields;
+        }
+
+        $this->updateNodeFields('item', $this->nodeId, $fields);
+    }
+
+    /**
+     * Bangun node item baru + inisialisasi response kosongnya.
+     */
+    protected function buildItemNode(int $id, string $name): array
+    {
+        $isScore = $this->nodeItemType === \App\Enums\SurveyItemType::Score->value;
+
+        $node = [
+            'id' => $id,
+            'name' => $name,
+            'order_num' => 0,
+            'item_type' => $this->nodeItemType,
+            'score_labels' => $isScore ? $this->parseScoreLabels($this->nodeScoreLabels) : [],
+            'has_date_fields' => $isScore ? $this->nodeHasDateFields : false,
+        ];
+
+        $this->responses[$id] = $this->emptyItemResponse($node['item_type'], $node['score_labels']);
+
+        return $node;
+    }
+
+    /**
+     * Shape response kosong untuk item baru sesuai tipenya.
+     */
+    protected function emptyItemResponse(string $type, array $labels = []): array
+    {
+        if ($type === \App\Enums\SurveyItemType::Inventory->value) {
+            return ['qty' => '', 'specification' => ''];
+        }
+
+        return [
+            'scores' => collect($labels ?: ['C', 'V'])->mapWithKeys(fn ($l) => [$l => ''])->all(),
+            'date_issued' => '',
+            'date_expired' => '',
+        ];
+    }
+
+    /**
+     * Re-align response item setelah tipe/label berubah — nilai label yang
+     * masih ada dipertahankan, sisanya di-reset ke shape kosong.
+     */
+    protected function realignItemResponse(array $response, string $type, array $labels): array
+    {
+        if ($type === \App\Enums\SurveyItemType::Inventory->value) {
+            return [
+                'qty' => $response['qty'] ?? '',
+                'specification' => $response['specification'] ?? '',
+            ];
+        }
+
+        $scores = [];
+        foreach ($labels as $label) {
+            $scores[$label] = $response['scores'][$label] ?? '';
+        }
+
+        return [
+            'scores' => $scores,
+            'date_issued' => $response['date_issued'] ?? '',
+            'date_expired' => $response['date_expired'] ?? '',
+        ];
+    }
+
+    /**
+     * Parse input label skor "C, V, F" -> ['C', 'V', 'F'].
+     */
+    protected function parseScoreLabels(string $raw): array
+    {
+        $labels = array_filter(array_map('trim', explode(',', $raw)), fn ($l) => $l !== '');
+
+        return array_values(array_unique($labels)) ?: ['C', 'V'];
+    }
+
+    /**
+     * Id node baru: max semua id di tree + 1 (unik per survey — snapshot
+     * lokal, tidak join ke tabel template).
+     */
+    protected function nextNodeId(): int
+    {
+        $max = 0;
+        $walk = function (array $nodes) use (&$walk, &$max) {
+            foreach ($nodes as $node) {
+                $max = max($max, (int) ($node['id'] ?? 0));
+                foreach (['subCategories', 'itemGroups', 'items'] as $key) {
+                    $walk($node[$key] ?? []);
+                }
+            }
+        };
+        $walk($this->structureTree['categories'] ?? []);
+
+        return $max + 1;
+    }
+
+    /**
+     * Append child ke node parent dengan id tertentu. Parent dicari dengan
+     * scope level (id antar-level bisa bertabrakan — berasal dari tabel berbeda).
+     * $parentLevel: 'category' | 'sub_category' | 'item_group'.
+     */
+    protected function appendChildNode(string $parentLevel, ?int $parentId, array $child): bool
+    {
+        if ($parentId === null) {
+            return false;
+        }
+
+        $this->structureTree['categories'] ??= [];
+
+        foreach ($this->structureTree['categories'] as &$cat) {
+            if ($parentLevel === 'category' && ($cat['id'] ?? null) === $parentId) {
+                $cat['subCategories'][] = $child;
+
+                return true;
+            }
+            $cat['subCategories'] ??= [];
+            foreach ($cat['subCategories'] as &$sc) {
+                if ($parentLevel === 'sub_category' && ($sc['id'] ?? null) === $parentId) {
+                    $sc['itemGroups'][] = $child;
+
+                    return true;
+                }
+                $sc['itemGroups'] ??= [];
+                foreach ($sc['itemGroups'] as &$ig) {
+                    if ($parentLevel === 'item_group' && ($ig['id'] ?? null) === $parentId) {
+                        $ig['items'][] = $child;
+
+                        return true;
+                    }
+                }
+                unset($ig);
+            }
+            unset($sc);
+        }
+        unset($cat);
+
+        return false;
+    }
+
+    /**
+     * Merge field ke node dengan level + id tertentu (in-place).
+     * Scope level wajib — id antar-level bisa bertabrakan.
+     */
+    protected function updateNodeFields(string $level, int $id, array $fields): bool
+    {
+        $this->structureTree['categories'] ??= [];
+
+        foreach ($this->structureTree['categories'] as &$cat) {
+            if ($level === 'category' && ($cat['id'] ?? null) === $id) {
+                $cat = $fields + $cat;
+
+                return true;
+            }
+            $cat['subCategories'] ??= [];
+            foreach ($cat['subCategories'] as &$sc) {
+                if ($level === 'sub_category' && ($sc['id'] ?? null) === $id) {
+                    $sc = $fields + $sc;
+
+                    return true;
+                }
+                $sc['itemGroups'] ??= [];
+                foreach ($sc['itemGroups'] as &$ig) {
+                    if ($level === 'item_group' && ($ig['id'] ?? null) === $id) {
+                        $ig = $fields + $ig;
+
+                        return true;
+                    }
+                    $ig['items'] ??= [];
+                    foreach ($ig['items'] as &$item) {
+                        if ($level === 'item' && ($item['id'] ?? null) === $id) {
+                            $item = $fields + $item;
+
+                            return true;
+                        }
+                    }
+                    unset($item);
+                }
+                unset($ig);
+            }
+            unset($sc);
+        }
+        unset($cat);
+
+        return false;
+    }
+
+    /**
+     * Cari grup item yang memuat item dengan id tertentu.
+     */
+    protected function findGroupOfItem(int $itemId): ?array
+    {
+        $walk = function (array $nodes) use (&$walk, $itemId) {
+            foreach ($nodes as $node) {
+                if (isset($node['items']) && collect($node['items'])->contains('id', $itemId)) {
+                    return $node;
+                }
+                foreach (['subCategories', 'itemGroups'] as $key) {
+                    if ($found = $walk($node[$key] ?? [])) {
+                        return $found;
+                    }
+                }
+            }
+
+            return null;
+        };
+
+        return $walk($this->structureTree['categories'] ?? []);
+    }
+
+    protected function resetNodeModal(): void
+    {
+        $this->nodeModalMode = 'add';
+        $this->nodeLevel = 'item';
+        $this->nodeParentId = null;
+        $this->nodeId = null;
+        $this->nodeName = '';
+        $this->nodeItemType = 'score';
+        $this->nodeScoreLabels = 'C, V';
+        $this->nodeHasDateFields = false;
+        $this->nodeTypeLocked = false;
     }
 
     /**
@@ -565,7 +990,7 @@ class SurveyForm extends Component
             return;
         }
 
-        $node = $this->findNode($this->structureTree['categories'] ?? [], (int) $id);
+        $node = $this->findNodeByLevel($level, (int) $id);
         if (! $node) {
             return;
         }
@@ -632,17 +1057,29 @@ class SurveyForm extends Component
     }
 
     /**
-     * Cari node (kategori/sub/grup/item) di tree berdasarkan id.
+     * Cari node di tree dengan scope level — WAJIB level-aware karena id
+     * node antar-level bisa bertabrakan (id berasal dari tabel berbeda:
+     * kategori id=1, item id=1, dst).
      */
-    protected function findNode(array $nodes, int $id): ?array
+    protected function findNodeByLevel(string $level, int $id): ?array
     {
-        foreach ($nodes as $node) {
-            if (($node['id'] ?? null) === $id) {
-                return $node;
+        foreach ($this->structureTree['categories'] ?? [] as $cat) {
+            if ($level === 'category' && ($cat['id'] ?? null) === $id) {
+                return $cat;
             }
-            foreach (['subCategories', 'itemGroups', 'items'] as $key) {
-                if ($found = $this->findNode($node[$key] ?? [], $id)) {
-                    return $found;
+            foreach ($cat['subCategories'] ?? [] as $sc) {
+                if ($level === 'sub_category' && ($sc['id'] ?? null) === $id) {
+                    return $sc;
+                }
+                foreach ($sc['itemGroups'] ?? [] as $ig) {
+                    if ($level === 'item_group' && ($ig['id'] ?? null) === $id) {
+                        return $ig;
+                    }
+                    foreach ($ig['items'] ?? [] as $item) {
+                        if ($level === 'item' && ($item['id'] ?? null) === $id) {
+                            return $item;
+                        }
+                    }
                 }
             }
         }

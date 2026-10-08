@@ -224,4 +224,125 @@ class SurveySnapshotTest extends TestCase
         $this->assertSame(1, $sub['itemGroups'][0]['order_num']);
         $this->assertSame($group2->id, $sub['itemGroups'][0]['id']);
     }
+
+    public function test_add_structure_node_requires_edit_mode_toggle(): void
+    {
+        $survey = $this->createSurvey();
+        $this->actingAs(\App\Models\User::factory()->create());
+        \Illuminate\Support\Facades\Gate::before(fn () => true);
+
+        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+            ->call('openAddNode', 'item', $this->itemGroup->id)
+            ->set('nodeName', 'Item Baru')
+            ->call('saveNode');
+
+        $items = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'];
+        $this->assertCount(1, $items);
+    }
+
+    public function test_add_item_to_group_creates_node_and_empty_response(): void
+    {
+        $survey = $this->createSurvey();
+        $this->actingAs(\App\Models\User::factory()->create());
+        \Illuminate\Support\Facades\Gate::before(fn () => true);
+
+        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+            ->call('toggleEditStructure')
+            ->call('openAddNode', 'item', $this->itemGroup->id);
+
+        // Grup sudah berisi item skor -> tipe terkunci mengikuti grup
+        $this->assertTrue($component->get('nodeTypeLocked'));
+        $this->assertSame('score', $component->get('nodeItemType'));
+
+        $component->set('nodeName', 'Item Tambahan')->call('saveNode');
+
+        $items = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'];
+        $this->assertCount(2, $items);
+
+        $newItem = $items[1];
+        $this->assertSame('Item Tambahan', $newItem['name']);
+        $this->assertSame('score', $newItem['item_type']);
+        $this->assertGreaterThan($this->item->id, $newItem['id']);
+
+        // Response kosong untuk item baru sudah di-init
+        $this->assertArrayHasKey($newItem['id'], $component->get('responses'));
+    }
+
+    public function test_edit_node_renames_label_and_name(): void
+    {
+        $survey = $this->createSurvey();
+        $this->actingAs(\App\Models\User::factory()->create());
+        \Illuminate\Support\Facades\Gate::before(fn () => true);
+
+        $catId = $survey->structure['categories'][0]['id'];
+
+        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+            ->call('toggleEditStructure')
+            ->call('openEditNode', 'category', $catId);
+
+        $this->assertSame('Kategori Test', $component->get('nodeName'));
+
+        $component->set('nodeName', 'Kategori Diganti')->call('saveNode');
+        $this->assertSame('Kategori Diganti', $component->get('structureTree')['categories'][0]['label']);
+
+        $component->call('openEditNode', 'item', $this->item->id)
+            ->set('nodeName', 'Item Diganti')
+            ->call('saveNode');
+
+        $item = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'][0];
+        $this->assertSame('Item Diganti', $item['name']);
+    }
+
+    public function test_item_type_change_realigns_response_shape(): void
+    {
+        $survey = $this->createSurvey();
+        $this->actingAs(\App\Models\User::factory()->create());
+        \Illuminate\Support\Facades\Gate::before(fn () => true);
+
+        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+            ->call('toggleEditStructure')
+            ->call('openEditNode', 'item', $this->item->id);
+
+        // Item tunggal di grup -> tipe bebas diubah
+        $this->assertFalse($component->get('nodeTypeLocked'));
+
+        $component->set('nodeItemType', 'inventory')->call('saveNode');
+
+        $item = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'][0];
+        $this->assertSame('inventory', $item['item_type']);
+
+        $response = $component->get('responses')[$this->item->id];
+        $this->assertArrayHasKey('qty', $response);
+        $this->assertArrayNotHasKey('scores', $response);
+    }
+
+    public function test_add_category_and_sub_category_to_empty_structure(): void
+    {
+        $survey = $this->createSurvey();
+        $this->actingAs(\App\Models\User::factory()->create());
+        \Illuminate\Support\Facades\Gate::before(fn () => true);
+
+        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+            ->call('toggleEditStructure')
+            ->call('openAddNode', 'category')
+            ->set('nodeName', 'Kategori Custom')
+            ->call('saveNode');
+
+        $cats = $component->get('structureTree')['categories'];
+        $this->assertCount(2, $cats);
+        $newCat = $cats[1];
+        $this->assertSame('Kategori Custom', $newCat['label']);
+
+        // Tab aktif pindah ke kategori baru
+        $this->assertSame($newCat['id'], $component->get('activeCategory'));
+
+        $component->call('openAddNode', 'sub_category', $newCat['id'])
+            ->set('nodeName', 'Sub Custom')
+            ->call('saveNode');
+
+        $subs = $component->get('structureTree')['categories'][1]['subCategories'];
+        $this->assertCount(1, $subs);
+        $this->assertSame('Sub Custom', $subs[0]['name']);
+        $this->assertSame($subs[0]['id'], $component->get('activeSubCategory'));
+    }
 }

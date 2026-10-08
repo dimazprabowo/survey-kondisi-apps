@@ -182,6 +182,7 @@
     x-on:keydown="handleKeydown($event)"
     x-on:group-note-removed.window="onFieldChange()"
     x-on:structure-node-removed.window="onFieldChange()"
+    x-on:structure-node-saved.window="onFieldChange()"
 >
     <!-- Breadcrumb -->
     <nav class="mb-6 flex" aria-label="Breadcrumb">
@@ -205,7 +206,7 @@
                     <div class="flex items-center gap-4">
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Edit Struktur</span>
-                            <x-toggle-switch wire:click="toggleEditStructure" :active="$editStructure" target="toggleEditStructure" activeColor="amber" title="Aktifkan/nonaktifkan mode hapus struktur (kategori, sub kategori, grup item, item)" />
+                            <x-toggle-switch wire:click="toggleEditStructure" :active="$editStructure" target="toggleEditStructure" activeColor="amber" title="Aktifkan/nonaktifkan mode edit struktur (tambah, ubah, hapus kategori/sub kategori/grup item/item)" />
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Auto Save</span>
@@ -292,12 +293,21 @@
                                 @endif
                             </button>
                             @if($editStructure)
+                                <x-loading-button wire:click="openEditNode('category', {{ $cat->id }})"
+                                    target="openEditNode('category', {{ $cat->id }})"
+                                    variant="icon-blue" icon="edit" wire:key="cat-edit-{{ $cat->id }}" title="Ubah nama kategori {{ $cat->label }}" />
                                 <x-loading-button wire:click="confirmRemoveNode('category', {{ $cat->id }})"
                                     target="confirmRemoveNode('category', {{ $cat->id }})"
                                     variant="icon-red" icon="delete" wire:key="cat-del-{{ $cat->id }}" title="Hapus kategori {{ $cat->label }} beserta isinya" class="mr-1" />
                             @endif
                         </div>
                     @endforeach
+                    @if($editStructure)
+                        <x-loading-button wire:click="openAddNode('category')"
+                            target="openAddNode('category')"
+                            variant="icon-green" icon="plus" wire:key="btn-add-category" title="Tambah kategori baru"
+                            class="self-center" />
+                    @endif
                 </nav>
             </div>
 
@@ -358,13 +368,32 @@
                                                 @endif
                                             </button>
                                             @if($editStructure)
+                                                <x-loading-button wire:click="openEditNode('sub_category', {{ $subCat->id }})"
+                                                    target="openEditNode('sub_category', {{ $subCat->id }})"
+                                                    variant="icon-blue" icon="edit" wire:key="sub-edit-{{ $subCat->id }}" title="Ubah nama sub kategori {{ $subCat->name }}" />
                                                 <x-loading-button wire:click="confirmRemoveNode('sub_category', {{ $subCat->id }})"
                                                     target="confirmRemoveNode('sub_category', {{ $subCat->id }})"
                                                     variant="icon-red" icon="delete" wire:key="sub-del-{{ $subCat->id }}" title="Hapus sub kategori {{ $subCat->name }} beserta isinya" class="mr-1" />
                                             @endif
                                         </div>
                                     @endforeach
+                                    @if($editStructure)
+                                        <x-loading-button wire:click="openAddNode('sub_category', {{ $cat->id }})"
+                                            target="openAddNode('sub_category', {{ $cat->id }})"
+                                            variant="icon-green" icon="plus" wire:key="sub-add-{{ $cat->id }}" title="Tambah sub kategori ke kategori {{ $cat->label }}"
+                                            class="self-center" />
+                                    @endif
                                 </nav>
+                            </div>
+                        @endif
+
+                        @if($editStructure && $cat->subCategories->isEmpty())
+                            <div class="mb-4">
+                                <x-loading-button wire:click="openAddNode('sub_category', {{ $cat->id }})"
+                                    target="openAddNode('sub_category', {{ $cat->id }})"
+                                    variant="secondary" size="sm" icon="plus" wire:key="sub-add-empty-{{ $cat->id }}" title="Tambah sub kategori ke kategori ini">
+                                    Tambah Sub Kategori
+                                </x-loading-button>
                             </div>
                         @endif
 
@@ -402,6 +431,9 @@
                                                     </span>
                                                 @endunless
                                                 @if($editStructure)
+                                                    <x-loading-button wire:click="openEditNode('item_group', {{ $itemGroup->id }})"
+                                                        target="openEditNode('item_group', {{ $itemGroup->id }})"
+                                                        variant="icon-blue" icon="edit" wire:key="ig-edit-{{ $itemGroup->id }}" title="Ubah nama grup item" />
                                                     <x-loading-button wire:click="confirmRemoveNode('item_group', {{ $itemGroup->id }})"
                                                         target="confirmRemoveNode('item_group', {{ $itemGroup->id }})"
                                                         variant="icon-red" icon="delete" wire:key="ig-del-{{ $itemGroup->id }}" title="Hapus grup item ini beserta isinya" />
@@ -427,7 +459,7 @@
                                                         <col class="w-20">
                                                     @endif
                                                     @if($editStructure)
-                                                        <col class="w-10">
+                                                        <col class="w-16">
                                                     @endif
                                                 </colgroup>
                                                 <thead class="bg-gray-50 dark:bg-gray-700/50">
@@ -444,7 +476,7 @@
                                                             <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-20">Avg</th>
                                                         @endif
                                                         @if($editStructure)
-                                                            <th class="w-10"></th>
+                                                            <th class="w-16"></th>
                                                         @endif
                                                     </tr>
                                                 </thead>
@@ -466,9 +498,14 @@
                                                                 </td>
                                                                 @if($editStructure)
                                                                     <td class="px-1 py-2 text-center">
-                                                                        <x-loading-button wire:click="confirmRemoveNode('item', {{ $item->id }})"
-                                                                            target="confirmRemoveNode('item', {{ $item->id }})"
-                                                                            variant="icon-red" icon="delete" wire:key="item-del-{{ $item->id }}" title="Hapus item ini" />
+                                                                        <div class="flex items-center justify-center">
+                                                                            <x-loading-button wire:click="openEditNode('item', {{ $item->id }})"
+                                                                                target="openEditNode('item', {{ $item->id }})"
+                                                                                variant="icon-blue" icon="edit" wire:key="item-edit-{{ $item->id }}" title="Ubah item ini" />
+                                                                            <x-loading-button wire:click="confirmRemoveNode('item', {{ $item->id }})"
+                                                                                target="confirmRemoveNode('item', {{ $item->id }})"
+                                                                                variant="icon-red" icon="delete" wire:key="item-del-{{ $item->id }}" title="Hapus item ini" />
+                                                                        </div>
                                                                     </td>
                                                                 @endif
                                                             </tr>
@@ -516,15 +553,34 @@
                                                                 </td>
                                                                 @if($editStructure)
                                                                     <td class="px-1 py-2 text-center">
-                                                                        <x-loading-button wire:click="confirmRemoveNode('item', {{ $item->id }})"
-                                                                            target="confirmRemoveNode('item', {{ $item->id }})"
-                                                                            variant="icon-red" icon="delete" wire:key="item-del-{{ $item->id }}" title="Hapus item ini" />
+                                                                        <div class="flex items-center justify-center">
+                                                                            <x-loading-button wire:click="openEditNode('item', {{ $item->id }})"
+                                                                                target="openEditNode('item', {{ $item->id }})"
+                                                                                variant="icon-blue" icon="edit" wire:key="item-edit-{{ $item->id }}" title="Ubah item ini" />
+                                                                            <x-loading-button wire:click="confirmRemoveNode('item', {{ $item->id }})"
+                                                                                target="confirmRemoveNode('item', {{ $item->id }})"
+                                                                                variant="icon-red" icon="delete" wire:key="item-del-{{ $item->id }}" title="Hapus item ini" />
+                                                                        </div>
                                                                     </td>
                                                                 @endif
                                                             </tr>
                                                         @endif
                                                     @endforeach
                                                 </tbody>
+                                                @if($editStructure)
+                                                    <tfoot>
+                                                        <tr>
+                                                            <td></td>
+                                                            <td colspan="{{ $isInventoryGroup ? 4 : count($scoreLabels) + 3 }}" class="px-3 py-1.5">
+                                                                <x-loading-button wire:click="openAddNode('item', {{ $itemGroup->id }})"
+                                                                    target="openAddNode('item', {{ $itemGroup->id }})"
+                                                                    variant="secondary" size="sm" icon="plus" wire:key="item-add-{{ $itemGroup->id }}" title="Tambah item ke grup ini">
+                                                                    Tambah Item
+                                                                </x-loading-button>
+                                                            </td>
+                                                        </tr>
+                                                    </tfoot>
+                                                @endif
                                             </table>
                                         </div>
 
@@ -557,6 +613,15 @@
                                         </div>
                                     </div>
                                 @endforeach
+                                @if($editStructure)
+                                    <div class="mb-4">
+                                        <x-loading-button wire:click="openAddNode('item_group', {{ $subCat->id }})"
+                                            target="openAddNode('item_group', {{ $subCat->id }})"
+                                            variant="secondary" size="sm" icon="plus" wire:key="ig-add-{{ $subCat->id }}" title="Tambah grup item ke sub kategori ini">
+                                            Tambah Grup Item
+                                        </x-loading-button>
+                                    </div>
+                                @endif
                                 </div>
                             @endif
                         @empty
@@ -587,6 +652,76 @@
             </div>
         </div>
     </form>
+
+    <!-- Modal tambah/ubah node struktur (kategori, sub kategori, grup item, item) -->
+    <x-modal name="survey-node-modal" maxWidth="md" focusable>
+        @php
+            $nodeLevelLabels = [
+                'category' => 'Kategori',
+                'sub_category' => 'Sub Kategori',
+                'item_group' => 'Grup Item',
+                'item' => 'Item',
+            ];
+            $nodeLevelLabel = $nodeLevelLabels[$nodeLevel] ?? 'Node';
+        @endphp
+        <div class="px-4 py-4 sm:p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
+                {{ $nodeModalMode === 'add' ? 'Tambah' : 'Ubah' }} {{ $nodeLevelLabel }}
+            </h3>
+
+            <div class="space-y-4">
+                <div>
+                    <x-input-label for="node_name" :value="$nodeLevel === 'category' ? 'Label Kategori' : 'Nama '.$nodeLevelLabel" :required="true" />
+                    <x-text-input wire:model="nodeName" id="node_name" type="text" class="mt-1 block w-full"
+                        placeholder="Nama {{ strtolower($nodeLevelLabel) }}" />
+                    <x-input-error :messages="$errors->get('nodeName')" class="mt-2" />
+                </div>
+
+                @if($nodeLevel === 'item')
+                    <div>
+                        <x-input-label for="node_item_type" value="Tipe Item" :required="true" />
+                        <select wire:model.live="nodeItemType" id="node_item_type" @disabled($nodeTypeLocked)
+                            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed">
+                            @foreach(\App\Enums\SurveyItemType::cases() as $type)
+                                <option value="{{ $type->value }}">{{ $type->label() }}</option>
+                            @endforeach
+                        </select>
+                        <x-input-error :messages="$errors->get('nodeItemType')" class="mt-2" />
+                    </div>
+
+                    @if($nodeTypeLocked)
+                        <p class="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/30 rounded-md px-3 py-2">
+                            Tipe & label skor mengikuti grup item (grup sudah berisi item lain).
+                        </p>
+                    @elseif($nodeItemType === \App\Enums\SurveyItemType::Score->value)
+                        <div>
+                            <x-input-label for="node_score_labels" value="Label Kolom Skor" :required="true" />
+                            <x-text-input wire:model="nodeScoreLabels" id="node_score_labels" type="text" class="mt-1 block w-full"
+                                placeholder="Contoh: C, V, F, M" />
+                            <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Pisahkan dengan koma.</p>
+                            <x-input-error :messages="$errors->get('nodeScoreLabels')" class="mt-1" />
+                        </div>
+                    @endif
+
+                    @if($nodeItemType === \App\Enums\SurveyItemType::Score->value)
+                        <label for="node_has_date_fields" class="inline-flex items-center gap-2">
+                            <input wire:model="nodeHasDateFields" id="node_has_date_fields" type="checkbox"
+                                class="rounded border-gray-300 dark:border-gray-600 text-blue-600 shadow-sm focus:ring-blue-500 dark:bg-gray-700">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Punya field tanggal (Issued/Expired)</span>
+                        </label>
+                    @endif
+                @endif
+            </div>
+
+            <div class="mt-6 flex flex-col sm:flex-row sm:justify-end gap-3">
+                <x-cancel-button wire:click="closeNodeModal" target="closeNodeModal" class="w-full sm:w-auto" />
+                <x-loading-button wire:click="saveNode" target="saveNode" variant="primary" size="lg"
+                    loadingText="Menyimpan..." class="w-full sm:w-auto">
+                    Simpan
+                </x-loading-button>
+            </div>
+        </div>
+    </x-modal>
 
     <!-- Modal konfirmasi buang perubahan saat Batal -->
     <x-confirm-modal eventName="confirm-cancel-survey" />
