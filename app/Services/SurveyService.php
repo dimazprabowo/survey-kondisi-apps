@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\SurveyItemType;
 use App\Enums\SurveyStatus;
+use App\Models\Ship;
 use App\Models\Survey;
 use App\Models\SurveyGroupNote;
 use App\Models\SurveyResponse;
@@ -21,7 +22,9 @@ class SurveyService
         ?string $search = null,
         ?string $statusFilter = null,
         ?int $shipId = null,
-        int $perPage = 15
+        int $perPage = 15,
+        ?string $sortField = null,
+        string $sortDir = 'desc'
     ): LengthAwarePaginator {
         $query = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code']);
 
@@ -45,7 +48,37 @@ class SurveyService
             $query->where('ship_id', $shipId);
         }
 
-        return $query->latest('survey_date')->paginate($perPage);
+        $dir = strtolower($sortDir) === 'asc' ? 'asc' : 'desc';
+        $sortable = [
+            'survey_number' => 'surveys.survey_number',
+            'ship' => '('.Ship::select('name')->whereColumn('ships.id', 'surveys.ship_id')->limit(1)->toSql().')',
+            'template' => '('.SurveyTemplate::select('name')->whereColumn('survey_templates.id', 'surveys.survey_template_id')->limit(1)->toSql().')',
+            'survey_date' => 'surveys.survey_date',
+            'surveyor' => 'surveys.surveyor',
+            'overall_cap_score' => 'surveys.overall_cap_score',
+            'status' => 'CASE surveys.status '.collect(SurveyStatus::cases())
+                ->map(fn ($s, $i) => "WHEN '{$s->value}' THEN {$i}")
+                ->implode(' ').' ELSE '.count(SurveyStatus::cases()).' END',
+        ];
+
+        if (! isset($sortable[$sortField])) {
+            $sortField = 'survey_date';
+            $dir = 'desc';
+        }
+
+        $expr = $sortable[$sortField];
+
+        // Nilai kosong (NULL, badge "-") dianggap nilai terkecil: paling atas
+        // saat asc, paling bawah saat desc. CASE pada 'status' mengurutkan
+        // mengikuti urutan workflow enum (draft → in_progress → completed →
+        // cancelled), bukan alfabet nilai kolom.
+        $nullDir = $dir === 'asc' ? 'DESC' : 'ASC';
+
+        return $query
+            ->orderByRaw("$expr IS NULL $nullDir")
+            ->orderByRaw("$expr $dir")
+            ->orderBy('surveys.id', 'desc')
+            ->paginate($perPage);
     }
 
     public function generateSurveyNumber(): string

@@ -1,6 +1,15 @@
 <div>
     @php
         $canExport = auth()->user()->can('surveys_export_excel') || auth()->user()->can('surveys_export_pdf');
+        $sortableHeaders = [
+            'survey_number' => 'Nomor Survey',
+            'ship' => 'Kapal',
+            'template' => 'Template',
+            'survey_date' => 'Tanggal',
+            'surveyor' => 'Surveyor',
+            'overall_cap_score' => 'CAP Score',
+            'status' => 'Status',
+        ];
     @endphp
     <div class="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
         <!-- Search -->
@@ -63,7 +72,20 @@
 
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <table class="min-w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
+                <colgroup>
+                    @if($canExport)
+                        <col class="w-12">
+                    @endif
+                    <col class="w-44">
+                    <col>
+                    <col>
+                    <col class="w-28">
+                    <col class="w-40">
+                    <col class="w-24">
+                    <col class="w-32">
+                    <col class="w-32">
+                </colgroup>
                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                     <tr>
                         @if($canExport)
@@ -73,13 +95,31 @@
                                     class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800">
                             </th>
                         @endif
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nomor Survey</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Kapal</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Template</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tanggal</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Surveyor</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">CAP Score</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                        @foreach($sortableHeaders as $sortCol => $sortLabel)
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider" wire:key="th-{{ $sortCol }}">
+                                <button type="button" wire:click="sortBy('{{ $sortCol }}')" wire:target="sortBy('{{ $sortCol }}')"
+                                    class="group inline-flex items-center gap-1 uppercase tracking-wider transition-colors {{ $sortField === $sortCol ? 'text-blue-600 dark:text-blue-400' : 'hover:text-gray-700 dark:hover:text-gray-200' }}">
+                                    {{ $sortLabel }}
+                                    <svg wire:loading class="animate-spin h-3 w-3" wire:target="sortBy('{{ $sortCol }}')" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.121 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    @if($sortField === $sortCol)
+                                        <svg wire:loading.remove class="h-3 w-3" wire:target="sortBy('{{ $sortCol }}')" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            @if($sortDir === 'asc')
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+                                            @else
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                                            @endif
+                                        </svg>
+                                    @else
+                                        <svg wire:loading.remove class="h-3 w-3 opacity-40 group-hover:opacity-80" wire:target="sortBy('{{ $sortCol }}')" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4" />
+                                        </svg>
+                                    @endif
+                                </button>
+                            </th>
+                        @endforeach
                         <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Aksi</th>
                     </tr>
                 </thead>
@@ -94,24 +134,24 @@
                                 </td>
                             @endif
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $survey->survey_number }}</div>
+                                <div class="text-sm font-medium text-gray-900 dark:text-white truncate" title="{{ $survey->survey_number }}">{{ $survey->survey_number }}</div>
                                 @if($survey->location)
-                                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ $survey->location }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title="{{ $survey->location }}">{{ $survey->location }}</div>
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm text-gray-900 dark:text-white">{{ $survey->ship?->name ?? '-' }}</div>
+                                <div class="text-sm text-gray-900 dark:text-white truncate" title="{{ $survey->ship?->name }}">{{ $survey->ship?->name ?? '-' }}</div>
                                 @if($survey->ship?->year_built)
                                     <div class="text-xs text-gray-500 dark:text-gray-400">Thn {{ $survey->ship->year_built }}</div>
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm text-gray-900 dark:text-white">{{ $survey->template?->name ?? ($survey->structure['template_name'] ?? '-') }}</div>
+                                <div class="text-sm text-gray-900 dark:text-white truncate" title="{{ $survey->template?->name ?? ($survey->structure['template_name'] ?? '') }}">{{ $survey->template?->name ?? ($survey->structure['template_name'] ?? '-') }}</div>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white truncate">
                                 {{ $survey->survey_date?->format('d M Y') ?? '-' }}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white truncate" title="{{ $survey->surveyor }}">
                                 {{ $survey->surveyor ?? '-' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">

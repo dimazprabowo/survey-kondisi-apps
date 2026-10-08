@@ -41,9 +41,29 @@ class SurveyManagement extends Component
     /** State checkbox "pilih semua" di header — dihitung ulang di render(). */
     public bool $selectAll = false;
 
+    /** Kolom sort aktif — whitelist di SurveyService::getFiltered(). */
+    public string $sortField = 'survey_date';
+
+    public string $sortDir = 'desc';
+
     public function mount()
     {
         $this->authorize('viewAny', Survey::class);
+    }
+
+    /**
+     * Toggle sorting kolom: klik kolom sama = balik arah, kolom baru = asc.
+     */
+    public function sortBy(string $field): void
+    {
+        if ($this->sortField === $field) {
+            $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortField = $field;
+            $this->sortDir = 'asc';
+        }
+
+        $this->resetPage();
     }
 
     public function updatingSearch()
@@ -120,7 +140,10 @@ class SurveyManagement extends Component
         $pageIds = app(SurveyService::class)->getFiltered(
             $this->search,
             $this->statusFilter,
-            $this->shipFilter ? (int) $this->shipFilter : null
+            $this->shipFilter ? (int) $this->shipFilter : null,
+            15,
+            $this->sortField,
+            $this->sortDir
         )->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->all();
 
         $this->selected = $value
@@ -235,7 +258,9 @@ class SurveyManagement extends Component
             $this->search,
             $this->statusFilter,
             $this->shipFilter ? (int) $this->shipFilter : null,
-            15
+            15,
+            $this->sortField,
+            $this->sortDir
         );
 
         // Checkbox header checked hanya jika SEMUA baris halaman ini tercentang —
