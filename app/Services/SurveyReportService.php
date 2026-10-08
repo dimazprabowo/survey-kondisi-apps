@@ -36,10 +36,24 @@ class SurveyReportService
 
             if ($report->wasRecentlyCreated) {
                 $this->seedDefaultSections($report, $survey);
-            } elseif ($report->file_status === FileStatus::Completed
-                && $report->generator_version !== self::GENERATOR_VERSION) {
-                $this->markGeneratedFileOutdated($report);
-                $report->save();
+            } else {
+                // Backfill section ber-key tetap yang belum ada (mis. bab1_intro
+                // untuk report yang dibuat sebelum section ini ada). Konten hasil
+                // edit user tidak disentuh — hanya key yang benar-benar absen.
+                $existingKeys = $report->sections()->pluck('key');
+                $order = (int) $report->sections()->max('order_num') + 1;
+                foreach ($this->fixedSectionDefaults($survey) as $key => $content) {
+                    if (! $existingKeys->contains($key)) {
+                        $report->sections()->create(compact('key', 'content', 'order'));
+                        $order++;
+                    }
+                }
+
+                if ($report->file_status === FileStatus::Completed
+                    && $report->generator_version !== self::GENERATOR_VERSION) {
+                    $this->markGeneratedFileOutdated($report);
+                    $report->save();
+                }
             }
 
             return $report;
@@ -436,6 +450,34 @@ class SurveyReportService
     }
 
     /**
+     * Narasi pembuka BAB I — verbatim dari 3 paragraf master Word
+     * (referensi kontrak, tujuan survey, pengantar CAP). Satu baris =
+     * satu paragraf pada dokumen hasil generate.
+     */
+    protected function bab1IntroDefault(): string
+    {
+        return implode("\n", [
+            'Sesuai dengan Surat Perjanjian Nomor. Sperj.338/UM.301/ASDP-2025 tanggal 30 April 2025; dan Surat Penunjukan Pelaksana Pekerjaan Nomor.1051/SP3/PBJ/III/ASDP-2025 tanggal 11 Maret 2025 kepada PT. Biro Klasifikasi Indonesia (Persero) – SBU Marine Services Jakarta tentang Pekerjaan Jasa Konsultansi Assessment Kondisi Teknis Kapal PT. ASDP Indonesia Ferry (Persero).',
+            'Tujuan dari dilaksanakan survey kondisi ini adalah melakukan kegiatan Survey kondisi mencakup aspek legalitas kapal, konstruksi kapal, sistim kapal, navigasi komunikasi kapal dan sistim keselamatan kapal. Hasil dari survey akan dijadikan menjadi satu laporan yang akan dijadikan sebagai pertimbangan teknis bagi pihak PT ASDP Indonesia Ferry.',
+            $this->capReference()['introduction'],
+        ]);
+    }
+
+    /**
+     * Section ber-key tetap beserta konten defaultnya — dipakai saat
+     * seed report baru maupun backfill report lama di getOrCreate().
+     */
+    protected function fixedSectionDefaults(Survey $survey): array
+    {
+        return [
+            'executive_summary' => $this->executiveSummaryDefault($survey),
+            'bab1_intro' => $this->bab1IntroDefault(),
+            'cap_standards' => $this->capStandardsDefault(),
+            'memoranda' => 'N/A',
+        ];
+    }
+
+    /**
      * Konten default per section saat report pertama dibuat.
      * finding_{catId} diisi gabungan group notes kategori tsb sebagai draf awal.
      */
@@ -447,11 +489,7 @@ class SurveyReportService
             ->get()
             ->groupBy('survey_item_group_id');
 
-        $defaults = [
-            'executive_summary' => $this->executiveSummaryDefault($survey),
-            'cap_standards' => $this->capStandardsDefault(),
-            'memoranda' => 'N/A',
-        ];
+        $defaults = $this->fixedSectionDefaults($survey);
 
         $order = 0;
         foreach ($defaults as $key => $content) {

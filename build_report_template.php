@@ -297,9 +297,14 @@ $body->removeChild($children[47]);
 
 // ---------------------------------------------------------------------
 // 7. BAB I — paragraf kontrak (54), narasi umum (55), dan CAP intro (56)
-//    adalah teks tetap master — dipertahankan verbatim. Daftar standar
-//    CAP (57-60) diganti marker ${bab1_standards}.
+//    diganti marker ${bab1_intro} (editable per laporan, default diisi
+//    teks master verbatim). Daftar standar CAP (57-60) diganti marker
+//    ${bab1_standards}.
 // ---------------------------------------------------------------------
+$body->insertBefore($markerP('bab1_intro'), $children[54]);
+foreach (range(54, 56) as $i) {
+    $body->removeChild($children[$i]);
+}
 $body->insertBefore($markerP('bab1_standards'), $children[57]);
 foreach (range(57, 60) as $i) {
     $body->removeChild($children[$i]);

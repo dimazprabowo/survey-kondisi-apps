@@ -42,7 +42,7 @@ class ReportEditor extends Component
 
     /**
      * Konten narasi per section: key => string.
-     * Key tetap: executive_summary, cap_standards, memoranda.
+     * Key tetap: executive_summary, bab1_intro, cap_standards, memoranda.
      * Key dinamis: finding_{catId}, saran_{catId}.
      */
     public array $sectionContent = [];
@@ -124,6 +124,7 @@ class ReportEditor extends Component
             'inspector_1' => 'inspector 1',
             'inspector_2' => 'inspector 2',
             'sectionContent.executive_summary' => 'executive summary',
+            'sectionContent.bab1_intro' => 'narasi pembuka BAB I',
             'sectionContent.cap_standards' => 'daftar standar CAP',
             'sectionContent.memoranda' => 'memoranda',
         ];

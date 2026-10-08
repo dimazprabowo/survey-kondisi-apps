@@ -247,6 +247,7 @@ class SurveyReportDocxBuilder
             'exec_summary' => $this->buildExecSummary($data),
             'cap_breakdown' => $this->buildCapBreakdown($data),
             'temuan_table' => $this->buildFindingsTable($data),
+            'bab1_intro' => $this->buildBab1Intro($data),
             'bab1_standards' => $this->buildBab1Standards($data),
             'status_class_table' => $this->buildStatusClassTable($data),
             'memoranda' => $this->buildParagraphs($this->section($data, 'memoranda')),
@@ -424,6 +425,20 @@ class SurveyReportDocxBuilder
     // -----------------------------------------------------------------
     //  Blok: BAB I & BAB II
     // -----------------------------------------------------------------
+
+    /**
+     * Narasi pembuka BAB I (referensi kontrak, tujuan survey, pengantar CAP)
+     * dari section 'bab1_intro' — satu baris = satu paragraf, mengikuti
+     * format master (ListParagraph, spacing before=0, indent left=0).
+     */
+    protected function buildBab1Intro(array $data): string
+    {
+        return $this->buildParagraphs($this->section($data, 'bab1_intro'), [
+            'style' => 'ListParagraph',
+            'rawSpacing' => '<w:spacing w:before="0"/>',
+            'indent' => 0,
+        ]);
+    }
 
     /**
      * Daftar standar CAP BAB I — satu item per baris pada section

@@ -571,12 +571,13 @@
             <div class="{{ $sheet }}" style="{{ $times }}">
                 <h3 class="text-center text-lg font-bold tracking-wide print:break-before-page">BAB I. UMUM/GENERAL</h3>
 
-                <div class="{{ $autoZone }} mt-6">
-                    <span class="{{ $autoTag }}" style="{{ $sans }}">Konten tetap dari master Word</span>
-                    <p class="text-justify">Sesuai dengan Surat Perjanjian Nomor. Sperj.338/UM.301/ASDP-2025 tanggal 30 April 2025; dan Surat Penunjukan Pelaksana Pekerjaan Nomor.1051/SP3/PBJ/III/ASDP-2025 tanggal 11 Maret 2025 kepada PT. Biro Klasifikasi Indonesia (Persero) – SBU Marine Services Jakarta tentang Pekerjaan Jasa Konsultansi Assessment Kondisi Teknis Kapal PT. ASDP Indonesia Ferry (Persero).</p>
-                    <p class="mt-3 text-justify">Tujuan dari dilaksanakan survey kondisi ini adalah melakukan kegiatan Survey kondisi mencakup aspek legalitas kapal, konstruksi kapal, sistim kapal, navigasi komunikasi kapal dan sistim keselamatan kapal. Hasil dari survey akan dijadikan menjadi satu laporan yang akan dijadikan sebagai pertimbangan teknis bagi pihak PT ASDP Indonesia Ferry.</p>
-                    <p class="mt-3 text-justify">{{ $capReference['introduction'] }}</p>
-                </div>
+                <x-input-label for="bab1_intro" value="Narasi pembuka BAB I" class="sr-only" />
+                <textarea wire:model="sectionContent.bab1_intro" id="bab1_intro" rows="8"
+                    x-autogrow
+                    placeholder="Narasi pembuka BAB I — satu paragraf per baris"
+                    class="{{ $paperTextarea }} mt-6 text-justify"></textarea>
+                <x-input-error :messages="$errors->get('sectionContent.bab1_intro')" class="mt-1" />
+                <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Satu paragraf per baris — default diisi teks master Word.</p>
 
                 <x-input-label for="cap_standards" value="Daftar Standar CAP" class="sr-only" />
                 <textarea wire:model="sectionContent.cap_standards" id="cap_standards" rows="4"
