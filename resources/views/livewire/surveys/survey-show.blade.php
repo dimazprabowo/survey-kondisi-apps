@@ -306,7 +306,7 @@
     <!-- Action Bar (Sticky, mengambang dari tepi viewport) -->
     <div class="sticky bottom-3 sm:bottom-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-3 px-4 sm:px-6 z-10">
         <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-end">
-            <x-cancel-button wire:click="$redirect(route('surveys.index'))" target="$redirect" class="w-full sm:w-auto" />
+            <x-cancel-button wire:click="backToList" target="backToList" label="Kembali" class="w-full sm:w-auto" />
             @can('survey_reports_view')
                 <x-loading-button wire:click="openReport" target="openReport" variant="secondary" size="md" loadingText="Memuat..." icon="view" class="w-full sm:w-auto">
                     Laporan

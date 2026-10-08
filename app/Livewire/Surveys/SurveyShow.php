@@ -151,6 +151,11 @@ class SurveyShow extends Component
         return $this->redirect(route('surveys.report', $this->survey), navigate: true);
     }
 
+    public function backToList()
+    {
+        return $this->redirect(route('surveys.index'), navigate: true);
+    }
+
     public function render()
     {
         return view('livewire.surveys.survey-show', [
