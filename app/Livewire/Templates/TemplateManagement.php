@@ -3,6 +3,7 @@
 namespace App\Livewire\Templates;
 
 use App\Exports\SurveyTemplatesExport;
+use App\Exports\SurveyTemplateStructureExport;
 use App\Livewire\Traits\HasNotification;
 use App\Models\SurveyTemplate;
 use App\Services\SurveyTemplateService;
@@ -10,11 +11,13 @@ use App\Traits\HasDynamicLike;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
+use Maatwebsite\Excel\Facades\Excel;
 
 class TemplateManagement extends Component
 {
-    use AuthorizesRequests, HasDynamicLike, HasNotification, WithPagination;
+    use AuthorizesRequests, HasDynamicLike, HasNotification, WithFileUploads, WithPagination;
 
     public $search = '';
 
@@ -27,6 +30,17 @@ class TemplateManagement extends Component
     public $deletingTemplateId;
 
     public $deletingTemplateName;
+
+    // State modal import struktur (file Excel format flat per-item)
+    public $importFile;
+
+    public string $importMode = 'new';
+
+    public string $importTemplateId = '';
+
+    public string $importName = '';
+
+    public string $importCode = '';
 
     public function mount()
     {
@@ -165,6 +179,105 @@ class TemplateManagement extends Component
         );
     }
 
+    // -----------------------------------------------------------------
+    //  Import/Export struktur template via Excel
+    // -----------------------------------------------------------------
+
+    public function openImportModal()
+    {
+        $this->authorize('import', SurveyTemplate::class);
+        $this->resetImportForm();
+        $this->dispatch('open-modal', 'template-import-modal');
+    }
+
+    public function closeImportModal()
+    {
+        $this->resetImportForm();
+        $this->dispatch('close-modal', 'template-import-modal');
+    }
+
+    protected function resetImportForm(): void
+    {
+        $this->reset(['importFile', 'importTemplateId', 'importName', 'importCode']);
+        $this->importMode = 'new';
+        $this->resetValidation();
+    }
+
+    public function updatedImportMode(): void
+    {
+        $this->resetValidation(['importTemplateId', 'importName', 'importCode']);
+    }
+
+    public function importStructure(SurveyTemplateService $service)
+    {
+        $this->authorize('import', SurveyTemplate::class);
+
+        $this->validate([
+            'importFile' => file_upload_validation_rule('template-import', true),
+            'importMode' => 'required|in:new,existing',
+            'importTemplateId' => $this->importMode === 'existing' ? 'required|exists:survey_templates,id' : 'nullable',
+            'importName' => $this->importMode === 'new' ? 'required|string|max:255' : 'nullable',
+            'importCode' => $this->importMode === 'new' ? 'required|string|max:50|unique:survey_templates,code' : 'nullable',
+        ], [], [
+            'importFile' => 'file Excel',
+            'importMode' => 'mode import',
+            'importTemplateId' => 'template tujuan',
+            'importName' => 'nama template',
+            'importCode' => 'kode template',
+        ]);
+
+        try {
+            if ($this->importMode === 'existing') {
+                $target = SurveyTemplate::findOrFail((int) $this->importTemplateId);
+                $this->authorize('update', $target);
+                $templateData = [];
+            } else {
+                $this->authorize('create', SurveyTemplate::class);
+                $target = null;
+                $templateData = ['name' => trim($this->importName), 'code' => trim($this->importCode)];
+            }
+
+            $sheets = Excel::toArray(null, $this->importFile->getRealPath());
+            $template = $service->importSheets($sheets, $target, $templateData);
+
+            $this->dispatch('close-modal', 'template-import-modal');
+            $this->resetImportForm();
+            $this->notifySuccess("Struktur berhasil diimport ke template {$template->name}.");
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->notifyError('Anda tidak dapat melakukan import struktur.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->notifyValidationError($e);
+            throw $e;
+        } catch (\Exception $e) {
+            report($e);
+            $this->notifyError('File tidak dapat diproses. Pastikan format sesuai template.');
+        }
+    }
+
+    public function downloadImportTemplate()
+    {
+        $this->authorize('exportExcel', SurveyTemplate::class);
+
+        return (new SurveyTemplateStructureExport)->download('template-struktur-survey.xlsx');
+    }
+
+    public function exportStructure($id)
+    {
+        $template = SurveyTemplate::findOrFail($id);
+        $this->authorize('exportExcel', SurveyTemplate::class);
+
+        return (new SurveyTemplateStructureExport($template))
+            ->download('struktur-'.$template->code.'.xlsx');
+    }
+
+    public function getImportTemplateOptionsProperty(): array
+    {
+        return SurveyTemplate::orderBy('name')
+            ->get(['id', 'name', 'code'])
+            ->map(fn ($t) => ['value' => (string) $t->id, 'label' => "{$t->name} ({$t->code})"])
+            ->all();
+    }
+
     public function render(SurveyTemplateService $service)
     {
         $templates = $service->getFiltered(
@@ -172,6 +285,11 @@ class TemplateManagement extends Component
             $this->statusFilter,
             15
         );
+
+        if ($this->filterChanged) {
+            $this->notifySuccess("Ditemukan {$templates->total()} data template.");
+            $this->filterChanged = false;
+        }
 
         return view('livewire.templates.template-management', compact('templates'));
     }

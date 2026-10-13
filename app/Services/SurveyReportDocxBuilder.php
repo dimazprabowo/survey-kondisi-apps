@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\CapRating;
 use App\Enums\SurveyItemType;
 use App\Models\SurveyReport;
 use Illuminate\Support\Collection;
@@ -279,6 +280,7 @@ class SurveyReportDocxBuilder
 
         // Kalimat pembuka tabel breakdown — mulai halaman baru seperti master;
         // "Overall CAP Rating" dan "Overall CAP Rating sebesar X,XX" bold sesuai master.
+        $rating = CapRating::fromScore($data['overallCap']);
         $boldPhrases = ['Overall CAP Rating'];
         if ($data['overallCap'] !== null) {
             array_unshift($boldPhrases, 'Overall CAP Rating sebesar '.number_format($data['overallCap'], 2));
@@ -289,7 +291,9 @@ class SurveyReportDocxBuilder
             .($data['ship']?->name ?? '-').', yang diperoleh dari rata-rata penilaian pada komponen pemeriksaan utama.'
             .($data['overallCap'] !== null
                 ? ' Berdasarkan hasil penilaian, kapal ini memperoleh Overall CAP Rating sebesar '
-                    .number_format($data['overallCap'], 2).'. Adapun rincian penilaian sebagai berikut:'
+                    .number_format($data['overallCap'], 2)
+                    .($rating !== null ? ' dengan kategori '.$rating->label().' ('.$rating->description().')' : '')
+                    .'. Adapun rincian penilaian sebagai berikut:'
                 : ''),
             ['line' => 360, 'size' => 24, 'boldPhrases' => $boldPhrases]
         );
@@ -304,6 +308,10 @@ class SurveyReportDocxBuilder
         $shipName = $data['ship']?->name ?? '-';
         $overall = $data['overallCap'];
         $half = (int) ceil($categories->count() / 2);
+        $rating = CapRating::fromScore($overall);
+        $overallText = $overall !== null
+            ? number_format($overall, 2).($rating !== null ? ' ('.$rating->label().')' : '')
+            : '-';
         $leftLines = $this->breakdownLines($categories->slice(0, $half)->values(), $responses, 0);
         $rightLines = $this->breakdownLines($categories->slice($half)->values(), $responses, $half);
         // Skema border master: tanpa tblBorders — hanya frame luar (per-cell
@@ -314,7 +322,7 @@ class SurveyReportDocxBuilder
             [
                 $this->tc($this->bp('Overall CAP Rating Condition '.$shipName, ['bold' => true]), ['span' => 7, 'vAlign' => 'center', 'borders' => ['left' => 'single']]),
                 $this->tc($this->bp(':', ['bold' => true, 'jc' => 'center']), ['vAlign' => 'center']),
-                $this->tc($this->bp($overall !== null ? number_format($overall, 2) : '-', ['bold' => true, 'jc' => 'right']), ['vAlign' => 'center', 'borders' => ['right' => 'single']]),
+                $this->tc($this->bp($overallText, ['bold' => true, 'jc' => 'right']), ['vAlign' => 'center', 'borders' => ['right' => 'single']]),
             ],
             [$this->tc($this->bp(''), ['span' => 9, 'shade' => '888888', 'borders' => ['left' => 'single', 'right' => 'single']])],
         ];

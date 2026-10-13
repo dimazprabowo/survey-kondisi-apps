@@ -1,6 +1,7 @@
 <div>
     @php
         $canExport = auth()->user()->can('surveys_export_excel') || auth()->user()->can('surveys_export_pdf');
+        $canSelect = $canExport || auth()->user()->can('surveys_update');
         $sortableHeaders = [
             'survey_number' => 'Nomor Survey',
             'ship' => 'Kapal',
@@ -44,13 +45,23 @@
 
         <!-- Action Buttons -->
         <div class="flex items-center gap-2 w-full sm:w-auto">
-            @if($canExport && count($selected))
+            @if(count($selected))
                 <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                     {{ count($selected) }} dipilih
                     <x-loading-button type="button" wire:click="clearSelection" target="clearSelection"
                         variant="icon-gray" icon="close" iconClass="w-3.5 h-3.5" wire:key="btn-clear-selection"
                         title="Hapus pilihan" />
                 </span>
+                @can('surveys_update')
+                    <x-loading-button type="button" wire:click="openBulkMoveModal" target="openBulkMoveModal"
+                        variant="warning" size="sm" loadingText="Memuat..."
+                        wire:key="btn-bulk-move" title="Pindahkan survey terpilih ke folder">
+                        <x-slot:icon>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13.5l3 3m0 0l3-3m-3 3v-6m1.06-4.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+                        </x-slot:icon>
+                        Pindahkan
+                    </x-loading-button>
+                @endcan
             @endif
             @can('surveys_export_excel')
                 <x-loading-button wire:click="exportExcel" target="exportExcel" variant="success" size="md" loadingText="Exporting..." title="Export Excel" icon="excel">
@@ -62,6 +73,16 @@
                     PDF
                 </x-loading-button>
             @endcan
+            @can('survey_folders_create')
+                @if(!$currentFolder)
+                    <x-loading-button wire:click="createFolder" target="createFolder" variant="secondary" size="md" loadingText="Memuat..." title="Tambah Folder">
+                        <x-slot:icon>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+                        </x-slot:icon>
+                        Folder
+                    </x-loading-button>
+                @endif
+            @endcan
             @can('surveys_create')
                 <x-loading-button wire:click="createSurvey" target="createSurvey" variant="primary" size="md" loadingText="Memuat..." icon="plus" class="flex-1 sm:flex-none">
                     Tambah Survey
@@ -70,11 +91,82 @@
         </div>
     </div>
 
+    <!-- Breadcrumb folder aktif -->
+    @if($currentFolder)
+        <div class="mb-4 flex items-center gap-2 text-sm">
+            <x-loading-button type="button" wire:click="backToRoot" target="backToRoot"
+                variant="icon-gray" icon="arrow-up" class="-rotate-90"
+                wire:key="btn-back-root" title="Kembali ke daftar utama" />
+            <button type="button" wire:click="backToRoot" wire:target="backToRoot"
+                class="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+                Survey Kondisi
+            </button>
+            <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+            </svg>
+            <span class="inline-flex items-center gap-1.5 font-semibold text-gray-900 dark:text-white">
+                <svg class="h-4 w-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19.5 21a3 3 0 003-3v-4.5a3 3 0 00-3-3h-15a3 3 0 00-3 3V18a3 3 0 003 3h15zM1.5 10.146V6a3 3 0 013-3h5.379a3 3 0 012.12.879l2.122 2.121a3 3 0 002.12.88h5.26a3 3 0 013 3v.267"/>
+                </svg>
+                {{ $currentFolder->name }}
+            </span>
+            <span class="text-xs text-gray-400 dark:text-gray-500">({{ $surveys->total() }} survey)</span>
+        </div>
+    @endif
+
+    <!-- Strip folder (hanya di root — folder tidak bertingkat) -->
+    @if(!$currentFolder && $folders->isNotEmpty())
+        <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            @foreach($folders as $folder)
+                <div wire:key="folder-{{ $folder->id }}"
+                    class="group relative flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-700 dark:hover:bg-blue-900/10">
+                    <button type="button" wire:click="openFolder({{ $folder->id }})" wire:target="openFolder({{ $folder->id }})"
+                        wire:loading.attr="disabled"
+                        class="flex min-w-0 flex-1 items-center gap-3 text-left">
+                        <svg wire:loading.class="hidden" wire:target="openFolder({{ $folder->id }})"
+                            class="h-9 w-9 flex-shrink-0 text-amber-500 dark:text-amber-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M19.5 21a3 3 0 003-3v-4.5a3 3 0 00-3-3h-15a3 3 0 00-3 3V18a3 3 0 003 3h15zM1.5 10.146V6a3 3 0 013-3h5.379a3 3 0 012.12.879l2.122 2.121a3 3 0 002.12.88h5.26a3 3 0 013 3v.267"/>
+                        </svg>
+                        <svg wire:loading wire:target="openFolder({{ $folder->id }})"
+                            class="h-9 w-9 flex-shrink-0 animate-spin text-amber-500 dark:text-amber-400" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span class="min-w-0">
+                            <span class="block truncate text-sm font-semibold text-gray-900 dark:text-white" title="{{ $folder->name }}">{{ $folder->name }}</span>
+                            @if(isset($folder->matched_surveys_count) && $folder->matched_surveys_count > 0)
+                                <span class="block text-xs font-medium text-green-600 dark:text-green-400">{{ $folder->matched_surveys_count }} cocok dari {{ $folder->surveys_count }} survey</span>
+                            @else
+                                <span class="block text-xs text-gray-500 dark:text-gray-400">{{ $folder->surveys_count }} survey</span>
+                            @endif
+                        </span>
+                    </button>
+                    <div class="flex items-center gap-1">
+                        @can('survey_folders_update')
+                            <x-loading-button type="button" wire:click="editFolder({{ $folder->id }})"
+                                target="editFolder({{ $folder->id }})"
+                                variant="icon-blue" icon="edit"
+                                wire:key="btn-edit-folder-{{ $folder->id }}"
+                                title="Ubah nama folder" />
+                        @endcan
+                        @can('survey_folders_delete')
+                            <x-loading-button type="button" wire:click="confirmDeleteFolder({{ $folder->id }})"
+                                target="confirmDeleteFolder({{ $folder->id }})"
+                                variant="icon-red" icon="delete"
+                                wire:key="btn-delete-folder-{{ $folder->id }}"
+                                title="Hapus folder" />
+                        @endcan
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    @endif
+
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
                 <colgroup>
-                    @if($canExport)
+                    @if($canSelect)
                         <col class="w-12">
                     @endif
                     <col class="w-44">
@@ -88,7 +180,7 @@
                 </colgroup>
                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                     <tr>
-                        @if($canExport)
+                        @if($canSelect)
                             <th class="w-12 px-4 py-3 text-center">
                                 <input type="checkbox" wire:model.live="selectAll"
                                     aria-label="Pilih semua survey di halaman ini"
@@ -126,7 +218,7 @@
                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     @forelse($surveys as $survey)
                         <tr wire:key="row-{{ $survey->id }}" class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                            @if($canExport)
+                            @if($canSelect)
                                 <td class="w-12 px-4 py-4 text-center">
                                     <input type="checkbox" wire:model.live="selected" value="{{ $survey->id }}"
                                         aria-label="Pilih survey {{ $survey->survey_number }}"
@@ -137,6 +229,14 @@
                                 <div class="text-sm font-medium text-gray-900 dark:text-white truncate" title="{{ $survey->survey_number }}">{{ $survey->survey_number }}</div>
                                 @if($survey->location)
                                     <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title="{{ $survey->location }}">{{ $survey->location }}</div>
+                                @endif
+                                @if(! $currentFolder && $survey->folder)
+                                    <div class="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400" title="Folder: {{ $survey->folder->name }}">
+                                        <svg class="h-3 w-3 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M19.5 21a3 3 0 003-3v-4.5a3 3 0 00-3-3h-15a3 3 0 00-3 3V18a3 3 0 003 3h15zM1.5 10.146V6a3 3 0 013-3h5.379a3 3 0 012.12.879l2.122 2.121a3 3 0 002.12.88h5.26a3 3 0 013 3v.267"/>
+                                        </svg>
+                                        <span class="truncate">{{ $survey->folder->name }}</span>
+                                    </div>
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
@@ -159,8 +259,8 @@
                                     @php
                                         $score = (float) $survey->overall_cap_score;
                                     @endphp
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold {{ survey_score_badge_class($score) }}">
-                                        {{ number_format($score, 2) }}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold {{ survey_score_badge_class($score) }}" title="{{ $survey->capRating()->description() }}">
+                                        {{ $survey->capRating()->label() }} &middot; {{ number_format($score, 2) }}
                                     </span>
                                 @else
                                     <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
@@ -178,7 +278,23 @@
                                         variant="icon-blue" icon="view"
                                         wire:key="btn-view-{{ $survey->id }}"
                                         title="Lihat Detail" />
+                                    @can('surveys_create')
+                                        <x-loading-button wire:click="openDuplicateModal({{ $survey->id }})"
+                                            target="openDuplicateModal({{ $survey->id }})"
+                                            variant="icon-green" icon="copy"
+                                            wire:key="btn-duplicate-{{ $survey->id }}"
+                                            title="Duplikasi (tanpa nilai respon)" />
+                                    @endcan
                                     @can('surveys_update')
+                                        <x-loading-button wire:click="openMoveModal({{ $survey->id }})"
+                                            target="openMoveModal({{ $survey->id }})"
+                                            variant="icon-amber"
+                                            wire:key="btn-move-{{ $survey->id }}"
+                                            title="Pindahkan ke folder">
+                                            <x-slot:icon>
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13.5l3 3m0 0l3-3m-3 3v-6m1.06-4.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+                                            </x-slot:icon>
+                                        </x-loading-button>
                                         <x-loading-button wire:click="editSurvey({{ $survey->id }})"
                                             target="editSurvey({{ $survey->id }})"
                                             variant="icon-blue" icon="edit"
@@ -197,7 +313,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $canExport ? 9 : 8 }}" class="px-6 py-12 text-center">
+                            <td colspan="{{ $canSelect ? 9 : 8 }}" class="px-6 py-12 text-center">
                                 <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                                 </svg>
@@ -223,6 +339,100 @@
         :itemName="$deletingSurveyNumber"
         confirmMethod="delete"
     />
+
+    <!-- Delete Folder Confirmation Modal -->
+    <x-delete-modal
+        :show="$showDeleteFolderModal"
+        wire:model="showDeleteFolderModal"
+        title="Hapus Folder"
+        message="Apakah Anda yakin ingin menghapus folder"
+        :itemName="$deletingFolderName"
+        confirmMethod="deleteFolder"
+    />
+
+    <!-- Modal tambah/ubah folder -->
+    <x-modal name="survey-folder-modal" maxWidth="md" focusable>
+        <form wire:submit="saveFolder" class="p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ $editingFolderId ? 'Ubah Folder' : 'Tambah Folder' }}
+            </h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Folder dipakai untuk mengelompokkan survey di halaman ini.
+            </p>
+            <div class="mt-4">
+                <x-input-label for="folderName" value="Nama Folder" :required="true" />
+                <x-text-input id="folderName" wire:model="folderName" type="text" class="mt-1 block w-full"
+                    placeholder="Mis. Survey 2026, Kapal RoRo, Arsip Lama" />
+                <x-input-error :messages="$errors->get('folderName')" class="mt-1" />
+            </div>
+            <div class="mt-6 flex justify-end gap-2">
+                <x-cancel-button type="button" wire:click="closeFolderModal" target="closeFolderModal" />
+                <x-loading-button type="submit" target="saveFolder" variant="primary" size="md" loadingText="Menyimpan..." icon="check">
+                    {{ $editingFolderId ? 'Simpan' : 'Buat Folder' }}
+                </x-loading-button>
+            </div>
+        </form>
+    </x-modal>
+
+    <!-- Modal pindah survey ke folder -->
+    <x-modal name="survey-move-modal" maxWidth="md" focusable>
+        <form wire:submit="saveMove" class="p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Pindahkan Survey</h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                @if($movingSurveyIds !== [])
+                    Pilih folder tujuan untuk <span class="font-semibold text-gray-700 dark:text-gray-200">{{ count($movingSurveyIds) }} survey terpilih</span>.
+                @else
+                    Pilih folder tujuan untuk survey <span class="font-semibold text-gray-700 dark:text-gray-200">{{ $movingSurveyNumber }}</span>.
+                @endif
+            </p>
+            <div class="mt-4">
+                <x-input-label for="moveFolderId" value="Folder Tujuan" />
+                <x-searchable-select
+                    wire:model="moveFolderId"
+                    :options="$this->folderOptions"
+                    placeholder="Tanpa Folder (Root)"
+                    searchPlaceholder="Cari folder..."
+                    emptyText="Belum ada folder — buat dulu di halaman utama"
+                />
+                <x-input-error :messages="$errors->get('moveFolderId')" class="mt-1" />
+            </div>
+            <div class="mt-6 flex justify-end gap-2">
+                <x-cancel-button type="button" wire:click="closeMoveModal" target="closeMoveModal" />
+                <x-loading-button type="submit" target="saveMove" variant="primary" size="md" loadingText="Memindahkan..." icon="check">
+                    Pindahkan
+                </x-loading-button>
+            </div>
+        </form>
+    </x-modal>
+
+    <!-- Modal duplikasi survey (tanpa value) -->
+    <x-modal name="survey-duplicate-modal" maxWidth="md" focusable>
+        <form wire:submit="duplicateSurvey" class="px-4 py-4 sm:p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Duplikasi Survey</h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Survey <span class="font-semibold text-gray-700 dark:text-gray-200">{{ $duplicatingSurveyNumber }}</span>
+                akan disalin <span class="font-semibold">tanpa nilai respon</span> (status Draft, nomor baru).
+                Pilih folder tujuan untuk hasil duplikasi.
+            </p>
+            <div class="mt-4">
+                <x-input-label for="duplicateFolderId" value="Folder Tujuan" />
+                <x-searchable-select
+                    wire:model="duplicateFolderId"
+                    :options="$this->folderOptions"
+                    placeholder="Tanpa Folder (Root)"
+                    searchPlaceholder="Cari folder..."
+                    emptyText="Belum ada folder — buat dulu di halaman utama"
+                />
+                <x-input-error :messages="$errors->get('duplicateFolderId')" class="mt-1" />
+            </div>
+            <div class="mt-6 flex justify-end gap-2">
+                <x-cancel-button type="button" wire:click="closeDuplicateModal" target="closeDuplicateModal" />
+                <x-loading-button type="submit" target="duplicateSurvey" variant="primary" size="md" loadingText="Menduplikasi..." icon="copy">
+                    Duplikasi
+                </x-loading-button>
+            </div>
+        </form>
+    </x-modal>
 
     <!-- Template Picker Modal -->
     @if($showTemplateModal)

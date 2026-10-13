@@ -10,6 +10,7 @@ use App\Models\SurveyTemplate;
 use App\Traits\HasDynamicLike;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class SurveyTemplateService
 {
@@ -291,6 +292,213 @@ class SurveyTemplateService
                 ->whereNotIn('id', $keepCatIds)
                 ->delete();
         });
+    }
+
+    /**
+     * Header kolom file Excel struktur template (single source of truth
+     * untuk export & validasi import).
+     */
+    public static function structureHeadings(): array
+    {
+        return ['Kategori', 'Sub Kategori', 'Grup Item', 'Nama Item', 'Tipe Item', 'Label Skor', 'Field Tanggal'];
+    }
+
+    /**
+     * Flatten hierarki template menjadi baris flat per kategori untuk
+     * export Excel: [label kategori => [baris, ...]].
+     */
+    public function exportRowsByCategory(SurveyTemplate $template): array
+    {
+        $template->loadMissing('categories.subCategories.itemGroups.items');
+
+        $grouped = [];
+        foreach ($template->categories as $cat) {
+            foreach ($cat->subCategories as $sub) {
+                foreach ($sub->itemGroups as $ig) {
+                    foreach ($ig->items as $item) {
+                        $grouped[$cat->label][] = [
+                            $cat->label,
+                            $sub->name,
+                            $ig->name,
+                            $item->name,
+                            $item->item_type instanceof \App\Enums\SurveyItemType ? $item->item_type->value : $item->item_type,
+                            implode(',', $item->score_labels ?? []),
+                            $item->has_date_fields ? 'Ya' : 'Tidak',
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * Import struktur dari seluruh sheet workbook Excel. Sheet yang
+     * baris pertamanya bukan header 'Kategori' (mis. Petunjuk) dilewati;
+     * baris data semua sheet digabung lalu diparse seperti biasa.
+     * $target null => buat template baru dari $templateData; selain itu
+     * struktur template target ditimpa via saveStructure.
+     */
+    public function importSheets(array $sheets, ?SurveyTemplate $target = null, array $templateData = []): SurveyTemplate
+    {
+        $rows = [self::structureHeadings()];
+
+        foreach ($sheets as $sheet) {
+            if (mb_strtoupper(trim((string) ($sheet[0][0] ?? ''))) !== 'KATEGORI') {
+                continue;
+            }
+
+            // Carry-forward kolom induk: sel kosong (hasil merge atau sengaja
+            // dikosongkan) mewarisi nilai terakhir di atasnya; carry kolom anak
+            // direset bila nilai induknya berubah. Reset penuh per sheet.
+            $carry = [];
+            foreach (array_slice($sheet, 1) as $row) {
+                $row = array_pad(array_slice(array_values($row), 0, 7), 7, null);
+
+                // Baris 100% kosong (mis. trailing buffer rows dari data
+                // validation dropdown) di-skip sebelum carry-forward.
+                if (implode('', array_map(fn ($v) => trim((string) ($v ?? '')), $row)) === '') {
+                    continue;
+                }
+
+                foreach ([0, 1, 2] as $c) {
+                    $v = trim((string) ($row[$c] ?? ''));
+                    if ($v === '') {
+                        $row[$c] = $carry[$c] ?? null;
+                    } else {
+                        if (($carry[$c] ?? null) !== $v) {
+                            $carry = array_slice($carry, 0, $c, true); // nilai induk berubah -> carry anak hangus
+                        }
+                        $carry[$c] = $v;
+                    }
+                }
+                $rows[] = $row;
+            }
+        }
+
+        return $this->importRows($rows, $target, $templateData);
+    }
+
+    /**
+     * Import struktur dari baris Excel (baris 1 = header).
+     * $target null => buat template baru dari $templateData; selain itu
+     * struktur template target ditimpa via saveStructure.
+     */
+    public function importRows(array $rows, ?SurveyTemplate $target = null, array $templateData = []): SurveyTemplate
+    {
+        $categories = $this->parseStructureRows($rows);
+
+        return DB::transaction(function () use ($categories, $target, $templateData) {
+            $template = $target ?? $this->create($templateData);
+            $this->saveStructure($template, $categories);
+
+            return $template->fresh();
+        });
+    }
+
+    /**
+     * Parse baris flat menjadi payload saveStructure. Hirarki ditentukan
+     * oleh tuple (kategori, sub, grup) — baris dengan tuple sama masuk ke
+     * grup yang sama; urutan kemunculan = order_num.
+     */
+    protected function parseStructureRows(array $rows): array
+    {
+        $typeAliases = [
+            'score' => 'score', 'skor' => 'score',
+            'inventory' => 'inventory', 'inventaris' => 'inventory',
+        ];
+        $yesValues = ['ya', 'y', 'yes', '1', 'true'];
+
+        $errors = [];
+        $categories = [];
+        $catIndex = $subIndex = $igIndex = [];
+
+        foreach ($rows as $i => $row) {
+            if ($i === 0) {
+                continue; // header
+            }
+
+            $cells = array_map(
+                fn ($v) => trim((string) ($v ?? '')),
+                array_pad(array_slice(array_values($row), 0, 7), 7, '')
+            );
+
+            if (implode('', $cells) === '') {
+                continue; // baris kosong
+            }
+
+            [$catName, $subName, $igName, $itemName, $type, $labels, $date] = $cells;
+            $line = $i + 1;
+
+            $rowErrorCount = count($errors);
+            foreach (['Kategori' => $catName, 'Sub Kategori' => $subName, 'Grup Item' => $igName, 'Nama Item' => $itemName, 'Tipe Item' => $type] as $col => $val) {
+                if ($val === '') {
+                    $errors[] = "Baris {$line}: kolom {$col} wajib diisi.";
+                }
+            }
+
+            $itemType = $typeAliases[mb_strtolower($type)] ?? null;
+            if ($type !== '' && ! $itemType) {
+                $errors[] = "Baris {$line}: Tipe Item '{$type}' tidak dikenal (gunakan: score / inventory).";
+            }
+
+            if (count($errors) >= 10) {
+                $errors[] = '...dan seterusnya. Perbaiki file lalu ulangi import.';
+                break;
+            }
+            if (count($errors) > $rowErrorCount) {
+                continue; // baris invalid — lewati, error sudah dicatat
+            }
+
+            $scoreLabels = $itemType === 'score'
+                ? (array_values(array_filter(array_map('trim', explode(',', $labels)))) ?: ['C', 'V'])
+                : [];
+            $hasDate = $itemType === 'score' && in_array(mb_strtolower($date), $yesValues, true);
+
+            // Bangun/temukan node hirarki berdasarkan tuple nama (case-insensitive).
+            $k1 = mb_strtolower($catName);
+            $k2 = $k1.'||'.mb_strtolower($subName);
+            $k3 = $k2.'||'.mb_strtolower($igName);
+
+            if (! isset($catIndex[$k1])) {
+                $catIndex[$k1] = count($categories);
+                $categories[] = ['label' => $catName, 'sub_categories' => []];
+            }
+            $cat = &$categories[$catIndex[$k1]];
+
+            if (! isset($subIndex[$k2])) {
+                $subIndex[$k2] = count($cat['sub_categories']);
+                $cat['sub_categories'][] = ['name' => $subName, 'item_groups' => []];
+            }
+            $sub = &$cat['sub_categories'][$subIndex[$k2]];
+
+            if (! isset($igIndex[$k3])) {
+                $igIndex[$k3] = count($sub['item_groups']);
+                $sub['item_groups'][] = ['name' => $igName, 'items' => []];
+            }
+            $ig = &$sub['item_groups'][$igIndex[$k3]];
+
+            $ig['items'][] = [
+                'name' => $itemName,
+                'item_type' => $itemType,
+                'score_labels' => $scoreLabels,
+                'has_date_fields' => $hasDate,
+            ];
+
+            unset($ig, $sub, $cat);
+        }
+
+        if ($errors) {
+            throw ValidationException::withMessages(['importFile' => $errors]);
+        }
+        if (! $categories) {
+            throw ValidationException::withMessages([
+                'importFile' => 'File tidak berisi data struktur yang valid. Unduh template untuk melihat formatnya.',
+            ]);
+        }
+
+        return $categories;
     }
 
     /**

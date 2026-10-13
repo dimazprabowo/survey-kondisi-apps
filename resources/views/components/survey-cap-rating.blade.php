@@ -11,8 +11,9 @@
             <p class="text-sm text-gray-500 dark:text-gray-400">{{ $description }}</p>
         </div>
         @if($score !== null)
-            <span class="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold {{ survey_score_badge_class($score) }}">
-                {{ number_format($score, 2) }}
+            @php $rating = \App\Enums\CapRating::fromScore($score); @endphp
+            <span class="inline-flex items-center px-4 py-2 rounded-full text-lg font-bold {{ $rating->badgeClass() }}" title="{{ $rating->description() }}">
+                {{ $rating->label() }} &middot; {{ number_format($score, 2) }}
             </span>
         @else
             <span class="text-gray-400 dark:text-gray-500 text-sm">Belum ada skor</span>

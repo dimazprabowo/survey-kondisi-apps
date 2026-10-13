@@ -124,11 +124,25 @@ return new class extends Migration
             $table->index(['survey_item_group_id', 'order_num']);
         });
 
-        // 4. Survey instances (per kapal, per template)
+        // 4a. Survey folders — pengelompokan survey buatan user (1 level,
+        //     tanpa nesting). Survey tanpa folder tampil di root index.
+        Schema::create('survey_folders', function (Blueprint $table) {
+            $table->id();
+            $table->string('name')->unique();
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamps();
+
+            $table->index('name');
+        });
+
+        // 4b. Survey instances (per kapal, per template)
         Schema::create('surveys', function (Blueprint $table) {
             $table->id();
             $table->string('survey_number', 50)->unique();
             $table->foreignId('ship_id')->constrained()->cascadeOnDelete();
+            // Folder opsional — null berarti survey tampil di root index.
+            $table->foreignId('survey_folder_id')->nullable()->constrained('survey_folders')->nullOnDelete();
             // Snapshot: template hanya cetakan — survey menyimpan struktur sendiri
             // saat dibuat, sehingga perubahan template tidak merusak survey lama.
             $table->foreignId('survey_template_id')->nullable()->constrained()->nullOnDelete();
@@ -146,6 +160,7 @@ return new class extends Migration
 
             $table->index(['ship_id', 'status']);
             $table->index(['survey_template_id', 'status']);
+            $table->index('survey_folder_id');
             $table->index('survey_date');
             $table->index('survey_number');
         });
@@ -251,6 +266,7 @@ return new class extends Migration
         Schema::dropIfExists('survey_group_notes');
         Schema::dropIfExists('survey_responses');
         Schema::dropIfExists('surveys');
+        Schema::dropIfExists('survey_folders');
         Schema::dropIfExists('survey_items');
         Schema::dropIfExists('survey_item_groups');
         Schema::dropIfExists('survey_sub_categories');

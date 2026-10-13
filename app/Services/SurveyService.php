@@ -6,6 +6,7 @@ use App\Enums\SurveyItemType;
 use App\Enums\SurveyStatus;
 use App\Models\Ship;
 use App\Models\Survey;
+use App\Models\SurveyFolder;
 use App\Models\SurveyGroupNote;
 use App\Models\SurveyResponse;
 use App\Models\SurveyTemplate;
@@ -18,26 +19,24 @@ class SurveyService
 {
     use HasDynamicLike;
 
+    /**
+     * @param  int|false|null  $folderId  int = survey dalam folder tsb,
+     *                                    false = hanya survey tanpa folder (root),
+     *                                    null = tanpa filter folder.
+     */
     public function getFiltered(
         ?string $search = null,
         ?string $statusFilter = null,
         ?int $shipId = null,
         int $perPage = 15,
         ?string $sortField = null,
-        string $sortDir = 'desc'
+        string $sortDir = 'desc',
+        int|false|null $folderId = null
     ): LengthAwarePaginator {
-        $query = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code']);
+        $query = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
 
         if ($search) {
-            $operator = $this->getLikeOperator();
-            $query->where(function ($q) use ($search, $operator) {
-                $q->where('survey_number', $operator, "%{$search}%")
-                    ->orWhere('surveyor', $operator, "%{$search}%")
-                    ->orWhere('location', $operator, "%{$search}%")
-                    ->orWhereHas('ship', function ($sq) use ($search, $operator) {
-                        $sq->where('name', $operator, "%{$search}%");
-                    });
-            });
+            $this->applySearch($query, $search);
         }
 
         if ($statusFilter !== null && $statusFilter !== '') {
@@ -46,6 +45,12 @@ class SurveyService
 
         if ($shipId) {
             $query->where('ship_id', $shipId);
+        }
+
+        if ($folderId === false) {
+            $query->whereNull('survey_folder_id');
+        } elseif (is_int($folderId)) {
+            $query->where('survey_folder_id', $folderId);
         }
 
         $dir = strtolower($sortDir) === 'asc' ? 'asc' : 'desc';
@@ -79,6 +84,24 @@ class SurveyService
             ->orderByRaw("$expr $dir")
             ->orderBy('surveys.id', 'desc')
             ->paginate($perPage);
+    }
+
+    /**
+     * Terapkan predicate search survey ke query — dipakai bersama oleh
+     * getFiltered (list) dan SurveyFolderService (hitung match per folder)
+     * agar cakupan kolom search selalu konsisten.
+     */
+    public function applySearch($query, string $search): void
+    {
+        $operator = $this->getLikeOperator();
+        $query->where(function ($q) use ($search, $operator) {
+            $q->where('survey_number', $operator, "%{$search}%")
+                ->orWhere('surveyor', $operator, "%{$search}%")
+                ->orWhere('location', $operator, "%{$search}%")
+                ->orWhereHas('ship', function ($sq) use ($search, $operator) {
+                    $sq->where('name', $operator, "%{$search}%");
+                });
+        });
     }
 
     public function generateSurveyNumber(): string
@@ -210,6 +233,25 @@ class SurveyService
         foreach (array_chunk($rows, 500) as $chunk) {
             DB::table('survey_responses')->insert($chunk);
         }
+    }
+
+    /**
+     * Duplikasi survey TANPA value respon: header disalin, struktur
+     * memakai snapshot milik survey sumber (ikut editan per-survey),
+     * respon dibuat kosong via pipeline create() yang sama.
+     */
+    public function duplicateWithoutValues(Survey $source, ?SurveyFolder $folder): Survey
+    {
+        return $this->create([
+            'ship_id' => $source->ship_id,
+            'survey_template_id' => $source->survey_template_id,
+            'survey_folder_id' => $folder?->id,
+            'structure' => $source->structure,
+            'survey_date' => $source->survey_date,
+            'surveyor' => $source->surveyor,
+            'location' => $source->location,
+            'notes' => $source->notes,
+        ]);
     }
 
     public function update(Survey $survey, array $data): Survey

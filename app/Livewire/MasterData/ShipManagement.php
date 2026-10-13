@@ -154,6 +154,11 @@ class ShipManagement extends Component
             15
         );
 
+        if ($this->filterChanged) {
+            $this->notifySuccess("Ditemukan {$ships->total()} data kapal.");
+            $this->filterChanged = false;
+        }
+
         return view('livewire.master-data.ship-management', compact('ships'));
     }
 }

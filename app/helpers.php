@@ -207,11 +207,7 @@ if (! function_exists('survey_score_color')) {
      */
     function survey_score_color(?float $score): ?string
     {
-        if ($score === null) {
-            return null;
-        }
-
-        return $score >= 3.5 ? 'green' : ($score >= 2.5 ? 'blue' : ($score >= 1.5 ? 'amber' : 'red'));
+        return \App\Enums\CapRating::fromScore($score)?->color();
     }
 }
 
@@ -273,13 +269,6 @@ if (! function_exists('survey_score_badge_class')) {
      */
     function survey_score_badge_class(?float $score): string
     {
-        $classes = [
-            'green' => 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-            'blue' => 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-            'amber' => 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-            'red' => 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-        ];
-
-        return $classes[survey_score_color($score) ?? 'red'] ?? $classes['red'];
+        return (\App\Enums\CapRating::fromScore($score) ?? \App\Enums\CapRating::Cap4)->badgeClass();
     }
 }

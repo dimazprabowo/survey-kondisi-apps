@@ -36,6 +36,19 @@
                     PDF
                 </x-loading-button>
             @endcan
+            @can('survey_templates_export_excel')
+                <x-loading-button wire:click="downloadImportTemplate" target="downloadImportTemplate" variant="secondary" size="md" loadingText="Mengunduh..." title="Unduh template Excel untuk import struktur" icon="download">
+                    Template
+                </x-loading-button>
+            @endcan
+            @can('survey_templates_import')
+                <x-loading-button wire:click="openImportModal" target="openImportModal" variant="warning" size="md" loadingText="Memuat..." title="Import struktur template dari Excel">
+                    <x-slot:icon>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4"/></svg>
+                    </x-slot:icon>
+                    Import
+                </x-loading-button>
+            @endcan
             @can('survey_templates_create')
                 <x-loading-button wire:click="createTemplate" target="createTemplate" variant="primary" size="md" loadingText="Memuat..." icon="plus" class="flex-1 sm:flex-none">
                     Tambah Template
@@ -109,6 +122,13 @@
                                             wire:key="btn-duplicate-{{ $template->id }}"
                                             title="Duplikasi" />
                                     @endcan
+                                    @can('survey_templates_export_excel')
+                                        <x-loading-button wire:click="exportStructure({{ $template->id }})"
+                                            target="exportStructure({{ $template->id }})"
+                                            variant="icon-green" icon="excel"
+                                            wire:key="btn-export-structure-{{ $template->id }}"
+                                            title="Export struktur ke Excel (bisa di-import kembali)" />
+                                    @endcan
                                     @can('survey_templates_update')
                                         <x-loading-button wire:click="editTemplate({{ $template->id }})"
                                             target="editTemplate({{ $template->id }})"
@@ -146,6 +166,92 @@
             {{ $templates->links() }}
         </div>
     </div>
+
+    <!-- Import Struktur Modal -->
+    <x-modal name="template-import-modal" maxWidth="md" focusable>
+        <form wire:submit="importStructure" class="px-4 py-4 sm:p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Import Struktur Template</h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Upload file Excel (.xlsx) sesuai format struktur. Belum punya formatnya?
+                <button type="button" wire:click="downloadImportTemplate" wire:loading.attr="disabled" wire:target="downloadImportTemplate"
+                    class="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 underline disabled:opacity-50">
+                    Unduh template kosong
+                </button>
+            </p>
+
+            <div class="mt-4 space-y-4">
+                <div>
+                    <x-input-label value="Mode Import" :required="true" />
+                    <div class="mt-1 flex items-center gap-4">
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                            <input type="radio" wire:model.live="importMode" value="new"
+                                class="text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                            Template Baru
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                            <input type="radio" wire:model.live="importMode" value="existing"
+                                class="text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                            Timpa Template Existing
+                        </label>
+                    </div>
+                    <x-input-error :messages="$errors->get('importMode')" class="mt-1" />
+                </div>
+
+                @if($importMode === 'existing')
+                    <div>
+                        <x-input-label for="importTemplateId" value="Template Tujuan" :required="true" />
+                        <x-searchable-select
+                            wire:model="importTemplateId"
+                            :options="$this->importTemplateOptions"
+                            placeholder="Pilih template yang strukturnya akan ditimpa"
+                            searchPlaceholder="Cari template..."
+                            emptyText="Belum ada template"
+                        />
+                        <x-input-error :messages="$errors->get('importTemplateId')" class="mt-1" />
+                        <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                            Seluruh struktur template terpilih akan ditimpa oleh isi file. Survey yang sudah dibuat tidak terpengaruh (memakai snapshot masing-masing).
+                        </p>
+                    </div>
+                @else
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <x-input-label for="importName" value="Nama Template" :required="true" />
+                            <x-text-input id="importName" wire:model="importName" type="text" class="mt-1 w-full"
+                                placeholder="Nama template survey" />
+                            <x-input-error :messages="$errors->get('importName')" class="mt-1" />
+                        </div>
+                        <div>
+                            <x-input-label for="importCode" value="Kode Template" :required="true" />
+                            <x-text-input id="importCode" wire:model="importCode" type="text" class="mt-1 w-full"
+                                placeholder="Kode unik, mis. TPL-CS" />
+                            <x-input-error :messages="$errors->get('importCode')" class="mt-1" />
+                        </div>
+                    </div>
+                @endif
+
+                <div>
+                    <x-input-label for="importFile" value="File Excel" :required="true" />
+                    <input id="importFile" wire:model="importFile" type="file" accept=".xlsx"
+                        class="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400
+                            file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0
+                            file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700
+                            hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-300" />
+                    <div wire:loading wire:target="importFile" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Mengupload file...</div>
+                    @if($importFile)
+                        <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">File: {{ $importFile->getClientOriginalName() }}</p>
+                    @endif
+                    <x-input-error :messages="$errors->get('importFile')" class="mt-1" />
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <x-cancel-button type="button" wire:click="closeImportModal" target="closeImportModal" />
+                <x-loading-button type="submit" target="importStructure" variant="primary" size="md" loadingText="Mengimport..." icon="check" wire:loading.attr="disabled" wire:target="importFile">
+                    Import
+                </x-loading-button>
+            </div>
+        </form>
+    </x-modal>
 
     <!-- Delete Confirmation Modal -->
     <x-delete-modal

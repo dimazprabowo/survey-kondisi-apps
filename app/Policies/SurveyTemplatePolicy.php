@@ -42,6 +42,11 @@ class SurveyTemplatePolicy
         return $user->can('survey_templates_update');
     }
 
+    public function import(User $user): bool
+    {
+        return $user->can('survey_templates_import');
+    }
+
     public function exportExcel(User $user): bool
     {
         return $user->can('survey_templates_export_excel');

@@ -225,6 +225,55 @@ class SurveySnapshotTest extends TestCase
         $this->assertSame($group2->id, $sub['itemGroups'][0]['id']);
     }
 
+    public function test_move_structure_node_reorders_per_level_and_resequences(): void
+    {
+        // Item & kategori kedua agar ada pasangan swap di tiap level
+        $item2 = SurveyItem::create([
+            'survey_item_group_id' => $this->itemGroup->id,
+            'name' => 'Item Kedua',
+            'item_type' => 'score',
+            'score_labels' => ['C', 'V'],
+            'order_num' => 2,
+        ]);
+        $cat2 = SurveyCategory::create([
+            'survey_template_id' => $this->template->id,
+            'label' => 'Kategori Kedua',
+            'order_num' => 2,
+        ]);
+
+        $survey = $this->createSurvey();
+        $this->actingAs(\App\Models\User::factory()->create());
+        \Illuminate\Support\Facades\Gate::before(fn () => true);
+
+        // Tanpa edit mode: ditolak
+        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+            ->call('moveStructureNode', 'item', $item2->id, 'up');
+        $items = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'];
+        $this->assertSame($item2->id, $items[1]['id']);
+
+        $component->call('toggleEditStructure');
+
+        // Item kedua naik ke posisi 1, order_num di-resequence
+        $component->call('moveStructureNode', 'item', $item2->id, 'up');
+        $items = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'];
+        $this->assertSame($item2->id, $items[0]['id']);
+        $this->assertSame($this->item->id, $items[1]['id']);
+        $this->assertSame(1, $items[0]['order_num']);
+        $this->assertSame(2, $items[1]['order_num']);
+
+        // Batas atas: no-op, tidak error
+        $component->call('moveStructureNode', 'item', $item2->id, 'up');
+        $items = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'];
+        $this->assertSame($item2->id, $items[0]['id']);
+
+        // Kategori kedua naik ke posisi pertama
+        $component->call('moveStructureNode', 'category', $cat2->id, 'up');
+        $cats = $component->get('structureTree')['categories'];
+        $this->assertSame($cat2->id, $cats[0]['id']);
+        $this->assertSame(1, $cats[0]['order_num']);
+        $this->assertSame(2, $cats[1]['order_num']);
+    }
+
     public function test_add_structure_node_requires_edit_mode_toggle(): void
     {
         $survey = $this->createSurvey();

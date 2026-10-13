@@ -3,7 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Survey;
-use App\Traits\HasDynamicLike;
+use App\Services\SurveyService;
 use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -14,7 +14,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapping, WithStyles
 {
-    use Exportable, HasDynamicLike;
+    use Exportable;
 
     protected ?string $search;
 
@@ -24,28 +24,23 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
 
     protected array $selectedIds;
 
-    public function __construct(?string $search = null, ?string $statusFilter = null, ?int $shipId = null, array $selectedIds = [])
+    protected int|false|null $folderId;
+
+    public function __construct(?string $search = null, ?string $statusFilter = null, ?int $shipId = null, array $selectedIds = [], int|false|null $folderId = null)
     {
         $this->search = $search;
         $this->statusFilter = $statusFilter;
         $this->shipId = $shipId;
         $this->selectedIds = $selectedIds;
+        $this->folderId = $folderId;
     }
 
     public function query()
     {
-        $query = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code']);
+        $query = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
 
         if ($this->search) {
-            $operator = $this->getLikeOperator();
-            $query->where(function ($q) use ($operator) {
-                $q->where('survey_number', $operator, "%{$this->search}%")
-                    ->orWhere('surveyor', $operator, "%{$this->search}%")
-                    ->orWhere('location', $operator, "%{$this->search}%")
-                    ->orWhereHas('ship', function ($sq) use ($operator) {
-                        $sq->where('name', $operator, "%{$this->search}%");
-                    });
-            });
+            (new SurveyService)->applySearch($query, $this->search);
         }
 
         if ($this->statusFilter !== null && $this->statusFilter !== '') {
@@ -54,6 +49,13 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
 
         if ($this->shipId) {
             $query->where('ship_id', $this->shipId);
+        }
+
+        // false = hanya survey tanpa folder (root); int = survey dalam folder tsb
+        if ($this->folderId === false) {
+            $query->whereNull('survey_folder_id');
+        } elseif (is_int($this->folderId)) {
+            $query->where('survey_folder_id', $this->folderId);
         }
 
         if ($this->selectedIds !== []) {
@@ -67,6 +69,7 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
     {
         return [
             'Nomor Survey',
+            'Folder',
             'Kapal',
             'Kode Kapal',
             'Tahun Pembuatan',
@@ -75,6 +78,7 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
             'Surveyor',
             'Lokasi',
             'CAP Score',
+            'Kategori CAP',
             'Status',
             'Dibuat Oleh',
             'Dibuat Pada',
@@ -85,6 +89,7 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
     {
         return [
             $survey->survey_number,
+            $survey->folder?->name ?? '-',
             $survey->ship?->name ?? '-',
             $survey->ship?->code ?? '-',
             $survey->ship?->year_built ?? '-',
@@ -93,6 +98,7 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
             $survey->surveyor ?? '-',
             $survey->location ?? '-',
             $survey->overall_cap_score !== null ? number_format((float) $survey->overall_cap_score, 2) : '-',
+            $survey->capRating()?->label() ?? '-',
             $survey->status->label(),
             $survey->creator?->name ?? '-',
             $survey->created_at?->format('d M Y H:i') ?? '-',

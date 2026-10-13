@@ -29,6 +29,8 @@ class SurveyForm extends Component
 
     public $survey_template_id;
 
+    public $survey_folder_id;
+
     public $survey_date;
 
     public $surveyor;
@@ -165,6 +167,19 @@ class SurveyForm extends Component
             if (! $this->survey_template_id) {
                 $defaultTemplate = (new SurveyTemplateService)->getDefault();
                 $this->survey_template_id = $defaultTemplate?->id;
+            }
+
+            // Folder tujuan dari index (create dari dalam folder aktif)
+            $folderParam = request()->query('folder');
+            if ($folderParam) {
+                try {
+                    $folderId = Crypt::decryptString($folderParam);
+                    if (\App\Models\SurveyFolder::find($folderId)) {
+                        $this->survey_folder_id = (int) $folderId;
+                    }
+                } catch (\Exception $e) {
+                    // Param tidak valid — survey dibuat di root
+                }
             }
 
             // Working copy struktur dari template terpilih (snapshot awal)
@@ -449,14 +464,28 @@ class SurveyForm extends Component
         $this->activeSubCategory = $subCategoryId;
     }
 
+    /**
+     * Gate untuk semua aksi yang memutasi working copy form (struktur,
+     * notes, draft). Persist tetap di-gate ulang oleh save().
+     */
+    protected function authorizeFormMutation(): void
+    {
+        $this->editMode
+            ? $this->authorize('update', $this->survey)
+            : $this->authorize('create', Survey::class);
+    }
+
     public function addGroupNote($itemGroupId): void
     {
+        $this->authorizeFormMutation();
         $this->groupNotes[$itemGroupId] = $this->groupNotes[$itemGroupId] ?? [];
         $this->groupNotes[$itemGroupId][] = '';
     }
 
     public function confirmRemoveGroupNote($itemGroupId, $index): void
     {
+        $this->authorizeFormMutation();
+
         if (! isset($this->groupNotes[$itemGroupId][$index])) {
             return;
         }
@@ -477,6 +506,8 @@ class SurveyForm extends Component
 
     public function removeGroupNote($itemGroupId, $index): void
     {
+        $this->authorizeFormMutation();
+
         if (! isset($this->groupNotes[$itemGroupId][$index])) {
             return;
         }
@@ -521,6 +552,7 @@ class SurveyForm extends Component
                 $this->notifySuccess('Survey berhasil diupdate!');
             } else {
                 $this->authorize('create', Survey::class);
+                $data['survey_folder_id'] = $this->survey_folder_id;
                 $survey = $service->create($data);
                 $service->saveResponses($survey->id, $this->responses, $this->groupNotes);
                 $this->clearDraft();
@@ -572,6 +604,7 @@ class SurveyForm extends Component
      */
     public function toggleEditStructure()
     {
+        $this->authorizeFormMutation();
         $this->editStructure = ! $this->editStructure;
         $this->notifyInfo($this->editStructure
             ? 'Mode edit struktur aktif. Tambah, ubah nama, atau hapus node — tersimpan saat survey disimpan.'
@@ -583,6 +616,8 @@ class SurveyForm extends Component
      */
     public function openAddNode(string $level, $parentId = null): void
     {
+        $this->authorizeFormMutation();
+
         if (! $this->editStructure) {
             return;
         }
@@ -611,6 +646,8 @@ class SurveyForm extends Component
      */
     public function openEditNode(string $level, $id): void
     {
+        $this->authorizeFormMutation();
+
         if (! $this->editStructure) {
             return;
         }
@@ -644,6 +681,8 @@ class SurveyForm extends Component
      */
     public function saveNode(): void
     {
+        $this->authorizeFormMutation();
+
         if (! $this->editStructure) {
             $this->dispatch('close-modal', 'survey-node-modal');
 
@@ -986,6 +1025,8 @@ class SurveyForm extends Component
      */
     public function confirmRemoveNode(string $level, $id): void
     {
+        $this->authorizeFormMutation();
+
         if (! $this->editStructure) {
             return;
         }
@@ -1027,6 +1068,8 @@ class SurveyForm extends Component
 
             return;
         }
+
+        $this->authorizeFormMutation();
 
         $id = (int) $id;
         $removed = $level === 'category'
@@ -1170,6 +1213,87 @@ class SurveyForm extends Component
     }
 
     /**
+     * Geser urutan node satu posisi (up = sebelumnya, down = berikutnya)
+     * di dalam list saudaranya. Nilai respon ikut item secara otomatis
+     * karena responses ter-keyed by item id; tab aktif juga id-based.
+     */
+    public function moveStructureNode(string $level, $id, string $direction): void
+    {
+        $this->authorizeFormMutation();
+
+        if (! $this->editStructure) {
+            return;
+        }
+
+        $id = (int) $id;
+        $offset = $direction === 'up' ? -1 : 1;
+        $this->structureTree['categories'] ??= [];
+
+        $found = $level === 'category'
+            ? $this->moveNodeInList($this->structureTree['categories'], $id, $offset)
+            : $this->moveNodeInTree($this->structureTree['categories'], $level, $id, $offset);
+
+        if (! $found) {
+            return;
+        }
+
+        $this->structureTree['categories'] = $this->renumberNodes($this->structureTree['categories']);
+        $this->structureIndexCache = null;
+    }
+
+    /**
+     * Swap node dengan $id terhadap tetangganya di dalam list saudara.
+     * Return true bila node ditemukan (di batas ujung tidak swap, tapi
+     * tetap handled agar traversal tidak lanjut ke cabang lain).
+     */
+    protected function moveNodeInList(array &$list, int $id, int $offset): bool
+    {
+        foreach (array_keys($list) as $i) {
+            if (($list[$i]['id'] ?? null) === $id) {
+                $j = $i + $offset;
+                if (isset($list[$j])) {
+                    [$list[$i], $list[$j]] = [$list[$j], $list[$i]];
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Cari list saudara node (level+id) di dalam tree lalu geser —
+     * pola traversal sama seperti removeFromTree.
+     */
+    protected function moveNodeInTree(array &$nodes, string $level, int $id, int $offset): bool
+    {
+        $childKey = [
+            'sub_category' => 'subCategories',
+            'item_group' => 'itemGroups',
+            'item' => 'items',
+        ][$level] ?? null;
+
+        if (! $childKey) {
+            return false;
+        }
+
+        foreach ($nodes as &$node) {
+            if (! empty($node[$childKey]) && $this->moveNodeInList($node[$childKey], $id, $offset)) {
+                return true;
+            }
+            foreach (['subCategories', 'itemGroups'] as $key) {
+                if (! empty($node[$key]) && $this->moveNodeInTree($node[$key], $level, $id, $offset)) {
+                    return true;
+                }
+            }
+        }
+        unset($node);
+
+        return false;
+    }
+
+    /**
      * Renumber order_num secara sekuensial di semua level (sub kategori, grup, item)
      * agar penomoran tampil berurutan tanpa loncat setelah ada node dihapus.
      * Rekursif — node children di-level berapapun ikut dinormalisasi.
@@ -1221,6 +1345,8 @@ class SurveyForm extends Component
      */
     public function saveDraft()
     {
+        $this->authorizeFormMutation();
+
         if (! $this->autoSave) {
             return;
         }

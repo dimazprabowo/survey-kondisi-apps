@@ -368,8 +368,9 @@
                         pemeriksaan utama.
                         @php $overallCap = $this->overallAvg($bab3Categories); @endphp
                         @if($overallCap !== null)
+                            @php $overallRating = \App\Enums\CapRating::fromScore($overallCap); @endphp
                             Berdasarkan hasil penilaian, kapal ini memperoleh
-                            <span class="font-bold">Overall CAP Rating sebesar {{ number_format($overallCap, 2) }}</span>.
+                            <span class="font-bold">Overall CAP Rating sebesar {{ number_format($overallCap, 2) }}</span>@if($overallRating) dengan kategori {{ $overallRating->label() }} ({{ $overallRating->description() }})@endif.
                             Adapun rincian penilaian sebagai berikut:
                         @endif
                     </p>
@@ -379,7 +380,7 @@
                         <div class="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 px-3 py-3 font-bold">
                             <span>Overall CAP Rating Condition {{ $ship?->name }}</span>
                             <span>:</span>
-                            <span>{{ $overallCap !== null ? number_format($overallCap, 2) : '-' }}</span>
+                            <span>{{ $overallCap !== null ? number_format($overallCap, 2).($overallRating ? ' ('.$overallRating->label().')' : '') : '-' }}</span>
                         </div>
                         <div class="h-6 bg-gray-500 dark:bg-gray-600"></div>
                         @php $half = (int) ceil(max($bab3Categories->count(), 1) / 2); @endphp
@@ -1108,10 +1109,12 @@
                             Download DOCX
                         </x-loading-button>
                     @endif
-                    <x-loading-button type="submit" target="save" variant="secondary" size="lg"
-                        loadingText="Menyimpan..." class="w-full sm:w-auto">
-                        Simpan
-                    </x-loading-button>
+                    @can('survey_reports_update')
+                        <x-loading-button type="submit" target="save" variant="secondary" size="lg"
+                            loadingText="Menyimpan..." class="w-full sm:w-auto">
+                            Simpan
+                        </x-loading-button>
+                    @endcan
                     @can('survey_reports_generate')
                         <x-loading-button type="button" wire:click.preserve-scroll="generate" target="generate" variant="primary" size="lg"
                             loadingText="Memproses..." class="w-full sm:w-auto"

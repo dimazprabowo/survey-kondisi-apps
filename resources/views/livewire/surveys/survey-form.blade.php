@@ -293,6 +293,12 @@
                                 @endif
                             </button>
                             @if($editStructure)
+                                <x-loading-button wire:click="moveStructureNode('category', {{ $cat->id }}, 'up')"
+                                    target="moveStructureNode('category', {{ $cat->id }}, 'up')"
+                                    variant="icon-gray" icon="arrow-left" wire:key="cat-up-{{ $cat->id }}" title="Geser kategori {{ $cat->label }} ke kiri" class="!p-1" :disabled="$loop->first" />
+                                <x-loading-button wire:click="moveStructureNode('category', {{ $cat->id }}, 'down')"
+                                    target="moveStructureNode('category', {{ $cat->id }}, 'down')"
+                                    variant="icon-gray" icon="arrow-right" wire:key="cat-down-{{ $cat->id }}" title="Geser kategori {{ $cat->label }} ke kanan" class="!p-1" :disabled="$loop->last" />
                                 <x-loading-button wire:click="openEditNode('category', {{ $cat->id }})"
                                     target="openEditNode('category', {{ $cat->id }})"
                                     variant="icon-blue" icon="edit" wire:key="cat-edit-{{ $cat->id }}" title="Ubah nama kategori {{ $cat->label }}" />
@@ -368,6 +374,12 @@
                                                 @endif
                                             </button>
                                             @if($editStructure)
+                                                <x-loading-button wire:click="moveStructureNode('sub_category', {{ $subCat->id }}, 'up')"
+                                                    target="moveStructureNode('sub_category', {{ $subCat->id }}, 'up')"
+                                                    variant="icon-gray" icon="arrow-left" wire:key="sub-up-{{ $subCat->id }}" title="Geser sub kategori {{ $subCat->name }} ke kiri" class="!p-1" :disabled="$loop->first" />
+                                                <x-loading-button wire:click="moveStructureNode('sub_category', {{ $subCat->id }}, 'down')"
+                                                    target="moveStructureNode('sub_category', {{ $subCat->id }}, 'down')"
+                                                    variant="icon-gray" icon="arrow-right" wire:key="sub-down-{{ $subCat->id }}" title="Geser sub kategori {{ $subCat->name }} ke kanan" class="!p-1" :disabled="$loop->last" />
                                                 <x-loading-button wire:click="openEditNode('sub_category', {{ $subCat->id }})"
                                                     target="openEditNode('sub_category', {{ $subCat->id }})"
                                                     variant="icon-blue" icon="edit" wire:key="sub-edit-{{ $subCat->id }}" title="Ubah nama sub kategori {{ $subCat->name }}" />
@@ -431,6 +443,12 @@
                                                     </span>
                                                 @endunless
                                                 @if($editStructure)
+                                                    <x-loading-button wire:click="moveStructureNode('item_group', {{ $itemGroup->id }}, 'up')"
+                                                        target="moveStructureNode('item_group', {{ $itemGroup->id }}, 'up')"
+                                                        variant="icon-gray" icon="arrow-up" wire:key="ig-up-{{ $itemGroup->id }}" title="Geser grup item ke atas" class="!p-1" :disabled="$loop->first" />
+                                                    <x-loading-button wire:click="moveStructureNode('item_group', {{ $itemGroup->id }}, 'down')"
+                                                        target="moveStructureNode('item_group', {{ $itemGroup->id }}, 'down')"
+                                                        variant="icon-gray" icon="arrow-down" wire:key="ig-down-{{ $itemGroup->id }}" title="Geser grup item ke bawah" class="!p-1" :disabled="$loop->last" />
                                                     <x-loading-button wire:click="openEditNode('item_group', {{ $itemGroup->id }})"
                                                         target="openEditNode('item_group', {{ $itemGroup->id }})"
                                                         variant="icon-blue" icon="edit" wire:key="ig-edit-{{ $itemGroup->id }}" title="Ubah nama grup item" />
@@ -459,7 +477,7 @@
                                                         <col class="w-20">
                                                     @endif
                                                     @if($editStructure)
-                                                        <col class="w-16">
+                                                        <col class="w-28">
                                                     @endif
                                                 </colgroup>
                                                 <thead class="bg-gray-50 dark:bg-gray-700/50">
@@ -476,7 +494,7 @@
                                                             <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-20">Avg</th>
                                                         @endif
                                                         @if($editStructure)
-                                                            <th class="w-16"></th>
+                                                            <th class="w-28"></th>
                                                         @endif
                                                     </tr>
                                                 </thead>
@@ -499,6 +517,12 @@
                                                                 @if($editStructure)
                                                                     <td class="px-1 py-2 text-center">
                                                                         <div class="flex items-center justify-center">
+                                                                            <x-loading-button wire:click="moveStructureNode('item', {{ $item->id }}, 'up')"
+                                                                                target="moveStructureNode('item', {{ $item->id }}, 'up')"
+                                                                                variant="icon-gray" icon="arrow-up" wire:key="item-up-{{ $item->id }}" title="Geser item ke atas" class="!p-1" :disabled="$loop->first" />
+                                                                            <x-loading-button wire:click="moveStructureNode('item', {{ $item->id }}, 'down')"
+                                                                                target="moveStructureNode('item', {{ $item->id }}, 'down')"
+                                                                                variant="icon-gray" icon="arrow-down" wire:key="item-down-{{ $item->id }}" title="Geser item ke bawah" class="!p-1" :disabled="$loop->last" />
                                                                             <x-loading-button wire:click="openEditNode('item', {{ $item->id }})"
                                                                                 target="openEditNode('item', {{ $item->id }})"
                                                                                 variant="icon-blue" icon="edit" wire:key="item-edit-{{ $item->id }}" title="Ubah item ini" />
@@ -554,6 +578,12 @@
                                                                 @if($editStructure)
                                                                     <td class="px-1 py-2 text-center">
                                                                         <div class="flex items-center justify-center">
+                                                                            <x-loading-button wire:click="moveStructureNode('item', {{ $item->id }}, 'up')"
+                                                                                target="moveStructureNode('item', {{ $item->id }}, 'up')"
+                                                                                variant="icon-gray" icon="arrow-up" wire:key="item-up-{{ $item->id }}" title="Geser item ke atas" class="!p-1" :disabled="$loop->first" />
+                                                                            <x-loading-button wire:click="moveStructureNode('item', {{ $item->id }}, 'down')"
+                                                                                target="moveStructureNode('item', {{ $item->id }}, 'down')"
+                                                                                variant="icon-gray" icon="arrow-down" wire:key="item-down-{{ $item->id }}" title="Geser item ke bawah" class="!p-1" :disabled="$loop->last" />
                                                                             <x-loading-button wire:click="openEditNode('item', {{ $item->id }})"
                                                                                 target="openEditNode('item', {{ $item->id }})"
                                                                                 variant="icon-blue" icon="edit" wire:key="item-edit-{{ $item->id }}" title="Ubah item ini" />

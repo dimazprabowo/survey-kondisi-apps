@@ -37,5 +37,10 @@ return [
             'max_size' => 20480, // 20 MB
             'mimes' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'zip', 'rar', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'],
         ],
+
+        'template-import' => [
+            'max_size' => 5120, // 5 MB
+            'mimes' => ['xlsx'],
+        ],
     ],
 ];

@@ -49,9 +49,10 @@
                     @if($survey->overall_cap_score !== null)
                         @php
                             $score = (float) $survey->overall_cap_score;
+                            $rating = $survey->capRating();
                         @endphp
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-base font-bold {{ survey_score_badge_class($score) }}">
-                            CAP: {{ number_format($score, 2) }}
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-base font-bold {{ survey_score_badge_class($score) }}" title="{{ $rating->description() }}">
+                            {{ $rating->label() }} &middot; {{ number_format($score, 2) }}
                         </span>
                     @endif
                 </div>

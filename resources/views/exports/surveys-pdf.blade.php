@@ -23,22 +23,24 @@
 <body>
     <div class="header">
         <h1>{{ config('app.name', 'Boilerplate') }}</h1>
-        <p>Laporan Data Survey Kondisi &mdash; {{ now()->format('d F Y, H:i') }}</p>
+        <p>Laporan Data Survey Kondisi{{ isset($folderName) && $folderName ? ' — Folder: '.$folderName : '' }} &mdash; {{ now()->format('d F Y, H:i') }}</p>
     </div>
 
     <table>
         <thead>
             <tr>
                 <th style="width: 4%;">No</th>
-                <th style="width: 12%;">Nomor Survey</th>
-                <th style="width: 14%;">Kapal</th>
-                <th style="width: 12%;">Template</th>
+                <th style="width: 10%;">Nomor Survey</th>
+                <th style="width: 8%;">Folder</th>
+                <th style="width: 11%;">Kapal</th>
+                <th style="width: 9%;">Template</th>
                 <th style="width: 10%;">Tanggal Survey</th>
-                <th style="width: 12%;">Surveyor</th>
-                <th style="width: 12%;">Lokasi</th>
-                <th style="width: 8%;">CAP Score</th>
+                <th style="width: 10%;">Surveyor</th>
+                <th style="width: 10%;">Lokasi</th>
+                <th style="width: 6%;">CAP Score</th>
+                <th style="width: 7%;">Kategori</th>
                 <th style="width: 8%;">Status</th>
-                <th style="width: 8%;">Dibuat Oleh</th>
+                <th style="width: 7%;">Dibuat Oleh</th>
             </tr>
         </thead>
         <tbody>
@@ -46,12 +48,14 @@
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td><strong>{{ $survey->survey_number }}</strong></td>
+                    <td>{{ $survey->folder?->name ?? '-' }}</td>
                     <td>{{ $survey->ship?->name ?? '-' }}</td>
                     <td>{{ $survey->template?->name ?? '-' }}</td>
                     <td>{{ $survey->survey_date?->format('d M Y') ?? '-' }}</td>
                     <td>{{ $survey->surveyor ?? '-' }}</td>
                     <td>{{ $survey->location ?? '-' }}</td>
                     <td>{{ $survey->overall_cap_score !== null ? number_format((float) $survey->overall_cap_score, 2) : '-' }}</td>
+                    <td>{{ $survey->capRating()?->label() ?? '-' }}</td>
                     <td>
                         @php
                             $badgeClass = match($survey->status->value) {

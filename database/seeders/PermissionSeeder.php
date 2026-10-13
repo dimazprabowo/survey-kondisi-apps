@@ -88,6 +88,11 @@ class PermissionSeeder extends Seeder
             'surveys_export_excel',
             'surveys_export_pdf',
 
+            // Folder Survey (pengelompokan survey di index)
+            'survey_folders_create',
+            'survey_folders_update',
+            'survey_folders_delete',
+
             // Laporan Survey (DOCX)
             'survey_reports_view',
             'survey_reports_update',
@@ -99,6 +104,7 @@ class PermissionSeeder extends Seeder
             'survey_templates_update',
             'survey_templates_delete',
             'survey_templates_duplicate',
+            'survey_templates_import',
             'survey_templates_export_excel',
             'survey_templates_export_pdf',
         ];

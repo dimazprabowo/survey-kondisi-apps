@@ -75,6 +75,7 @@ class ReportEditor extends Component
     {
         $survey->loadMissing('ship.certificates');
         $this->survey = $survey;
+        $this->authorize('viewAny', SurveyReport::class);
         $this->report = $service->getOrCreate($survey);
         $this->authorize('view', $this->report);
 
@@ -226,6 +227,8 @@ class ReportEditor extends Component
      */
     public function refreshStatus(): void
     {
+        $this->authorize('view', $this->report);
+
         if ($this->report->file_status === FileStatus::Processing) {
             $this->report->refresh();
         }
@@ -248,7 +251,13 @@ class ReportEditor extends Component
     public function updatedDocumentationPhoto(): void
     {
         try {
+            $this->authorize('update', $this->report);
             $this->validateOnly('documentationPhoto');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->documentationPhoto = null;
+            $this->notifyError('Anda tidak memiliki izin untuk mengubah dokumentasi.');
+
+            return;
         } catch (\Illuminate\Validation\ValidationException $e) {
             $this->dispatch('documentation-photo-invalid');
             throw $e;

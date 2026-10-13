@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CapRating;
 use App\Enums\SurveyStatus;
 use App\Traits\Blameable;
 use App\Traits\HasEncryptedRouteKey;
@@ -22,6 +23,7 @@ class Survey extends Model
         'survey_number',
         'ship_id',
         'survey_template_id',
+        'survey_folder_id',
         'structure',
         'survey_date',
         'surveyor',
@@ -52,6 +54,11 @@ class Survey extends Model
         return $this->belongsTo(SurveyTemplate::class, 'survey_template_id');
     }
 
+    public function folder(): BelongsTo
+    {
+        return $this->belongsTo(SurveyFolder::class, 'survey_folder_id');
+    }
+
     public function responses(): HasMany
     {
         return $this->hasMany(SurveyResponse::class);
@@ -77,10 +84,18 @@ class Survey extends Model
         return $query->where('status', SurveyStatus::Completed);
     }
 
+    /**
+     * Grade kategori CAP maritim dari overall_cap_score (derived, bukan kolom).
+     */
+    public function capRating(): ?CapRating
+    {
+        return CapRating::fromScore($this->overall_cap_score !== null ? (float) $this->overall_cap_score : null);
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['survey_number', 'ship_id', 'survey_template_id', 'survey_date', 'status', 'overall_cap_score'])
+            ->logOnly(['survey_number', 'ship_id', 'survey_template_id', 'survey_folder_id', 'survey_date', 'status', 'overall_cap_score'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->useLogName('survey');

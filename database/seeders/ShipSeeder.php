@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Ship;
+use App\Models\ShipCertificate;
 use Illuminate\Database\Seeder;
 
 class ShipSeeder extends Seeder
@@ -28,6 +29,64 @@ class ShipSeeder extends Seeder
         }
 
         $this->enrichParticulars();
+        $this->enrichCertificates();
+    }
+
+    /**
+     * Isi sertifikat status class per kapal (dipakai tabel BAB II laporan).
+     * Hanya untuk kapal yang belum punya sertifikat — aman dijalankan ulang.
+     * Nilai deterministik per kapal.
+     */
+    protected function enrichCertificates(): void
+    {
+        $certTypes = [
+            'Special Survey (Class)',
+            'Intermediate Survey (Class)',
+            'Annual Survey (Class)',
+            'Docking Survey',
+            'Tailshaft Survey',
+            'Boiler Survey',
+            'Passenger Ship Safety Certificate',
+            'Cargo Ship Safety Equipment Certificate',
+            'Cargo Ship Safety Radio Certificate',
+            'International Load Line Certificate',
+            'IOPP Certificate',
+            'SMC (ISM Code)',
+            'ISSC (ISPS Code)',
+        ];
+
+        $created = 0;
+
+        Ship::query()->orderBy('id')->each(function (Ship $ship) use ($certTypes, &$created) {
+            if ($ship->certificates()->exists()) {
+                return;
+            }
+
+            $fake = fake();
+            $fake->seed($ship->id * 104729);
+
+            $types = $fake->randomElements($certTypes, $fake->numberBetween(8, 11));
+
+            foreach ($types as $order => $type) {
+                $last = \Carbon\Carbon::parse($fake->dateTimeBetween('-4 years', '-3 months'));
+                $next1 = $last->copy()->addYear();
+
+                ShipCertificate::create([
+                    'ship_id' => $ship->id,
+                    'certificate_type' => $type,
+                    'last_date' => $last->format('Y-m-d'),
+                    'next_1_date' => $next1->format('Y-m-d'),
+                    'next_2_date' => $last->copy()->addYears(2)->format('Y-m-d'),
+                    'postpone_date' => $fake->boolean(15)
+                        ? $next1->copy()->addMonths($fake->numberBetween(1, 6))->format('Y-m-d')
+                        : null,
+                    'order_num' => $order + 1,
+                ]);
+                $created++;
+            }
+        });
+
+        $this->command->info("Ship certificates seeded: {$created} rows");
     }
 
     /**

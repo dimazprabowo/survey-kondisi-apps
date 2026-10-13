@@ -7,6 +7,7 @@ use App\Enums\SurveyStatus;
 use App\Models\Ship;
 use App\Models\Survey;
 use App\Models\SurveyCategory;
+use App\Models\SurveyFolder;
 use App\Models\SurveyItem;
 use App\Models\SurveyTemplate;
 use App\Models\User;
@@ -60,6 +61,40 @@ class SurveySeeder extends Seeder
         // Lengkapi sampai total 25 survey dummy — aman dijalankan ulang
         // (hanya menambah sampai target tercapai, tidak menduplikasi).
         $this->seedRandomSurveys($service, $defaultTemplateId, $user?->id, target: 25);
+
+        $this->seedFolders($user?->id);
+    }
+
+    /**
+     * Buat folder per tahun survey lalu assign survey yang belum punya folder.
+     * ~25% survey dibiarkan di root — mendemokan tampilan campuran folder + root.
+     * Survey yang sudah di-folder-kan manual tidak disentuh.
+     */
+    protected function seedFolders(?int $userId): void
+    {
+        $assigned = 0;
+
+        Survey::orderBy('id')->each(function (Survey $survey) use ($userId, &$assigned) {
+            if ($survey->survey_folder_id !== null || ! $survey->survey_date) {
+                return;
+            }
+
+            $fake = fake();
+            $fake->seed($survey->id * 31 + 7);
+            if ($fake->boolean(25)) {
+                return; // sisakan sebagian di root
+            }
+
+            $folder = SurveyFolder::firstOrCreate(
+                ['name' => 'Survey Tahun '.$survey->survey_date->format('Y')],
+                ['created_by' => $userId]
+            );
+
+            $survey->update(['survey_folder_id' => $folder->id]);
+            $assigned++;
+        });
+
+        $this->command->info('Survey folders seeded: '.SurveyFolder::count()." folder, {$assigned} survey diassign.");
     }
 
     /**
