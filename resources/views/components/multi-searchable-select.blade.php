@@ -13,8 +13,9 @@
 ])
 
 @php
-    $componentId = $id ?? 'multi-searchable-select-' . uniqid();
     $wireModel = $attributes->wire('model')->value();
+    // ID deterministik (stabil antar-render) — uniqid() membuat x-key berubah tiap render.
+    $componentId = $id ?? 'multi-searchable-select-' . md5(($wireModel ?: $name) . '|' . $placeholder);
 @endphp
 
 <div 
@@ -76,6 +77,15 @@
             this.selectedValues = [];
         },
         
+        // Ambil opsi terbaru dari elemen data tersembunyi — ia ikut morph tiap render
+        // (wire:ignore.self hanya mengabaikan root), sementara @js($options) di x-data
+        // hanya dibaca sekali saat init.
+        refreshOptions() {
+            if (this.$refs.optionsData) {
+                this.options = JSON.parse(this.$refs.optionsData.textContent || '[]');
+            }
+        },
+
         closeDropdown() {
             this.open = false;
             this.search = '';
@@ -95,6 +105,7 @@
         
         toggleDropdown() {
             if (!this.open) {
+                this.refreshOptions();
                 this.checkPosition();
             }
             this.open = !this.open;
@@ -110,6 +121,9 @@
     class="relative w-full"
     wire:ignore.self
 >
+    {{-- Sumber opsi ter-update tiap render (child ikut morph); dibaca saat dropdown dibuka --}}
+    <div x-ref="optionsData" class="hidden">{!! json_encode($options) !!}</div>
+
     {{-- Trigger Button --}}
     <button
         type="button"

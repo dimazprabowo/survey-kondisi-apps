@@ -183,6 +183,11 @@ Jika butuh variant baru (mis. warna/size berbeda), EXTEND komponen yang ada via 
    - SOLUSI: sertakan **index posisi** di `wire:key` wrapper yang berisi input `wire:model`, mis. `wire:key="item-{row_key}-{itemIndex}"`, `cat-panel-{row_key}-{catIndex}`, `sub-panel-{row_key}-{subIndex}`, `ig-{row_key}-{igIndex}`. Saat posisi berubah, key berubah → node di-render ulang fresh → directive init dengan expression baru yang benar.
    - Key gabungan `{row_key}-{index}` (bukan hanya `{index}`) tetap mempertahankan identitas entitas untuk baris yang TIDAK berpindah (pending value aman).
    - Alternatif pola aman: input tanpa `wire:model` — pakai `value="{{ ... }}"` + `wire:blur="updateX(...idx, $event.target.value)"` (seperti pola `updateScoreLabels`/`updateItemType`).
+9. **Options `x-searchable-select`/`x-multi-searchable-select` yang dinamis bisa stale**:
+   - `options: @js($options)` di `x-data` hanya dibaca SEKALI saat Alpine init; root `wire:ignore.self` membuat node tidak di-render ulang → opsi baru server-side (mis. folder baru dibuat) tidak pernah masuk dropdown.
+   - SOLUSI (sudah di komponen): opsi juga di-render ke `<div x-ref="optionsData" class="hidden">{!! json_encode($options) !!}</div>` — child TETAP ikut morph tiap render (`.self` hanya mengabaikan root). Saat dropdown dibuka, `refreshOptions()` membaca ulang elemen itu → selalu fresh.
+   - `componentId` deterministik: `md5($wireModel.'|'.$placeholder)` — JANGAN `uniqid()` (berubah tiap render).
+   - JANGAN andalkan `wire:key` signature di root `wire:ignore.self` untuk refresh opsi — key berubah = node beda, risiko node ganda saat morph.
 
 # File Storage (pola WAJIB)
 Alur async via worker (JANGAN simpan file langsung di request):

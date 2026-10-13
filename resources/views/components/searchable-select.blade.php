@@ -13,9 +13,10 @@
 ])
 
 @php
-    $componentId = $id ?? 'searchable-select-' . uniqid();
     $wireModel = $attributes->wire('model')->value();
     $isLive = $attributes->wire('model')->hasModifier('live');
+    // ID deterministik (stabil antar-render) — uniqid() membuat x-key berubah tiap render.
+    $componentId = $id ?? 'searchable-select-' . md5(($wireModel ?: $name) . '|' . $placeholder);
 @endphp
 
 <div
@@ -45,6 +46,15 @@
                 return this.selectedOption.label;
             }
             return this.placeholder;
+        },
+
+        // Ambil opsi terbaru dari elemen data tersembunyi — ia ikut morph tiap render
+        // (wire:ignore.self hanya mengabaikan root), sementara @js($options) di x-data
+        // hanya dibaca sekali saat init.
+        refreshOptions() {
+            if (this.$refs.optionsData) {
+                this.options = JSON.parse(this.$refs.optionsData.textContent || '[]');
+            }
         },
 
         selectOption(option) {
@@ -79,6 +89,7 @@
 
         toggleDropdown() {
             if (!this.open) {
+                this.refreshOptions();
                 this.checkPosition();
             }
             this.open = !this.open;
@@ -92,6 +103,9 @@
     class="relative w-full"
     wire:ignore.self
 >
+    {{-- Sumber opsi ter-update tiap render (child ikut morph); dibaca saat dropdown dibuka --}}
+    <div x-ref="optionsData" class="hidden">{!! json_encode($options) !!}</div>
+
     {{-- Trigger Button --}}
     <button
         type="button"
