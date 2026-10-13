@@ -12,9 +12,9 @@
             'status' => 'Status',
         ];
     @endphp
-    <div class="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
+    <div class="mb-6 flex flex-col lg:flex-row lg:items-center gap-3">
         <!-- Search -->
-        <div class="flex-1 w-full sm:w-auto">
+        <div class="flex-1 w-full lg:w-auto">
             <input wire:model.live.debounce.300ms="search" type="text" placeholder="Cari survey (nomor, kapal, surveyor)..."
                 class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
         </div>
@@ -43,51 +43,57 @@
             </div>
         </x-filter-popover>
 
-        <!-- Action Buttons -->
-        <div class="flex items-center gap-2 w-full sm:w-auto">
-            @if(count($selected))
-                <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                    {{ count($selected) }} dipilih
-                    <x-loading-button type="button" wire:click="clearSelection" target="clearSelection"
-                        variant="icon-gray" icon="close" iconClass="w-3.5 h-3.5" wire:key="btn-clear-selection"
-                        title="Hapus pilihan" />
-                </span>
-                @can('surveys_update')
-                    <x-loading-button type="button" wire:click="openBulkMoveModal" target="openBulkMoveModal"
-                        variant="warning" size="sm" loadingText="Memuat..."
-                        wire:key="btn-bulk-move" title="Pindahkan survey terpilih ke folder">
-                        <x-slot:icon>
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13.5l3 3m0 0l3-3m-3 3v-6m1.06-4.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
-                        </x-slot:icon>
-                        Pindahkan
-                    </x-loading-button>
-                @endcan
-            @endif
+        <!-- Action Buttons: utama (Excel/PDF/Tambah) satu baris,
+             aksi sekunder turun ke baris sendiri mengisi lebar penuh di mobile -->
+        <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:justify-end">
             @can('surveys_export_excel')
-                <x-loading-button wire:click="exportExcel" target="exportExcel" variant="success" size="md" loadingText="Exporting..." title="Export Excel" icon="excel">
+                <x-loading-button wire:click="exportExcel" target="exportExcel" variant="success" size="md" loadingText="Exporting..." title="Export Excel" icon="excel" class="lg:order-1">
                     Excel
                 </x-loading-button>
             @endcan
             @can('surveys_export_pdf')
-                <x-loading-button wire:click="exportPdf" target="exportPdf" variant="danger" size="md" loadingText="Exporting..." title="Export PDF" icon="pdf">
+                <x-loading-button wire:click="exportPdf" target="exportPdf" variant="danger" size="md" loadingText="Exporting..." title="Export PDF" icon="pdf" class="lg:order-2">
                     PDF
                 </x-loading-button>
             @endcan
-            @can('survey_folders_create')
-                @if(!$currentFolder)
-                    <x-loading-button wire:click="createFolder" target="createFolder" variant="secondary" size="md" loadingText="Memuat..." title="Tambah Folder">
-                        <x-slot:icon>
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
-                        </x-slot:icon>
-                        Folder
-                    </x-loading-button>
-                @endif
-            @endcan
             @can('surveys_create')
-                <x-loading-button wire:click="createSurvey" target="createSurvey" variant="primary" size="md" loadingText="Memuat..." icon="plus" class="flex-1 sm:flex-none">
+                <x-loading-button wire:click="createSurvey" target="createSurvey" variant="primary" size="md" loadingText="Memuat..." icon="plus" class="flex-1 lg:flex-none lg:order-4">
                     Tambah Survey
                 </x-loading-button>
             @endcan
+
+            @if(count($selected) || (auth()->user()->can('survey_folders_create') && !$currentFolder))
+                <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:order-3">
+                    @if(count($selected))
+                        <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                            {{ count($selected) }} dipilih
+                            <x-loading-button type="button" wire:click="clearSelection" target="clearSelection"
+                                variant="icon-gray" icon="close" iconClass="w-3.5 h-3.5" wire:key="btn-clear-selection"
+                                title="Hapus pilihan" />
+                        </span>
+                        @can('surveys_update')
+                            <x-loading-button type="button" wire:click="openBulkMoveModal" target="openBulkMoveModal"
+                                variant="warning" size="sm" loadingText="Memuat..."
+                                wire:key="btn-bulk-move" title="Pindahkan survey terpilih ke folder" class="flex-1 lg:flex-none">
+                                <x-slot:icon>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13.5l3 3m0 0l3-3m-3 3v-6m1.06-4.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+                                </x-slot:icon>
+                                Pindahkan
+                            </x-loading-button>
+                        @endcan
+                    @endif
+                    @can('survey_folders_create')
+                        @if(!$currentFolder)
+                            <x-loading-button wire:click="createFolder" target="createFolder" variant="secondary" size="md" loadingText="Memuat..." title="Tambah Folder" class="flex-1 lg:flex-none">
+                                <x-slot:icon>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+                                </x-slot:icon>
+                                Folder
+                            </x-loading-button>
+                        @endif
+                    @endcan
+                </div>
+            @endif
         </div>
     </div>
 
@@ -104,13 +110,13 @@
             <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
             </svg>
-            <span class="inline-flex items-center gap-1.5 font-semibold text-gray-900 dark:text-white">
-                <svg class="h-4 w-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
+            <span class="inline-flex min-w-0 items-center gap-1.5 font-semibold text-gray-900 dark:text-white" title="{{ $currentFolder->name }}">
+                <svg class="h-4 w-4 shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M19.5 21a3 3 0 003-3v-4.5a3 3 0 00-3-3h-15a3 3 0 00-3 3V18a3 3 0 003 3h15zM1.5 10.146V6a3 3 0 013-3h5.379a3 3 0 012.12.879l2.122 2.121a3 3 0 002.12.88h5.26a3 3 0 013 3v.267"/>
                 </svg>
-                {{ $currentFolder->name }}
+                <span class="truncate">{{ $currentFolder->name }}</span>
             </span>
-            <span class="text-xs text-gray-400 dark:text-gray-500">({{ $surveys->total() }} survey)</span>
+            <span class="shrink-0 text-xs text-gray-400 dark:text-gray-500">({{ $surveys->total() }} survey)</span>
         </div>
     @endif
 

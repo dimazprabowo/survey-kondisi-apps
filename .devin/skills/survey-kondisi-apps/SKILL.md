@@ -246,6 +246,37 @@ Jika ada ambiguitas yang berdampak besar -> TANYA dulu, jangan berasumsi.
 - Upload file: tampilkan status (processing/completed/failed) + progress, tombol download/preview bila selesai.
 - Responsive: uji layout mobile (stack) & desktop.
 
+## Toast Hasil Filter/Search (WAJIB di SEMUA halaman list)
+Setiap perubahan search/filter WAJIB menampilkan toast jumlah hasil — pola `filterChanged`:
+
+1. Properti: `public bool $filterChanged = false;`
+2. Set flag di SEMUA hook `updating*` (search + setiap filter) dan `resetFilters()`:
+   ```php
+   public function updatingSearch()
+   {
+       $this->resetPage();
+       $this->filterChanged = true;
+   }
+
+   public function resetFilters()
+   {
+       $this->statusFilter = '';
+       $this->resetPage();
+       $this->filterChanged = true;
+       $this->notifySuccess('Filter berhasil direset.');
+   }
+   ```
+3. Konsumsi flag di `render()` SETELAH query paginator (pakai `->total()`, akurat lintas halaman):
+   ```php
+   if ($this->filterChanged) {
+       $this->notifySuccess("Ditemukan {$items->total()} data {entity}.");
+       $this->filterChanged = false;
+   }
+   ```
+   PENTING: `resetFilters()` sudah panggil notifySuccess sendiri — toast "Ditemukan N" tetap muncul setelahnya (dua toast berurutan, ini perilaku yang diinginkan).
+- JANGAN panggil notifySuccess di hook `updating*` — hasil belum dihitung saat itu; selalu di `render()` setelah query.
+- Bila halaman punya konteks tambahan (mis. folder di Survey Kondisi), ekstrak penyusunan pesan ke method `searchResultMessage()` di component — jangan tulis logic pesan di Blade.
+
 # Design System & Responsive (WAJIB, bukan opsional)
 
 ## Prinsip Desain
@@ -270,6 +301,16 @@ Jika ada ambiguitas yang berdampak besar -> TANYA dulu, jangan berasumsi.
 - Pagination: `hidden sm:flex` untuk prev/next text, cukup ikon di mobile.
 - Empty state: centered, `py-12 text-center`, ikon `h-12 w-12 mx-auto text-gray-400`.
 - Font size: `text-sm` untuk tabel/form (compact), `text-base` untuk page header, `text-xs` untuk meta/badge.
+- Bar aksi/header dengan beberapa tombol (export, filter, tambah): WAJIB `flex-wrap` — banyak tombol wrap ke baris baru di mobile, bukan overflow horizontal.
+- Header list (search + filter + action bar) dengan > 3 tombol aksi: baris horizontal mulai `lg:flex-row`, BUKAN `sm:flex-row` — di tablet/medium (sm–lg) tombol banyak masih melebihi lebar layar dan terdorong keluar ("offside"). Pola: `flex-col lg:flex-row lg:items-center gap-3`, baris tombol `flex flex-wrap items-center gap-2 w-full lg:w-auto lg:justify-end`. Header dengan <= 3 tombol tetap boleh `sm:flex-row`.
+- Pola action bar > 3 tombol (acuan: menu Perusahaan): pisah 2 grup.
+  - GRUP UTAMA di baris atas, urutan WAJIB `Excel -> PDF -> Tambah`. Tombol "Tambah" pakai `flex-1 lg:flex-none` agar mengisi sisa baris di mobile.
+  - GRUP SEKUNDER (import, folder, bulk action, dst) dibungkus div sendiri `flex flex-wrap items-center gap-2 w-full lg:w-auto lg:order-3` — di mobile turun ke baris baru, tiap tombolnya `flex-1 lg:flex-none` agar mengisi lebar secara rata (profesional, tidak ada celah kosong).
+  - Di `lg:`, pertahankan urutan desktop dengan `lg:order-*`: Excel `lg:order-1`, PDF `lg:order-2`, grup sekunder `lg:order-3`, Tambah `lg:order-4` — Tambah tetap paling kanan (primary CTA). Di mobile tidak ada class order → mengikuti urutan DOM.
+  - Guard container sekunder dengan `@if` gabungan permission agar div kosong tidak menghasilkan gap/baris kosong.
+- Header card `justify-between` (judul + kontrol kanan seperti toggle/badge): WAJIB `flex-wrap` + `gap-y-*`, atau `flex-col sm:flex-row`. Jangan biarkan kontrol menekan judul di layar sempit.
+- `flex-1` di dalam `flex items-center` yang berisi input/teks: WAJIB `min-w-0` — tanpa itu `min-width:auto` membuat anak tidak bisa menyusut di bawah intrinsic width → overflow di mobile.
+- Teks panjang di breadcrumb/chip/badge bar (mis. nama folder): parent `min-w-0`, ikon `shrink-0`, teks `truncate` + `title` attr untuk full text.
 
 ## Aksesibilitas Dasar
 - Setiap input WAJIB punya `<x-input-label>` dengan `for` attribute.
@@ -341,3 +382,10 @@ JANGAN bocorkan pesan exception mentah ke user.
 - Membuat form grid tanpa breakpoint responsif (harus adaptif 1/2/3 kolom)
 - Membuat `<x-text-input>` tanpa `placeholder` (kecuali type="date"/"hidden") -- WAJIB placeholder deskriptif bahasa Indonesia
 - Membuat field required tanpa `:required="true"` di `<x-input-label>` -- WAJIB tanda bintang merah `*` untuk field wajib
+- Membuat sticky action bar mepet tepi (`bottom-0`/`top-0`) -- WAJIB offset `bottom-3 sm:bottom-4`/`top-3`/`top-4`
+- Membuat bar aksi/header `justify-between` tanpa `flex-wrap` -- tombol/kontrol overflow di mobile
+- Memakai `sm:flex-row` pada header list dengan > 3 tombol aksi -- tombol terdorong keluar layar di tablet; gunakan `lg:flex-row`
+- Mencampur tombol sekunder (import/folder/bulk) sebaris dengan trio utama Excel/PDF/Tambah -- pisah jadi baris sendiri dengan pola grup utama/sekunder
+- `flex-1` tanpa `min-w-0` di dalam flex row -- anak tidak bisa menyusut, overflow di layar sempit
+- Membuat halaman list tanpa toast "Ditemukan N data" saat search/filter berubah -- WAJIB pola `filterChanged` + notify di `render()`
+- Memanggil notify di hook `updating*` untuk hasil filter -- hasil belum dihitung; notify HANYA di `render()` setelah query paginator

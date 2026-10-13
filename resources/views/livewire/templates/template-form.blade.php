@@ -118,7 +118,7 @@
                             </div>
                             <span class="text-sm font-bold text-gray-700 dark:text-gray-300">{{ to_roman($catIndex + 1) }}.</span>
                         </div>
-                        <div class="flex-1 grid grid-cols-1 gap-2">
+                        <div class="flex-1 min-w-0 grid grid-cols-1 gap-2">
                             <div>
                                 <x-text-input wire:model.live.debounce.500ms="categories.{{ $catIndex }}.label" type="text" class="block w-full" placeholder="Nama kategori (mis. Hull & Construction)" />
                                 <x-input-error :messages="$errors->get('categories.'.$catIndex.'.label')" class="mt-1" />
@@ -182,7 +182,7 @@
                                         <x-loading-button wire:click="moveSubCategoryDown({{ $catIndex }}, {{ $subIndex }})" target="moveSubCategoryDown({{ $catIndex }}, {{ $subIndex }})" variant="icon-gray" icon="arrow-right" wire:key="sub-down-{{ $catIndex }}-{{ $subIndex }}" title="Geser ke Kanan" class="!p-1" :disabled="$subIndex === count($category['sub_categories']) - 1" />
                                     </div>
                                     <span class="text-xs font-medium text-gray-600 dark:text-gray-400">{{ $subIndex + 1 }}.</span>
-                                    <div class="flex-1">
+                                    <div class="flex-1 min-w-0">
                                         <x-text-input wire:model.live.debounce.500ms="categories.{{ $catIndex }}.sub_categories.{{ $subIndex }}.name" type="text" class="block w-full" placeholder="Nama sub kategori" />
                                         <x-input-error :messages="$errors->get('categories.'.$catIndex.'.sub_categories.'.$subIndex.'.name')" class="mt-1" />
                                     </div>
@@ -206,7 +206,7 @@
                                                     <x-loading-button wire:click="moveItemGroupDown({{ $catIndex }}, {{ $subIndex }}, {{ $igIndex }})" target="moveItemGroupDown({{ $catIndex }}, {{ $subIndex }}, {{ $igIndex }})" variant="icon-gray" icon="arrow-down" wire:key="ig-down-{{ $catIndex }}-{{ $subIndex }}-{{ $igIndex }}" title="Turun" class="!p-1" :disabled="$igIndex === count($subCategory['item_groups']) - 1" />
                                                 </div>
                                                 <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ $subIndex + 1 }}.{{ $igIndex + 1 }}</span>
-                                                <div class="flex-1">
+                                                <div class="flex-1 min-w-0">
                                                     <x-text-input wire:model="categories.{{ $catIndex }}.sub_categories.{{ $subIndex }}.item_groups.{{ $igIndex }}.name" type="text" class="block w-full" placeholder="Nama item group" />
                                                     <x-input-error :messages="$errors->get('categories.'.$catIndex.'.sub_categories.'.$subIndex.'.item_groups.'.$igIndex.'.name')" class="mt-1" />
                                                 </div>
@@ -300,8 +300,9 @@
             </div>
         </div>
 
-        <!-- Action Bar (Sticky, width matches cards above) -->
-        <div class="sticky bottom-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-3 px-4 sm:px-6 z-10">
+        <!-- Action Bar (Sticky, width matches cards above; offset dari tepi
+             viewport agar tidak mepet — terlihat mengambang, tidak tertutup chrome) -->
+        <div class="sticky bottom-3 sm:bottom-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-3 px-4 sm:px-6 z-10">
             <div class="flex flex-col sm:flex-row gap-3 sm:justify-end">
                 <x-cancel-button wire:click="cancel" target="cancel" class="w-full sm:w-auto sm:min-w-[160px]" />
                 <x-loading-button wire:click="save" target="save" variant="primary" size="lg" loadingText="Menyimpan..." class="w-full sm:w-auto sm:min-w-[160px]">

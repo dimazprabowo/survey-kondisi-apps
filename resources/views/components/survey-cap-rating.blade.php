@@ -5,7 +5,7 @@
 ])
 
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
-    <div class="px-4 py-4 sm:px-6 flex items-center justify-between">
+    <div class="px-4 py-4 sm:px-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ $label }}</h3>
             <p class="text-sm text-gray-500 dark:text-gray-400">{{ $description }}</p>

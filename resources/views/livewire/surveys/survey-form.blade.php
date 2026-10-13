@@ -199,11 +199,11 @@
         <!-- Header Section -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
             <div class="px-4 py-5 sm:p-6">
-                <div class="flex items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
+                <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
                         Informasi Survey
                     </h3>
-                    <div class="flex items-center gap-4">
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Edit Struktur</span>
                             <x-toggle-switch wire:click="toggleEditStructure" :active="$editStructure" target="toggleEditStructure" activeColor="amber" title="Aktifkan/nonaktifkan mode edit struktur (tambah, ubah, hapus kategori/sub kategori/grup item/item)" />

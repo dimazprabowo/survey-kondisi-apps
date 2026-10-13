@@ -1,7 +1,7 @@
 <div>
-    <div class="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
+    <div class="mb-6 flex flex-col lg:flex-row lg:items-center gap-3">
         <!-- Search -->
-        <div class="flex-1 w-full sm:w-auto">
+        <div class="flex-1 w-full lg:w-auto">
             <input wire:model.live.debounce.300ms="search" type="text" placeholder="Cari template (nama, kode, deskripsi)..."
                 class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
         </div>
@@ -24,36 +24,42 @@
             </div>
         </x-filter-popover>
 
-        <!-- Action Buttons -->
-        <div class="flex items-center gap-2 w-full sm:w-auto">
+        <!-- Action Buttons: utama (Excel/PDF/Tambah) satu baris,
+             aksi sekunder turun ke baris sendiri mengisi lebar penuh di mobile -->
+        <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:justify-end">
             @can('survey_templates_export_excel')
-                <x-loading-button wire:click="exportExcel" target="exportExcel" variant="success" size="md" loadingText="Exporting..." title="Export Excel" icon="excel">
+                <x-loading-button wire:click="exportExcel" target="exportExcel" variant="success" size="md" loadingText="Exporting..." title="Export Excel" icon="excel" class="lg:order-1">
                     Excel
                 </x-loading-button>
             @endcan
             @can('survey_templates_export_pdf')
-                <x-loading-button wire:click="exportPdf" target="exportPdf" variant="danger" size="md" loadingText="Exporting..." title="Export PDF" icon="pdf">
+                <x-loading-button wire:click="exportPdf" target="exportPdf" variant="danger" size="md" loadingText="Exporting..." title="Export PDF" icon="pdf" class="lg:order-2">
                     PDF
                 </x-loading-button>
             @endcan
-            @can('survey_templates_export_excel')
-                <x-loading-button wire:click="downloadImportTemplate" target="downloadImportTemplate" variant="secondary" size="md" loadingText="Mengunduh..." title="Unduh template Excel untuk import struktur" icon="download">
-                    Template
-                </x-loading-button>
-            @endcan
-            @can('survey_templates_import')
-                <x-loading-button wire:click="openImportModal" target="openImportModal" variant="warning" size="md" loadingText="Memuat..." title="Import struktur template dari Excel">
-                    <x-slot:icon>
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4"/></svg>
-                    </x-slot:icon>
-                    Import
-                </x-loading-button>
-            @endcan
             @can('survey_templates_create')
-                <x-loading-button wire:click="createTemplate" target="createTemplate" variant="primary" size="md" loadingText="Memuat..." icon="plus" class="flex-1 sm:flex-none">
+                <x-loading-button wire:click="createTemplate" target="createTemplate" variant="primary" size="md" loadingText="Memuat..." icon="plus" class="flex-1 lg:flex-none lg:order-4">
                     Tambah Template
                 </x-loading-button>
             @endcan
+
+            @if(auth()->user()->can('survey_templates_export_excel') || auth()->user()->can('survey_templates_import'))
+                <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:order-3">
+                    @can('survey_templates_export_excel')
+                        <x-loading-button wire:click="downloadImportTemplate" target="downloadImportTemplate" variant="secondary" size="md" loadingText="Mengunduh..." title="Unduh template Excel untuk import struktur" icon="download" class="flex-1 lg:flex-none">
+                            Template
+                        </x-loading-button>
+                    @endcan
+                    @can('survey_templates_import')
+                        <x-loading-button wire:click="openImportModal" target="openImportModal" variant="warning" size="md" loadingText="Memuat..." title="Import struktur template dari Excel" class="flex-1 lg:flex-none">
+                            <x-slot:icon>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4"/></svg>
+                            </x-slot:icon>
+                            Import
+                        </x-loading-button>
+                    @endcan
+                </div>
+            @endif
         </div>
     </div>
 
