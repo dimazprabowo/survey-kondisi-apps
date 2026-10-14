@@ -1,2 +1,6 @@
 *
 !.gitignore
+
+# Izinkan folder templates beserta seluruh isinya
+!/templates/
+!/templates/**
