@@ -95,7 +95,7 @@
                     </div>
 
                     {{-- User List --}}
-                    <div class="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden divide-y divide-gray-100 dark:divide-gray-700 max-h-56 overflow-y-auto">
+                    <div class="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden divide-y divide-gray-100 dark:divide-gray-700 max-h-56 overflow-y-auto custom-scrollbar">
                         @forelse($users as $user)
                             <button type="button"
                                     wire:click="toggleUser({{ $user->id }})"

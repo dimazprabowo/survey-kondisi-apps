@@ -316,6 +316,7 @@ Setiap perubahan search/filter WAJIB menampilkan toast jumlah hasil — pola `fi
 - Header card `justify-between` (judul + kontrol kanan seperti toggle/badge): WAJIB `flex-wrap` + `gap-y-*`, atau `flex-col sm:flex-row`. Jangan biarkan kontrol menekan judul di layar sempit.
 - `flex-1` di dalam `flex items-center` yang berisi input/teks: WAJIB `min-w-0` — tanpa itu `min-width:auto` membuat anak tidak bisa menyusut di bawah intrinsic width → overflow di mobile.
 - Teks panjang di breadcrumb/chip/badge bar (mis. nama folder): parent `min-w-0`, ikon `shrink-0`, teks `truncate` + `title` attr untuk full text.
+- Scrollbar: SEMUA container yang scrollable (`overflow-x-auto`/`overflow-y-auto`/`overflow-auto`) WAJIB pakai class `custom-scrollbar` — di sidebar, dropdown select, area modal, dan wrapper tabel. Kecuali tab/nav bar horizontal yang memang pakai `navbar-scroll` (scrollbar disembunyikan). Scrollbar root halaman (vertikal) sudah distyle global via `html` di `app.css` — tidak perlu class tambahan.
 
 ## Aksesibilitas Dasar
 - Setiap input WAJIB punya `<x-input-label>` dengan `for` attribute.

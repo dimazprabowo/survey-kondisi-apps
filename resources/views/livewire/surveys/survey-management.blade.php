@@ -169,7 +169,7 @@
     @endif
 
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto custom-scrollbar">
             <table class="min-w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
                 <colgroup>
                     @if($canSelect)
@@ -455,7 +455,7 @@
                         </button>
                     </div>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Pilih template yang akan digunakan untuk survey ini. Template tidak dapat diubah setelah survey dibuat.</p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
                         @foreach($this->templateOptions as $template)
                             <button type="button" wire:click="proceedWithTemplate({{ $template['id'] }})" wire:target="proceedWithTemplate({{ $template['id'] }})" wire:key="tpl-{{ $template['id'] }}"
                                 wire:loading.attr="disabled" wire:loading.class="opacity-60 cursor-wait" wire:loading.class.remove="hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"

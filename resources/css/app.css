@@ -71,6 +71,41 @@ button, a, [role="button"], label[for], select, summary {
     background: linear-gradient(180deg, rgba(59, 130, 246, 1), rgba(37, 99, 235, 1));
 }
 
+/* Page-level scrollbar (scroll vertikal halaman) — gaya sama dengan .custom-scrollbar.
+   Ditargetkan ke html karena scroll root; .dark ada di elemen html yang sama. */
+html {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(59, 130, 246, 0.3) transparent;
+}
+
+html::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+html::-webkit-scrollbar-track {
+    background: rgba(241, 245, 249, 0.5);
+}
+
+html::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.6), rgba(37, 99, 235, 0.7));
+    border-radius: 12px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+html.dark {
+    scrollbar-color: rgba(59, 130, 246, 0.4) transparent;
+}
+
+html.dark::-webkit-scrollbar-track {
+    background: rgba(30, 41, 59, 0.4);
+}
+
+html.dark::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.5), rgba(37, 99, 235, 0.6));
+}
+
 /* Auto-save flash — warm green border + glow yang memudar perlahan pada field respons */
 .autosave-glow {
     animation: autosave-glow 0.9s ease-out;

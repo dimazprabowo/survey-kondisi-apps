@@ -445,7 +445,7 @@
                         temuan utama. Uraian keterangan pada setiap item menggambarkan kondisi umum yang
                         ditemukan di lapangan dan indikasi kerusakan.
                     </p>
-                    <div class="mt-2 overflow-x-auto">
+                    <div class="mt-2 overflow-x-auto custom-scrollbar">
                         <table class="w-full border-collapse border border-gray-400 dark:border-gray-500">
                             <thead>
                                 <tr class="bg-[#D9E2F3] dark:bg-blue-900/30">
@@ -589,7 +589,7 @@
 
                 <div class="{{ $autoZone }} mt-8">
                     <span class="{{ $autoTag }}" style="{{ $sans }}">Konten tetap dari master Word</span>
-                    <div class="mt-4 overflow-x-auto">
+                    <div class="mt-4 overflow-x-auto custom-scrollbar">
                         <table class="w-full min-w-[720px] table-fixed border-collapse border border-gray-500 text-xs leading-5 dark:border-gray-400">
                             <colgroup>
                                 <col style="width: 12%">
@@ -670,7 +670,7 @@
                 <div class="{{ $autoZone }}">
                     <span class="{{ $autoTag }}" style="{{ $sans }}">Otomatis dari master data kapal</span>
                     <p class="font-bold">SHIP PARTICULAR</p>
-                    <div class="mt-1 overflow-x-auto">
+                    <div class="mt-1 overflow-x-auto custom-scrollbar">
                         <table>
                             <tbody>
                                 @foreach([
@@ -711,7 +711,7 @@
                 <div class="{{ $autoZone }}">
                     <span class="{{ $autoTag }}" style="{{ $sans }}">Otomatis dari master data kapal</span>
                     <p class="font-bold">STATUS CLASS</p>
-                    <div class="mt-1 overflow-x-auto">
+                    <div class="mt-1 overflow-x-auto custom-scrollbar">
                         <table class="w-full border-collapse border border-gray-400 dark:border-gray-500">
                             <thead>
                                 <tr class="bg-[#D9E2F3] dark:bg-blue-900/30">
@@ -838,7 +838,7 @@
                             <p class="mb-2 text-center font-bold leading-normal">{{ $legend }}</p>
                         @endif
 
-                        <div class="overflow-x-auto">
+                        <div class="overflow-x-auto custom-scrollbar">
                             <table class="w-full min-w-[700px] table-fixed border-collapse border border-black dark:border-gray-400 text-[16px] leading-6">
                                 <colgroup>
                                     @foreach($colWidths as $colWidth)
