@@ -1108,6 +1108,18 @@
                             loadingText="Mengunduh..." icon="download" class="w-full sm:w-auto">
                             Download DOCX
                         </x-loading-button>
+                        @can('survey_reports_edit_word')
+                            <x-loading-button type="button" wire:click.preserve-scroll="editWord" target="editWord" variant="warning" size="lg"
+                                loadingText="Memuat..." icon="edit" class="w-full sm:w-auto" title="Buka laporan di editor Word (OnlyOffice)">
+                                Edit Word
+                            </x-loading-button>
+                        @endcan
+                        @if($report->edited_file_path)
+                            <x-loading-button type="button" wire:click.preserve-scroll="downloadEdited" target="downloadEdited" variant="secondary" size="lg"
+                                loadingText="Mengunduh..." icon="download" class="w-full sm:w-auto" title="Versi hasil edit Word terakhir ({{ $report->edited_at?->format('d/m/Y H:i') }})">
+                                Unduh Versi Edit
+                            </x-loading-button>
+                        @endif
                     @endif
                     @can('survey_reports_update')
                         <x-loading-button type="submit" target="save" variant="secondary" size="lg"

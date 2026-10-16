@@ -1,7 +1,31 @@
 <?php
 
 use App\Http\Controllers\Api\SsoSyncController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
+// OnlyOffice Document Server — callback save/forcesave.
+// Diverifikasi via JWT (secret sama dengan konfigurasi Document Server),
+// bukan session auth. Selalu jawab {"error":0} agar DS tidak retry.
+Route::post('/onlyoffice/report/{report}/callback', function (Request $request, \App\Models\SurveyReport $report) {
+    $service = app(\App\Services\OnlyOfficeService::class);
+
+    try {
+        $payload = $service->callbackPayload($request);
+    } catch (\Throwable $e) {
+        return response()->json(['error' => 1, 'message' => 'Token tidak valid.'], 403);
+    }
+
+    try {
+        $service->handleCallback($report, $payload);
+    } catch (\Throwable $e) {
+        report($e);
+
+        return response()->json(['error' => 1, 'message' => 'Gagal menyimpan dokumen.'], 200);
+    }
+
+    return response()->json(['error' => 0]);
+})->middleware('throttle:60,1')->name('onlyoffice.report.callback');
 
 // SSO Server sync endpoints — only register if SSO is enabled
 // Protected by X-SSO-Secret header + rate limiting

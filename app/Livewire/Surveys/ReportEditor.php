@@ -9,6 +9,7 @@ use App\Models\SurveyGroupNote;
 use App\Models\SurveyReport;
 use App\Models\SurveyReportDocumentation;
 use App\Models\SurveyResponse;
+use App\Services\FileStorageService;
 use App\Services\SurveyReportService;
 use App\Services\SurveyService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -217,6 +218,44 @@ class ReportEditor extends Component
             return null;
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
+
+            return null;
+        }
+    }
+
+    public function editWord()
+    {
+        try {
+            $this->authorize('editWord', $this->report);
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->notifyError('Anda tidak memiliki izin untuk mengedit dokumen Word.');
+
+            return;
+        }
+
+        if ($this->report->file_status !== FileStatus::Completed || ! $this->report->file_path) {
+            $this->notifyWarning('Generate DOCX terlebih dahulu sebelum edit Word.');
+
+            return;
+        }
+
+        return $this->redirect(route('surveys.report.word', $this->survey), navigate: true);
+    }
+
+    public function downloadEdited(FileStorageService $storage)
+    {
+        try {
+            $this->authorize('view', $this->report);
+
+            if (! $this->report->edited_file_path) {
+                $this->notifyWarning('Belum ada versi edit tersimpan.');
+
+                return null;
+            }
+
+            return $storage->download($this->report->edited_file_path, $this->report->edited_file_name);
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->notifyError('Anda tidak memiliki izin untuk mengunduh laporan.');
 
             return null;
         }

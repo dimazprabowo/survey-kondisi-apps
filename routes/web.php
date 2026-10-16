@@ -55,6 +55,9 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
         Route::get('/{survey}/report', function (\App\Models\Survey $survey) {
             return view('surveys.report', ['survey' => $survey]);
         })->middleware('can:survey_reports_view')->name('report');
+        Route::get('/{survey}/report/word', function (\App\Models\Survey $survey) {
+            return view('surveys.report-word-editor', ['survey' => $survey]);
+        })->middleware('can:survey_reports_edit_word')->name('report.word');
         Route::get('/{survey}/report/benchmark-chart', function (\App\Models\Survey $survey) {
             $png = app(\App\Services\SurveyReportDocxBuilder::class)->renderBenchmarkChartPng(
                 app(\App\Services\SurveyReportService::class)->benchmarkData($survey)
@@ -94,5 +97,16 @@ Route::middleware(['auth', 'verified', 'active'])->group(function () {
         Route::view('/roles', 'settings.roles')->middleware('can:roles_view')->name('roles');
     });
 });
+
+// OnlyOffice Document Server — unduh DOCX untuk diedit.
+// Bukan session auth: diakses server OnlyOffice via signed URL yang
+// kedaluwarsa (12 jam), digenerate server-side saat halaman editor dibuka.
+Route::get('/onlyoffice/report/{report}/file', function (\App\Models\SurveyReport $report) {
+    $path = app(\App\Services\OnlyOfficeService::class)->editableSourcePath($report);
+    $storage = app(\App\Services\FileStorageService::class);
+    abort_unless($path && $storage->exists($path), 404);
+
+    return $storage->inline($path, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+})->middleware('signed')->name('onlyoffice.report.file');
 
 require __DIR__.'/auth.php';

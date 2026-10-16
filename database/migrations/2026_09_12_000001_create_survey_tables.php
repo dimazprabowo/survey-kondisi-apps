@@ -217,6 +217,12 @@ return new class extends Migration
             $table->text('file_error')->nullable();
             $table->timestamp('file_processed_at')->nullable();
             $table->string('generator_version', 50)->nullable();
+            // Versi hasil edit via OnlyOffice — file generate asli tetap utuh
+            $table->string('edited_file_path')->nullable();
+            $table->string('edited_file_name')->nullable();
+            $table->unsignedBigInteger('edited_file_size')->nullable();
+            $table->timestamp('edited_at')->nullable();
+            $table->foreignId('edited_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();

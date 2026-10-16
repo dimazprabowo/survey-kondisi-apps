@@ -41,6 +41,12 @@ return [
         'secret_key' => env('RECAPTCHA_SECRET_KEY'),
     ],
 
+    'onlyoffice' => [
+        'enabled' => env('ONLYOFFICE_ENABLED', false),
+        'url' => rtrim((string) env('ONLYOFFICE_URL'), '/'),
+        'jwt_secret' => env('ONLYOFFICE_JWT_SECRET'),
+    ],
+
     'sso' => [
         'enabled' => env('IS_USING_SSO', false),
         'client_id' => env('SSO_CLIENT_ID'),

@@ -26,4 +26,9 @@ class SurveyReportPolicy
     {
         return $user->can('survey_reports_generate');
     }
+
+    public function editWord(User $user, SurveyReport $report): bool
+    {
+        return $user->can('survey_reports_edit_word');
+    }
 }

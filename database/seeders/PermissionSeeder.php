@@ -97,6 +97,7 @@ class PermissionSeeder extends Seeder
             'survey_reports_view',
             'survey_reports_update',
             'survey_reports_generate',
+            'survey_reports_edit_word',
 
             // Template Form (manajemen template survey)
             'survey_templates_view',

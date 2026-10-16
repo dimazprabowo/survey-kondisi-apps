@@ -139,6 +139,7 @@ class RolePermissionService
                 ['name' => 'survey_reports_view',     'label' => 'Lihat Laporan Survey'],
                 ['name' => 'survey_reports_update',   'label' => 'Edit Laporan Survey'],
                 ['name' => 'survey_reports_generate', 'label' => 'Generate Laporan Survey'],
+                ['name' => 'survey_reports_edit_word', 'label' => 'Edit Word Laporan (OnlyOffice)'],
             ],
             'Template Form' => [
                 ['name' => 'survey_templates_view',         'label' => 'Lihat Template'],
