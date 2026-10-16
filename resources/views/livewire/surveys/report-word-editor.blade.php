@@ -1,10 +1,17 @@
 <div>
     <div class="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
         <div class="flex-1 min-w-0">
-            <h2 class="text-2xl font-bold text-gray-900 dark:text-white truncate" title="{{ $report?->report_title }}">
-                Edit Word — {{ $report?->report_title ?? 'Laporan Survey' }}
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                <span class="sm:hidden">Edit Word</span>
+                <span class="hidden sm:block truncate" title="Edit Word — {{ $report?->report_title ?? 'Laporan Survey' }}">
+                    Edit Word — {{ $report?->report_title ?? 'Laporan Survey' }}
+                </span>
             </h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p class="sm:hidden mt-0.5 truncate text-sm font-medium text-gray-700 dark:text-gray-300"
+                title="{{ $report?->report_title ?? 'Laporan Survey' }}">
+                {{ $report?->report_title ?? 'Laporan Survey' }}
+            </p>
+            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
                 {{ $report?->survey?->ship?->name ?? '-' }}
                 @if($report?->edited_at)
                     &middot; Versi edit terakhir: {{ $report->edited_at->format('d/m/Y H:i') }}
@@ -17,13 +24,11 @@
             </p>
         </div>
         <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            @if($report?->edited_file_path)
-                <x-loading-button type="button" wire:click="downloadEdited" target="downloadEdited"
-                    variant="success" size="md" loadingText="Mengunduh..." icon="download"
-                    class="flex-1 sm:flex-none">
-                    Unduh Versi Edit
-                </x-loading-button>
-            @endif
+            <x-loading-button type="button" wire:click="download" target="download"
+                variant="success" size="md" loadingText="Mengunduh..." icon="download"
+                class="flex-1 sm:flex-none">
+                Unduh DOCX{{ $report?->edited_file_path ? ' (Versi Edit)' : '' }}
+            </x-loading-button>
             <x-loading-button type="button" wire:click="back" target="back"
                 variant="secondary" size="md" loadingText="Memuat..."
                 class="flex-1 sm:flex-none">

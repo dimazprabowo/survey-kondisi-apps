@@ -162,12 +162,22 @@ class SurveyReportService
         $report->generator_version = null;
     }
 
-    /**
-     * Download file DOCX hasil generate terakhir.
-     */
+    public function activeFilePath(SurveyReport $report): ?string
+    {
+        return $report->edited_file_path ?: $report->file_path;
+    }
+
+    public function activeFileName(SurveyReport $report): ?string
+    {
+        return $report->edited_file_name ?: $report->file_name;
+    }
+
     public function download(SurveyReport $report)
     {
-        return app(FileStorageService::class)->download($report->file_path, $report->file_name);
+        return app(FileStorageService::class)->download(
+            $this->activeFilePath($report),
+            $this->activeFileName($report)
+        );
     }
 
     public function generateReportNumber(): string

@@ -86,13 +86,20 @@ class Ship extends Model
      */
     public function formattedDimension(string $attribute): ?string
     {
+        $value = $this->dimensionValue($attribute);
+
+        return $value !== null ? $value.' m' : null;
+    }
+
+    public function dimensionValue(string $attribute): ?string
+    {
         $value = trim((string) ($this->{$attribute} ?? ''));
 
         if ($value === '') {
             return null;
         }
 
-        return rtrim((string) preg_replace('/\s*m$/i', '', $value)).' m';
+        return rtrim((string) preg_replace('/\s*m$/i', '', $value));
     }
 
     public function getActivitylogOptions(): LogOptions

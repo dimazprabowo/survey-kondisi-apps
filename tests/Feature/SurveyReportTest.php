@@ -435,6 +435,7 @@ class SurveyReportTest extends TestCase
             'name' => 'KMP. A & B',
             'main_engine' => 'MAN B&W 9L27/38',
             'builder' => 'PT. Dock <Shipyard>',
+            'loa' => '54.67 m',
         ]);
         $survey = $this->createSurvey();
         $service = new SurveyReportService(new SurveyService);
@@ -457,11 +458,42 @@ class SurveyReportTest extends TestCase
             libxml_use_internal_errors($previous);
             $this->assertStringContainsString('MAN B&amp;W 9L27/38', $xml);
             $this->assertStringNotContainsString('MAN B&W 9L27/38', $xml);
+            $this->assertStringContainsString('>54.67</w:t>', $xml);
+            $this->assertStringNotContainsString('>54.67 m</w:t>', $xml);
         } finally {
             if (is_file($path)) {
                 unlink($path);
             }
         }
+    }
+
+    public function test_generate_sukses_menghapus_revisi_edit_lama(): void
+    {
+        Storage::fake('local');
+        $survey = $this->createSurvey();
+        $service = new SurveyReportService(new SurveyService);
+        $report = $service->getOrCreate($survey);
+        $editedPath = 'testing/survey-reports/kmp-test/edited.docx';
+        Storage::disk('local')->put($editedPath, 'EDITED-OLD');
+        $report->update([
+            'edited_file_path' => $editedPath,
+            'edited_file_name' => 'edited.docx',
+            'edited_file_size' => 10,
+            'edited_at' => now(),
+            'edited_by' => $this->user->id,
+        ]);
+
+        (new ProcessSurveyReport($report->id))->handle(
+            app(SurveyReportDocxBuilder::class),
+            app(\App\Services\FileStorageService::class),
+        );
+
+        $report->refresh();
+        $this->assertSame(FileStatus::Completed, $report->file_status);
+        $this->assertNull($report->edited_file_path);
+        $this->assertNull($report->edited_at);
+        Storage::disk('local')->assertMissing($editedPath);
+        Storage::disk('local')->assertExists($report->file_path);
     }
 
     public function test_generate_menandai_processing_dan_dispatch_job(): void

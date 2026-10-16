@@ -126,6 +126,22 @@ class OnlyOfficeReportTest extends TestCase
             ->assertSet('unavailableReason', 'File laporan belum tersedia. Generate DOCX terlebih dahulu.');
     }
 
+    public function test_word_editor_uses_edited_revision_when_generated_file_is_outdated(): void
+    {
+        Gate::before(fn () => true);
+        $report = $this->makeReport();
+        Storage::disk('local')->put('local/survey-reports/alpha/edited.docx', 'EDITED');
+        $report->update([
+            'file_status' => null,
+            'edited_file_path' => 'local/survey-reports/alpha/edited.docx',
+            'edited_file_name' => 'edited.docx',
+            'edited_at' => now(),
+        ]);
+
+        Livewire::test(ReportWordEditor::class, ['survey' => $report->survey])
+            ->assertSet('unavailableReason', null);
+    }
+
     public function test_document_file_route_requires_signed_url(): void
     {
         $report = $this->makeReport();
@@ -164,6 +180,50 @@ class OnlyOfficeReportTest extends TestCase
 
         // Sesi edit berikutnya melanjutkan dari versi edit → key berubah.
         $this->assertSame($report->edited_file_path, $this->service->editableSourcePath($report));
+        $reportService = app(\App\Services\SurveyReportService::class);
+        $this->assertSame($report->edited_file_path, $reportService->activeFilePath($report));
+        $this->assertSame($report->edited_file_name, $reportService->activeFileName($report));
+    }
+
+    public function test_repeated_forcesave_from_same_editor_session_is_accepted(): void
+    {
+        $report = $this->makeReport();
+        $sessionKey = $this->service->documentKey($report);
+        Http::fake(['*' => Http::sequence()
+            ->push('FIRST-SAVE')
+            ->push('SECOND-SAVE')]);
+        $this->service->handleCallback($report, [
+            'status' => 6,
+            'key' => $sessionKey,
+            'url' => 'http://onlyoffice.test/cache/first.docx',
+        ]);
+
+        $report->refresh();
+        $this->service->handleCallback($report, [
+            'status' => 6,
+            'key' => $sessionKey,
+            'url' => 'http://onlyoffice.test/cache/second.docx',
+        ]);
+
+        $report->refresh();
+        $this->assertSame('SECOND-SAVE', Storage::disk('local')->get($report->edited_file_path));
+    }
+
+    public function test_callback_from_old_document_revision_is_ignored(): void
+    {
+        $report = $this->makeReport();
+        $oldKey = $this->service->documentKey($report);
+        $report->update(['file_processed_at' => now()->addMinute()]);
+        Http::fake();
+
+        $this->service->handleCallback($report->refresh(), [
+            'status' => 2,
+            'key' => $oldKey,
+            'url' => 'http://onlyoffice.test/cache/stale.docx',
+        ]);
+
+        $this->assertNull($report->fresh()->edited_file_path);
+        Http::assertNothingSent();
     }
 
     public function test_callback_rejects_missing_or_invalid_token(): void

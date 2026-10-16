@@ -1103,10 +1103,11 @@
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                 <x-cancel-button wire:click="back" target="back" label="Kembali" class="w-full sm:w-auto" />
                 <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                    @if($report->file_status === \App\Enums\FileStatus::Completed)
+                    @if($report->edited_file_path || $report->file_status === \App\Enums\FileStatus::Completed)
                         <x-loading-button type="button" wire:click.preserve-scroll="download" target="download" variant="success" size="lg"
-                            loadingText="Mengunduh..." icon="download" class="w-full sm:w-auto">
-                            Download DOCX
+                            loadingText="Mengunduh..." icon="download" class="w-full sm:w-auto"
+                            title="{{ $report->edited_file_path ? 'Versi hasil edit Word terakhir ('.$report->edited_at?->format('d/m/Y H:i').')' : 'File hasil generate terakhir' }}">
+                            Unduh DOCX{{ $report->edited_file_path ? ' (Versi Edit)' : '' }}
                         </x-loading-button>
                         @can('survey_reports_edit_word')
                             <x-loading-button type="button" wire:click.preserve-scroll="editWord" target="editWord" variant="warning" size="lg"
@@ -1114,12 +1115,6 @@
                                 Edit Word
                             </x-loading-button>
                         @endcan
-                        @if($report->edited_file_path)
-                            <x-loading-button type="button" wire:click.preserve-scroll="downloadEdited" target="downloadEdited" variant="secondary" size="lg"
-                                loadingText="Mengunduh..." icon="download" class="w-full sm:w-auto" title="Versi hasil edit Word terakhir ({{ $report->edited_at?->format('d/m/Y H:i') }})">
-                                Unduh Versi Edit
-                            </x-loading-button>
-                        @endif
                     @endif
                     @can('survey_reports_update')
                         <x-loading-button type="submit" target="save" variant="secondary" size="lg"
@@ -1128,15 +1123,21 @@
                         </x-loading-button>
                     @endcan
                     @can('survey_reports_generate')
-                        <x-loading-button type="button" wire:click.preserve-scroll="generate" target="generate" variant="primary" size="lg"
+                        <x-loading-button type="button" wire:click.preserve-scroll="prepareGenerate" target="prepareGenerate,generate" variant="primary" size="lg"
                             loadingText="Memproses..." class="w-full sm:w-auto"
                             :loading="$report->file_status === \App\Enums\FileStatus::Processing"
                             :disabled="$report->file_status === \App\Enums\FileStatus::Processing">
-                            {{ $report->file_status === \App\Enums\FileStatus::Completed ? 'Regenerate DOCX' : 'Generate DOCX' }}
+                            {{ $report->edited_file_path || $report->file_status === \App\Enums\FileStatus::Completed ? 'Regenerate DOCX' : 'Generate DOCX' }}
                         </x-loading-button>
                     @endcan
                 </div>
             </div>
         </div>
     </form>
+
+    <x-confirm-modal
+        name="report-regenerate-modal"
+        eventName="confirm-report-regenerate"
+        type="warning"
+    />
 </div>

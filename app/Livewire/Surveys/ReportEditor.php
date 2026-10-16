@@ -9,7 +9,6 @@ use App\Models\SurveyGroupNote;
 use App\Models\SurveyReport;
 use App\Models\SurveyReportDocumentation;
 use App\Models\SurveyResponse;
-use App\Services\FileStorageService;
 use App\Services\SurveyReportService;
 use App\Services\SurveyService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -171,15 +170,41 @@ class ReportEditor extends Component
         }
     }
 
+    public function prepareGenerate(SurveyReportService $service)
+    {
+        try {
+            $this->authorize('generate', $this->report);
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->notifyError('Anda tidak memiliki izin untuk generate laporan.');
+
+            return;
+        }
+
+        if (! $this->report->edited_file_path) {
+            return $this->generate($service);
+        }
+
+        $this->dispatch('confirm-report-regenerate',
+            action: 'generate',
+            title: 'Generate Ulang Dokumen?',
+            message: 'Dokumen ini pernah diedit melalui OnlyOffice. Generate ulang akan membuat dokumen baru berdasarkan data aplikasi dan menggantikan versi edit aktif. Perubahan manual pada versi edit tidak akan ikut ke dokumen baru. Versi edit lama baru dihapus setelah generate berhasil.',
+            confirmText: 'Ya, Generate Ulang',
+            cancelText: 'Batal',
+            type: 'warning',
+        );
+    }
+
     public function generate(SurveyReportService $service)
     {
         try {
             $this->authorize('generate', $this->report);
             $this->validate();
         } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->dispatch('confirm-report-regenerate-close');
             $this->notifyValidationError($e);
             throw $e;
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->dispatch('confirm-report-regenerate-close');
             $this->notifyError('Anda tidak memiliki izin untuk generate laporan.');
 
             return;
@@ -194,8 +219,10 @@ class ReportEditor extends Component
             }
 
             $service->requestGenerate($this->report->refresh(), auth()->id());
+            $this->dispatch('confirm-report-regenerate-close');
             $this->notifySuccess('Generate laporan dimulai. File akan tersedia setelah proses selesai.');
         } catch (\Exception $e) {
+            $this->dispatch('confirm-report-regenerate-close');
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
         }
     }
@@ -205,7 +232,7 @@ class ReportEditor extends Component
         try {
             $this->authorize('view', $this->report);
 
-            if (! $this->report->file_path || $this->report->file_status !== FileStatus::Completed) {
+            if (! $service->activeFilePath($this->report)) {
                 $this->notifyWarning('File laporan belum tersedia.');
 
                 return null;
@@ -233,32 +260,14 @@ class ReportEditor extends Component
             return;
         }
 
-        if ($this->report->file_status !== FileStatus::Completed || ! $this->report->file_path) {
+        if (! $this->report->edited_file_path
+            && ($this->report->file_status !== FileStatus::Completed || ! $this->report->file_path)) {
             $this->notifyWarning('Generate DOCX terlebih dahulu sebelum edit Word.');
 
             return;
         }
 
         return $this->redirect(route('surveys.report.word', $this->survey), navigate: true);
-    }
-
-    public function downloadEdited(FileStorageService $storage)
-    {
-        try {
-            $this->authorize('view', $this->report);
-
-            if (! $this->report->edited_file_path) {
-                $this->notifyWarning('Belum ada versi edit tersimpan.');
-
-                return null;
-            }
-
-            return $storage->download($this->report->edited_file_path, $this->report->edited_file_name);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
-            $this->notifyError('Anda tidak memiliki izin untuk mengunduh laporan.');
-
-            return null;
-        }
     }
 
     /**

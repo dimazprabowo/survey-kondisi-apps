@@ -148,6 +148,18 @@ class OnlyOfficeService
     public function handleCallback(SurveyReport $report, array $payload): void
     {
         $status = (int) ($payload['status'] ?? 0);
+        $callbackKey = (string) ($payload['key'] ?? '');
+
+        if ($callbackKey !== ''
+            && ! $report->edited_file_path
+            && ! hash_equals($this->documentKey($report), $callbackKey)) {
+            Log::warning('Callback OnlyOffice dari revisi dokumen lama diabaikan', [
+                'report_id' => $report->id,
+                'callback_key' => $callbackKey,
+            ]);
+
+            return;
+        }
 
         if (in_array($status, [3, 7], true)) {
             Log::warning('OnlyOffice gagal menyimpan dokumen', [

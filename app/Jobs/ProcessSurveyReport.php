@@ -60,6 +60,7 @@ class ProcessSurveyReport implements ShouldQueue
                 $storage->delete($report->file_path);
             }
 
+            $editedFilePath = $report->edited_file_path;
             $report->update([
                 'file_path' => $stored['path'],
                 'file_name' => $stored['name'],
@@ -68,7 +69,16 @@ class ProcessSurveyReport implements ShouldQueue
                 'file_error' => null,
                 'file_processed_at' => now(),
                 'generator_version' => SurveyReportService::GENERATOR_VERSION,
+                'edited_file_path' => null,
+                'edited_file_name' => null,
+                'edited_file_size' => null,
+                'edited_at' => null,
+                'edited_by' => null,
             ]);
+
+            if ($editedFilePath) {
+                $storage->delete($editedFilePath);
+            }
 
             $this->notifyUser(
                 'Laporan Survey Selesai',

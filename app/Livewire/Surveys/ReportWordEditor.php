@@ -42,7 +42,8 @@ class ReportWordEditor extends Component
             return;
         }
 
-        if ($this->report->file_status !== FileStatus::Completed || ! $this->report->file_path) {
+        if (! $this->report->edited_file_path
+            && ($this->report->file_status !== FileStatus::Completed || ! $this->report->file_path)) {
             $this->unavailableReason = 'File laporan belum tersedia. Generate DOCX terlebih dahulu.';
 
             return;
@@ -59,18 +60,18 @@ class ReportWordEditor extends Component
         $this->editorConfig = $onlyOffice->buildEditorConfig($this->report, auth()->user());
     }
 
-    public function downloadEdited(FileStorageService $storage)
+    public function download(SurveyReportService $service)
     {
         try {
             $this->authorize('view', $this->report);
 
-            if (! $this->report->edited_file_path) {
-                $this->notifyWarning('Belum ada versi edit tersimpan.');
+            if (! $service->activeFilePath($this->report)) {
+                $this->notifyWarning('File laporan belum tersedia.');
 
                 return null;
             }
 
-            return $storage->download($this->report->edited_file_path, $this->report->edited_file_name);
+            return $service->download($this->report);
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengunduh laporan.');
 
