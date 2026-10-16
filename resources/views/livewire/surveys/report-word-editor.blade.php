@@ -41,7 +41,7 @@
         </div>
     @else
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div id="onlyoffice-editor" wire:ignore class="w-full" style="height: calc(100vh - 240px); min-height: 480px;"></div>
+            <div id="onlyoffice-editor" wire:ignore class="w-full" style="height: calc(100dvh - 200px); min-height: 480px;"></div>
         </div>
 
         <script src="{{ $apiJsUrl }}"></script>
@@ -49,11 +49,21 @@
             (function () {
                 var editorConfig = @js($editorConfig);
 
+                function fitOnlyOfficeEditor() {
+                    var el = document.getElementById('onlyoffice-editor');
+                    if (! el) {
+                        return;
+                    }
+                    var top = el.getBoundingClientRect().top;
+                    el.style.height = Math.max(480, Math.floor(window.innerHeight - top - 8)) + 'px';
+                }
+
                 function initOnlyOfficeEditor() {
                     var el = document.getElementById('onlyoffice-editor');
                     if (! el) {
                         return;
                     }
+                    fitOnlyOfficeEditor();
                     if (window.__onlyOfficeEditor && typeof window.__onlyOfficeEditor.destroyEditor === 'function') {
                         window.__onlyOfficeEditor.destroyEditor();
                         window.__onlyOfficeEditor = null;
@@ -63,7 +73,18 @@
                             + 'Gagal memuat OnlyOffice Document Server. Periksa koneksi ke server dokumen.</div>';
                         return;
                     }
+                    editorConfig.events = editorConfig.events || {};
+                    editorConfig.events.onDocumentReady = fitOnlyOfficeEditor;
                     window.__onlyOfficeEditor = new DocsAPI.DocEditor('onlyoffice-editor', editorConfig);
+
+                    // Re-fit setelah layout settle (font, iframe, sidebar) —
+                    // pengukuran sekali sebelum DocEditor load sering terlalu dini.
+                    requestAnimationFrame(fitOnlyOfficeEditor);
+                    setTimeout(fitOnlyOfficeEditor, 300);
+                    setTimeout(fitOnlyOfficeEditor, 1000);
+                    if (document.fonts && document.fonts.ready) {
+                        document.fonts.ready.then(fitOnlyOfficeEditor);
+                    }
                 }
 
                 if (document.readyState === 'loading') {
@@ -72,6 +93,8 @@
                     initOnlyOfficeEditor();
                 }
                 document.addEventListener('livewire:navigated', initOnlyOfficeEditor);
+                window.addEventListener('load', fitOnlyOfficeEditor);
+                window.addEventListener('resize', fitOnlyOfficeEditor);
             })();
         </script>
     @endif

@@ -7,6 +7,7 @@ use App\Enums\SurveyItemType;
 use App\Models\SurveyReport;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpWord\Settings;
 use PhpOffice\PhpWord\TemplateProcessor;
 
 /**
@@ -43,6 +44,10 @@ class SurveyReportDocxBuilder
         }
 
         $data = $this->reportService->buildReportData($report);
+
+        // PHPWord tidak meng-escape nilai setValue() secara default — tanpa ini
+        // karakter &, <, > pada data (mis. "MAN B&W 9L27/38") merusak document.xml.
+        Settings::setOutputEscapingEnabled(true);
 
         $tp = new TemplateProcessor($templatePath);
         $this->fillScalars($tp, $data);

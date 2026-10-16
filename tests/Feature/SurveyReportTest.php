@@ -429,6 +429,41 @@ class SurveyReportTest extends TestCase
         }
     }
 
+    public function test_nilai_skalar_dengan_karakter_xml_di_escape_saat_generate(): void
+    {
+        $this->ship->update([
+            'name' => 'KMP. A & B',
+            'main_engine' => 'MAN B&W 9L27/38',
+            'builder' => 'PT. Dock <Shipyard>',
+        ]);
+        $survey = $this->createSurvey();
+        $service = new SurveyReportService(new SurveyService);
+        $report = $service->getOrCreate($survey);
+        $path = app(SurveyReportDocxBuilder::class)->build($report);
+
+        try {
+            $zip = new \ZipArchive;
+            $this->assertTrue($zip->open($path) === true);
+            $xml = $zip->getFromName('word/document.xml');
+            $zip->close();
+
+            $this->assertIsString($xml);
+            $previous = libxml_use_internal_errors(true);
+            libxml_clear_errors();
+            $document = new \DOMDocument;
+            $this->assertTrue($document->loadXML($xml));
+            $this->assertSame([], libxml_get_errors());
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+            $this->assertStringContainsString('MAN B&amp;W 9L27/38', $xml);
+            $this->assertStringNotContainsString('MAN B&W 9L27/38', $xml);
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
     public function test_generate_menandai_processing_dan_dispatch_job(): void
     {
         Queue::fake();
