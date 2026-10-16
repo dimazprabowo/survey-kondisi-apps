@@ -28,15 +28,15 @@ class SurveyFolderTest extends TestCase
         Gate::before(fn () => true);
     }
 
-    protected function makeSurvey(string $number, ?int $folderId = null): Survey
+    protected function makeSurvey(string $number, ?int $folderId = null, array $attributes = []): Survey
     {
-        return Survey::create([
+        return Survey::create(array_merge([
             'survey_number' => $number,
             'ship_id' => $this->ship->id,
             'survey_date' => '2026-01-01',
             'status' => 'draft',
             'survey_folder_id' => $folderId,
-        ]);
+        ], $attributes));
     }
 
     public function test_folder_crud_via_component(): void
@@ -215,6 +215,85 @@ class SurveyFolderTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         (new SurveyFolderService)->delete($folder);
+    }
+
+    public function test_status_filter_searches_inside_folders(): void
+    {
+        $folderA = SurveyFolder::create(['name' => 'Grup A']);
+        $folderB = SurveyFolder::create(['name' => 'Grup B']);
+        SurveyFolder::create(['name' => 'Grup C']); // kosong
+
+        $this->makeSurvey('SVY-0001');                                       // draft root
+        $this->makeSurvey('SVY-0002', $folderA->id, ['status' => 'completed']);
+        $this->makeSurvey('SVY-0003', $folderA->id);                         // draft di folder A
+        $this->makeSurvey('SVY-0004', $folderB->id);                         // draft di folder B
+        $this->makeSurvey('SVY-0005', null, ['status' => 'completed']);      // completed root
+
+        $component = Livewire::test(SurveyManagement::class)->set('statusFilter', 'completed');
+
+        // List global lintas folder — completed di root maupun di folder ikut tampil.
+        $this->assertSame(
+            ['SVY-0002', 'SVY-0005'],
+            $component->viewData('surveys')->pluck('survey_number')->sort()->values()->all()
+        );
+
+        // Strip folder ikut terfilter: hanya folder berisi survey completed.
+        $folders = $component->viewData('folders');
+        $this->assertSame(['Grup A'], $folders->pluck('name')->all());
+        $this->assertSame(1, $folders->first()->matched_surveys_count);
+        $this->assertSame(2, $folders->first()->surveys_count);
+    }
+
+    public function test_ship_filter_searches_inside_folders(): void
+    {
+        $beta = Ship::create(['name' => 'Beta', 'status' => 'active']);
+        $folderA = SurveyFolder::create(['name' => 'Grup A']);
+        $folderB = SurveyFolder::create(['name' => 'Grup B']);
+
+        $this->makeSurvey('SVY-0001', $folderA->id);                          // Alpha di folder A
+        $this->makeSurvey('SVY-0002', $folderA->id, ['ship_id' => $beta->id]); // Beta di folder A
+        $this->makeSurvey('SVY-0003', $folderB->id);                          // Alpha di folder B
+        $this->makeSurvey('SVY-0004');                                        // Alpha root
+
+        $component = Livewire::test(SurveyManagement::class)->set('shipFilter', (string) $beta->id);
+
+        $this->assertSame(['SVY-0002'], $component->viewData('surveys')->pluck('survey_number')->all());
+        $folders = $component->viewData('folders');
+        $this->assertSame(['Grup A'], $folders->pluck('name')->all());
+        $this->assertSame(1, $folders->first()->matched_surveys_count);
+    }
+
+    public function test_folder_name_match_still_shows_when_surveys_fail_other_filters(): void
+    {
+        $folderA = SurveyFolder::create(['name' => 'Arsip Lama']);
+        SurveyFolder::create(['name' => 'Grup B']);
+
+        $this->makeSurvey('SVY-0001', $folderA->id); // draft
+        $this->makeSurvey('SVY-0002');               // draft root
+
+        $component = Livewire::test(SurveyManagement::class)
+            ->set('search', 'Arsip')
+            ->set('statusFilter', 'completed');
+
+        // Tidak ada survey completed, tapi nama folder cocok dengan search.
+        $this->assertSame([], $component->viewData('surveys')->pluck('survey_number')->all());
+        $folders = $component->viewData('folders');
+        $this->assertSame(['Arsip Lama'], $folders->pluck('name')->all());
+        $this->assertSame(0, $folders->first()->matched_surveys_count);
+    }
+
+    public function test_filters_apply_inside_active_folder(): void
+    {
+        $folder = SurveyFolder::create(['name' => 'Grup A']);
+        $this->makeSurvey('SVY-0001', $folder->id, ['status' => 'completed']);
+        $this->makeSurvey('SVY-0002', $folder->id); // draft
+        $this->makeSurvey('SVY-0003', null, ['status' => 'completed']); // root — tidak ikut
+
+        $component = Livewire::test(SurveyManagement::class)
+            ->call('openFolder', $folder->id)
+            ->set('statusFilter', 'completed');
+
+        $this->assertSame(['SVY-0001'], $component->viewData('surveys')->pluck('survey_number')->all());
     }
 
     public function test_create_survey_inside_folder_carries_folder_param(): void

@@ -136,13 +136,15 @@
                 ($disabled ? ' opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800' : ' hover:border-gray-400 dark:hover:border-gray-500')
         ]) }}
     >
-        <div class="flex items-center gap-2">
-            <span 
+        {{-- wire:ignore: teks & badge diisi Alpine (server render kosong) — tanpa ini
+             morph Livewire menghapus konten setiap re-render dan Alpine tidak menulis ulang --}}
+        <div class="flex items-center gap-2" wire:ignore>
+            <span
                 x-text="displayText"
                 :class="selectedOptions.length > 0 ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'"
                 class="block truncate text-sm flex-1"
             ></span>
-            
+
             {{-- Selected Count Badge --}}
             <template x-if="selectedOptions.length > 0">
                 <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
@@ -150,9 +152,9 @@
                 </span>
             </template>
         </div>
-        
+
         {{-- Chevron Icon --}}
-        <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+        <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3" wire:ignore>
             <svg 
                 class="h-5 w-5 text-gray-400 transition-transform duration-200" 
                 :class="{ 'rotate-180': open }"
@@ -165,8 +167,10 @@
         </span>
     </button>
 
-    {{-- Dropdown Panel --}}
+    {{-- Dropdown Panel — wire:ignore: isinya 100% hasil generate Alpine (x-for/x-if,
+         x-model) sehingga tidak perlu ikut morph; mencegah item list terhapus saat re-render --}}
     <div
+        wire:ignore
         x-show="open"
         x-transition:enter="transition ease-out duration-200"
         x-transition:enter-start="opacity-0 scale-95"

@@ -16,24 +16,31 @@ class SurveyFolderService
 
     /**
      * Daftar folder + jumlah survey di dalamnya, untuk strip folder di index.
-     * Saat search aktif: folder tampil bila namanya cocok ATAU berisi survey
-     * yang cocok (matched_surveys_count = jumlah hasil di dalam folder tsb,
-     * pakai predicate search yang sama dengan list survey).
+     * Saat ada kriteria aktif (search/status/kapal): folder tampil bila
+     * namanya cocok dengan search ATAU berisi survey yang memenuhi semua
+     * kriteria (matched_surveys_count = jumlah hasil di dalam folder tsb,
+     * pakai predicate filter yang sama dengan list survey). Tanpa search,
+     * kecocokan nama folder tidak relevan — folder hanya tampil bila punya
+     * survey yang cocok.
      */
-    public function getFolders(?string $search = null): Collection
+    public function getFolders(?string $search = null, ?string $statusFilter = null, ?int $shipId = null): Collection
     {
+        $hasCriteria = $search || ($statusFilter !== null && $statusFilter !== '') || $shipId;
         $query = SurveyFolder::withCount('surveys')->orderBy('name');
 
-        if ($search) {
+        if ($hasCriteria) {
             $operator = $this->getLikeOperator();
+            $match = fn ($sq) => $this->surveys->applyFilters($sq, $search, $statusFilter, $shipId);
             $query
-                ->where(function ($q) use ($search, $operator) {
-                    $q->where('name', $operator, "%{$search}%")
-                        ->orWhereHas('surveys', fn ($sq) => $this->surveys->applySearch($sq, $search));
+                ->where(function ($q) use ($search, $operator, $match) {
+                    if ($search) {
+                        $q->where('name', $operator, "%{$search}%")
+                            ->orWhereHas('surveys', $match);
+                    } else {
+                        $q->whereHas('surveys', $match);
+                    }
                 })
-                ->withCount([
-                    'surveys as matched_surveys_count' => fn ($sq) => $this->surveys->applySearch($sq, $search),
-                ]);
+                ->withCount(['surveys as matched_surveys_count' => $match]);
         }
 
         return $query->get();

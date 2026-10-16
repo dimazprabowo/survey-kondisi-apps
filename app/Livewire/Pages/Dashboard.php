@@ -2,18 +2,44 @@
 
 namespace App\Livewire\Pages;
 
-use App\Models\Company;
-use App\Models\User;
+use App\Models\Survey;
+use App\Services\DashboardService;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Component;
-use Spatie\Permission\Models\Role;
 
 class Dashboard extends Component
 {
+    public string $year = '';
+
+    public function mount(): void
+    {
+        $this->year = (string) now()->year;
+    }
+
+    protected function rules(): array
+    {
+        return ['year' => ['required', 'integer', 'between:1900,2100']];
+    }
+
+    protected function validationAttributes(): array
+    {
+        return ['year' => 'tahun survey'];
+    }
+
+    public function updatedYear(): void
+    {
+        $this->authorize('viewStats');
+        $this->authorize('viewAny', Survey::class);
+        if ($this->year === '') {
+            $this->year = (string) now()->year;
+        }
+        $this->validate();
+    }
+
     public function render()
     {
         $user = auth()->user();
-        $canViewStats = Gate::allows('dashboard_view');
+        $canViewStats = Gate::allows('viewStats');
 
         $data = [
             'authUser' => $user,
@@ -24,14 +50,13 @@ class Dashboard extends Component
 
         if ($canViewStats) {
             // Only query counts the user is permitted to see (avoid information leak + unnecessary queries).
-            if (Gate::allows('users_view')) {
-                $data['totalUsers'] = User::count();
-            }
-            if (Gate::allows('companies_view')) {
-                $data['totalCompanies'] = Company::count();
-            }
-            if (Gate::allows('roles_view')) {
-                $data['totalRoles'] = Role::count();
+            $service = app(DashboardService::class);
+            $data = array_merge($data, $service->administrationCounts());
+            if (Gate::allows('viewAny', Survey::class)) {
+                $data['analyticsYear'] = validator(['year' => $this->year], $this->rules())->passes()
+                    ? (int) $this->year : now()->year;
+                $data['yearOptions'] = $service->surveyYears();
+                $data['analytics'] = $service->surveyAnalytics($data['analyticsYear']);
             }
         }
 

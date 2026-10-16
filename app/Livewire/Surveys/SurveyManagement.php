@@ -481,10 +481,10 @@ class SurveyManagement extends Component
     {
         $this->authorize('exportPdf', Survey::class);
 
-        $surveys = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name'])
-            ->when($this->search, fn ($q) => $service->applySearch($q, $this->search))
-            ->when($this->statusFilter !== null && $this->statusFilter !== '', fn ($q) => $q->where('status', $this->statusFilter))
-            ->when($this->shipFilter, fn ($q) => $q->where('ship_id', (int) $this->shipFilter))
+        $query = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
+        $service->applyFilters($query, $this->search, $this->statusFilter, $this->shipFilter ? (int) $this->shipFilter : null);
+
+        $surveys = $query
             ->when($this->folderScope() === false, fn ($q) => $q->whereNull('survey_folder_id'))
             ->when(is_int($this->folderScope()), fn ($q) => $q->where('survey_folder_id', $this->folderScope()))
             ->when($this->selected !== [], fn ($q) => $q->whereIn('id', array_map('intval', $this->selected)))
@@ -638,7 +638,7 @@ class SurveyManagement extends Component
 
         // Strip folder hanya di root — folder tidak bertingkat (1 level).
         $folders = $this->folderId === null
-            ? $folderService->getFolders($this->search)
+            ? $folderService->getFolders($this->search, $this->statusFilter, $this->shipFilter ? (int) $this->shipFilter : null)
             : collect();
 
         if ($this->filterChanged) {

@@ -39,17 +39,7 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
     {
         $query = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
 
-        if ($this->search) {
-            (new SurveyService)->applySearch($query, $this->search);
-        }
-
-        if ($this->statusFilter !== null && $this->statusFilter !== '') {
-            $query->where('status', $this->statusFilter);
-        }
-
-        if ($this->shipId) {
-            $query->where('ship_id', $this->shipId);
-        }
+        (new SurveyService)->applyFilters($query, $this->search, $this->statusFilter, $this->shipId);
 
         // false = hanya survey tanpa folder (root); int = survey dalam folder tsb
         if ($this->folderId === false) {

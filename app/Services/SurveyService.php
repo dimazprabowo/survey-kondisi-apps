@@ -35,17 +35,7 @@ class SurveyService
     ): LengthAwarePaginator {
         $query = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
 
-        if ($search) {
-            $this->applySearch($query, $search);
-        }
-
-        if ($statusFilter !== null && $statusFilter !== '') {
-            $query->where('status', $statusFilter);
-        }
-
-        if ($shipId) {
-            $query->where('ship_id', $shipId);
-        }
+        $this->applyFilters($query, $search, $statusFilter, $shipId);
 
         if ($folderId === false) {
             $query->whereNull('survey_folder_id');
@@ -84,6 +74,27 @@ class SurveyService
             ->orderByRaw("$expr $dir")
             ->orderBy('surveys.id', 'desc')
             ->paginate($perPage);
+    }
+
+    /**
+     * Terapkan seluruh kriteria filter index survey (search + status +
+     * kapal) ke query — dipakai bersama oleh getFiltered (list), export,
+     * dan SurveyFolderService (hitung match per folder) agar cakupan
+     * filter selalu konsisten.
+     */
+    public function applyFilters($query, ?string $search = null, ?string $statusFilter = null, ?int $shipId = null): void
+    {
+        if ($search) {
+            $this->applySearch($query, $search);
+        }
+
+        if ($statusFilter !== null && $statusFilter !== '') {
+            $query->where('status', $statusFilter);
+        }
+
+        if ($shipId) {
+            $query->where('ship_id', $shipId);
+        }
     }
 
     /**

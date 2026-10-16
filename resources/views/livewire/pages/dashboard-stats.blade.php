@@ -22,6 +22,137 @@
         </div>
     </div>
 
+    @isset($analytics)
+        <section aria-labelledby="survey-analytics-title" class="space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                <div class="min-w-0">
+                    <p class="text-xs font-semibold uppercase tracking-widest text-blue-600 dark:text-blue-400">Ringkasan Operasional</p>
+                    <h2 id="survey-analytics-title" class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">Kinerja Survey Kondisi</h2>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Berdasarkan tanggal survey, Januari–Desember {{ $analyticsYear }}. Mencakup semua folder.</p>
+                </div>
+                <div class="w-full sm:w-44 shrink-0">
+                    <x-input-label for="dashboard-year" value="Tahun survey" />
+                    <x-searchable-select id="dashboard-year" wire:model.live="year" :options="$yearOptions"
+                        :clearable="false" placeholder="Pilih tahun" searchPlaceholder="Cari tahun..." aria-label="Tahun survey" />
+                    <x-input-error :messages="$errors->get('year')" class="mt-1" />
+                </div>
+            </div>
+
+            <div wire:loading.flex wire:target="year" role="status" class="items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                <x-loading-spinner size="sm" /> Memuat ringkasan survey...
+            </div>
+
+            <div wire:loading.class="opacity-50 pointer-events-none" wire:target="year" class="space-y-5 transition-opacity">
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div class="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-5">
+                        <p class="text-sm font-medium text-blue-700 dark:text-blue-300">Total Survey</p>
+                        <p class="mt-3 text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ number_format($analytics['total']) }}</p>
+                        <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">Seluruh status pada tahun {{ $analyticsYear }}</p>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Survey Selesai</p>
+                        <p class="mt-3 text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ number_format($analytics['completed']) }}</p>
+                        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ $analytics['completionRate'] }}% dari total survey tahun ini</p>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Rata-rata Skor CAP</p>
+                        <p class="mt-3 text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ $analytics['averageScore'] !== null ? number_format($analytics['averageScore'], 2, ',', '.') : '—' }} <span class="text-sm font-normal text-gray-500 dark:text-gray-400">/ 4</span></p>
+                        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Survey selesai dengan skor; semakin tinggi semakin baik</p>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Survey Selesai Berskor</p>
+                        <p class="mt-3 text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ number_format($analytics['rated']) }}</p>
+                        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ number_format($analytics['unrated']) }} survey selesai belum memiliki skor</p>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm">
+                    <div class="flex flex-wrap items-start justify-between gap-3 mb-5">
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Aktivitas survey bulanan</h3>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Jumlah survey menurut bulan pelaksanaan, termasuk draft dan dibatalkan.</p>
+                        </div>
+                        <span class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300"><span class="h-2.5 w-2.5 rounded-sm bg-blue-500"></span>Jumlah survey</span>
+                    </div>
+                    @if($analytics['total'] > 0)
+                        <div class="overflow-x-auto custom-scrollbar">
+                            <svg viewBox="0 0 730 260" class="w-full min-w-[600px] text-gray-500 dark:text-gray-400" role="img" aria-labelledby="monthly-chart-title monthly-chart-description">
+                                <title id="monthly-chart-title">Jumlah survey per bulan tahun {{ $analyticsYear }}</title>
+                                <desc id="monthly-chart-description">@foreach($analytics['months'] as $month){{ $month['label'] }}: {{ $month['count'] }} survey. @endforeach</desc>
+                                @foreach([0, 1, 2, 3, 4] as $tick)
+                                    <line x1="40" y1="{{ 220 - $tick * 48 }}" x2="724" y2="{{ 220 - $tick * 48 }}" stroke="currentColor" stroke-opacity="0.15" stroke-dasharray="4 4" />
+                                    <text x="32" y="{{ 224 - $tick * 48 }}" text-anchor="end" fill="currentColor" font-size="11">{{ $analytics['axisMax'] * $tick / 4 }}</text>
+                                @endforeach
+                                @foreach($analytics['months'] as $month)
+                                    <g wire:key="dashboard-month-{{ $loop->index }}">
+                                        <rect x="{{ $month['x'] }}" y="{{ $month['y'] }}" width="32" height="{{ $month['height'] }}" rx="5" class="fill-blue-500 dark:fill-blue-400 hover:fill-blue-600 dark:hover:fill-blue-300 transition-colors">
+                                            <title>{{ $month['label'] }} {{ $analyticsYear }}: {{ $month['count'] }} survey</title>
+                                        </rect>
+                                        <text x="{{ $month['x'] + 16 }}" y="{{ $month['y'] - 8 }}" text-anchor="middle" fill="currentColor" font-size="12" font-weight="600">{{ $month['count'] }}</text>
+                                        <text x="{{ $month['x'] + 16 }}" y="246" text-anchor="middle" fill="currentColor" font-size="12">{{ $month['label'] }}</text>
+                                    </g>
+                                @endforeach
+                            </svg>
+                        </div>
+                        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400 sm:hidden">Geser grafik untuk melihat seluruh bulan.</p>
+                    @else
+                        <div class="py-12 text-center rounded-lg bg-gray-50 dark:bg-gray-900/40">
+                            <x-icon name="chart-bar" class="h-12 w-12 mx-auto text-gray-400" />
+                            <p class="mt-3 text-sm font-medium text-gray-700 dark:text-gray-300">Belum ada survey pada tahun ini</p>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Pilih tahun lain untuk melihat data yang tersedia.</p>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm">
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Komposisi status survey</h3>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Status terkini dari {{ number_format($analytics['total']) }} survey pada tahun {{ $analyticsYear }}.</p>
+                        <div class="mt-6 space-y-5">
+                            @foreach($analytics['statuses'] as $status)
+                                <div wire:key="dashboard-status-{{ $loop->index }}">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 text-sm mb-2">
+                                        <span class="rounded-md px-2 py-0.5 text-xs font-medium {{ $status['class'] }}">{{ $status['label'] }}</span>
+                                        <span class="tabular-nums text-gray-900 dark:text-white"><strong>{{ number_format($status['count']) }}</strong> <span class="text-xs text-gray-500 dark:text-gray-400">/ {{ $status['percentage'] }}%</span></span>
+                                    </div>
+                                    <div role="img" aria-label="{{ $status['label'] }}: {{ $status['count'] }} survey, {{ $status['percentage'] }} persen" class="h-2.5 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                                        <div class="h-full rounded-full {{ $status['class'] }}" style="width: {{ $status['percentage'] }}%; background-color: currentColor;"></div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm">
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Distribusi Grade CAP maritim</h3>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ number_format($analytics['rated']) }} survey selesai dengan skor. CAP 1 adalah grade terbaik.</p>
+                        @if($analytics['rated'] > 0)
+                            <div class="mt-6 space-y-5">
+                                @foreach($analytics['ratings'] as $rating)
+                                    <div wire:key="dashboard-cap-{{ $loop->index }}">
+                                        <div class="flex flex-wrap items-center justify-between gap-2 text-sm mb-2">
+                                            <span class="rounded-md px-2 py-0.5 text-xs font-medium {{ $rating['class'] }}">{{ $rating['label'] }} · {{ $rating['description'] }}</span>
+                                            <span class="tabular-nums text-gray-900 dark:text-white"><strong>{{ number_format($rating['count']) }}</strong> <span class="text-xs text-gray-500 dark:text-gray-400">/ {{ $rating['percentage'] }}%</span></span>
+                                        </div>
+                                        <div role="img" aria-label="{{ $rating['label'] }}: {{ $rating['count'] }} survey, {{ $rating['percentage'] }} persen" class="h-2.5 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                                            <div class="h-full rounded-full {{ $rating['class'] }}" style="width: {{ $rating['percentage'] }}%; background-color: currentColor;"></div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="py-12 text-center">
+                                <x-icon name="chart-bar" class="h-12 w-12 mx-auto text-gray-400" />
+                                <p class="mt-3 text-sm font-medium text-gray-700 dark:text-gray-300">Belum ada hasil CAP final</p>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Grafik muncul setelah survey selesai dan memiliki skor CAP.</p>
+                            </div>
+                        @endif
+                    </div>
+                </div>
+                <p class="text-xs leading-relaxed text-gray-500 dark:text-gray-400">Setiap survey dihitung satu kali, bukan per kapal unik. Data yang dihapus tidak disertakan. Persentase dibulatkan; skor CAP kosong tidak dianggap nol.</p>
+            </div>
+        </section>
+    @endisset
+
     {{-- Stat Cards: User, Company & Role (gated by respective entity permissions) --}}
     @canany(['users_view', 'companies_view', 'roles_view'])
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -10,6 +10,7 @@
     'error' => false,
     'emptyText' => 'Tidak ada data',
     'noResultText' => 'Tidak ditemukan',
+    'clearable' => true,
 ])
 
 @php
@@ -118,14 +119,17 @@
                 ($disabled ? ' opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800' : ' hover:border-gray-400 dark:hover:border-gray-500')
         ]) }}
     >
-        <span 
+        {{-- wire:ignore: teks diisi Alpine (server render kosong) — tanpa ini morph
+             Livewire menghapus teks setiap re-render dan Alpine tidak menulis ulang --}}
+        <span
             x-text="displayText"
             :class="selectedOption ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'"
             class="block truncate text-sm"
+            wire:ignore
         ></span>
-        
+
         {{-- Chevron Icon --}}
-        <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+        <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3" wire:ignore>
             <svg 
                 class="h-5 w-5 text-gray-400 transition-transform duration-200" 
                 :class="{ 'rotate-180': open }"
@@ -138,8 +142,10 @@
         </span>
     </button>
 
-    {{-- Dropdown Panel --}}
+    {{-- Dropdown Panel — wire:ignore: isinya 100% hasil generate Alpine (x-for/x-if,
+         x-model) sehingga tidak perlu ikut morph; mencegah item list terhapus saat re-render --}}
     <div
+        wire:ignore
         x-show="open"
         x-transition:enter="transition ease-out duration-200"
         x-transition:enter-start="opacity-0"
@@ -189,6 +195,7 @@
             role="listbox"
         >
             {{-- Clear/Empty Option --}}
+            @if($clearable)
             <template x-if="value && value !== ''">
                 <li
                     x-on:click="clearSelection()"
@@ -203,6 +210,7 @@
                     </div>
                 </li>
             </template>
+            @endif
 
             {{-- Filtered Options --}}
             <template x-for="option in filteredOptions" :key="option.value">
