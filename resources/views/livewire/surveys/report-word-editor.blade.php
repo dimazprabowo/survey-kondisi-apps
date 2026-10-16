@@ -1,13 +1,13 @@
 <div>
-    <div class="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+    <div class="mb-4 flex flex-col lg:flex-row lg:items-center gap-3">
         <div class="flex-1 min-w-0">
-            <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-                <span class="sm:hidden">Edit Word</span>
-                <span class="hidden sm:block truncate" title="Edit Word — {{ $report?->report_title ?? 'Laporan Survey' }}">
+            <h2 class="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white">
+                <span class="lg:hidden">Edit Word</span>
+                <span class="hidden lg:block truncate" title="Edit Word — {{ $report?->report_title ?? 'Laporan Survey' }}">
                     Edit Word — {{ $report?->report_title ?? 'Laporan Survey' }}
                 </span>
             </h2>
-            <p class="sm:hidden mt-0.5 truncate text-sm font-medium text-gray-700 dark:text-gray-300"
+            <p class="lg:hidden mt-0.5 truncate text-sm font-medium text-gray-700 dark:text-gray-300"
                 title="{{ $report?->report_title ?? 'Laporan Survey' }}">
                 {{ $report?->report_title ?? 'Laporan Survey' }}
             </p>
@@ -23,15 +23,15 @@
                 @endif
             </p>
         </div>
-        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             <x-loading-button type="button" wire:click="download" target="download"
                 variant="success" size="md" loadingText="Mengunduh..." icon="download"
-                class="flex-1 sm:flex-none">
+                class="flex-1 lg:flex-none">
                 Unduh DOCX{{ $report?->edited_file_path ? ' (Versi Edit)' : '' }}
             </x-loading-button>
             <x-loading-button type="button" wire:click="back" target="back"
                 variant="secondary" size="md" loadingText="Memuat..."
-                class="flex-1 sm:flex-none">
+                class="flex-1 lg:flex-none">
                 Kembali ke Laporan
             </x-loading-button>
         </div>
