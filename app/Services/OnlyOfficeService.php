@@ -81,6 +81,8 @@ class OnlyOfficeService
         $config = [
             'documentType' => 'word',
             'type' => 'desktop',
+            'width' => '100%',
+            'height' => '100%',
             'document' => [
                 'fileType' => 'docx',
                 'key' => $this->documentKey($report),

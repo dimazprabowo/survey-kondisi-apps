@@ -40,8 +40,10 @@
             <p class="mt-3 text-sm font-medium text-amber-800 dark:text-amber-300">{{ $unavailableReason }}</p>
         </div>
     @else
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div id="onlyoffice-editor" wire:ignore class="w-full" style="height: calc(100dvh - 200px); min-height: 480px;"></div>
+        <div id="onlyoffice-editor-shell" wire:ignore
+            class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden"
+            style="height: calc(100dvh - 200px); min-height: 480px;">
+            <div id="onlyoffice-editor" class="w-full h-full"></div>
         </div>
 
         <script src="{{ $apiJsUrl }}"></script>
@@ -50,12 +52,12 @@
                 var editorConfig = @js($editorConfig);
 
                 function fitOnlyOfficeEditor() {
-                    var el = document.getElementById('onlyoffice-editor');
-                    if (! el) {
+                    var shell = document.getElementById('onlyoffice-editor-shell');
+                    if (! shell) {
                         return;
                     }
-                    var top = el.getBoundingClientRect().top;
-                    el.style.height = Math.max(480, Math.floor(window.innerHeight - top - 8)) + 'px';
+                    var top = shell.getBoundingClientRect().top;
+                    shell.style.height = Math.max(480, Math.floor(window.innerHeight - top - 8)) + 'px';
                 }
 
                 function initOnlyOfficeEditor() {

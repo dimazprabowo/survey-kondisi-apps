@@ -80,6 +80,8 @@ class OnlyOfficeReportTest extends TestCase
         $config = $this->service->buildEditorConfig($report, $this->user);
 
         $this->assertSame('docx', $config['document']['fileType']);
+        $this->assertSame('100%', $config['width']);
+        $this->assertSame('100%', $config['height']);
         $this->assertStringContainsString('signature=', $config['document']['url']);
         $this->assertStringContainsString('onlyoffice/report', $config['editorConfig']['callbackUrl']);
         $this->assertSame((string) $this->user->id, $config['editorConfig']['user']['id']);
