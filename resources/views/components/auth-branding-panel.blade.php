@@ -1,8 +1,8 @@
 {{--
     Auth Branding Panel - Left/right side panel for guest auth pages.
 
-    Template (boilerplate) context: generic enterprise application shell with
-    authentication, role-based access control, and user management.
+    App context: Sistem Survey Kondisi Kapal — pengelolaan template penilaian,
+    pengisian survey kondisi, serta laporan & dokumentasi resmi.
     Visual language: enterprise blueprint grid + clean feature highlights.
 
     Uses currentColor so the illustration inherits the white text color
@@ -43,11 +43,11 @@
             {{-- Main headline --}}
             <div class="space-y-4 max-w-lg mb-8">
                 <h2 class="text-3xl lg:text-4xl xl:text-[2.75rem] font-bold leading-tight">
-                    Enterprise Application<br>Platform
+                    Sistem Survey<br>Kondisi Kapal
                 </h2>
                 <p class="text-base lg:text-lg text-blue-100 leading-relaxed">
-                    Laravel boilerplate dengan autentikasi, role-based access control,
-                    dan manajemen pengguna untuk membangun aplikasi enterprise.
+                    Platform terpadu pengelolaan survey kondisi kapal — dari template
+                    penilaian dinamis, pengisian survey, hingga laporan resmi.
                 </p>
             </div>
         </div>
@@ -62,36 +62,37 @@
             <div class="flex items-start space-x-3">
                 <div class="flex-shrink-0 w-8 h-8 bg-blue-500/25 rounded-lg flex items-center justify-center">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                     </svg>
                 </div>
                 <div>
-                    <h3 class="font-semibold text-sm text-white">Authentication & Authorization</h3>
-                    <p class="text-xs text-blue-200">Login, register, verifikasi email, reset password</p>
+                    <h3 class="font-semibold text-sm text-white">Penilaian Terstruktur</h3>
+                    <p class="text-xs text-blue-200">Kategori kondisi bertingkat dengan skor CAP otomatis</p>
                 </div>
             </div>
 
             <div class="flex items-start space-x-3">
                 <div class="flex-shrink-0 w-8 h-8 bg-blue-500/25 rounded-lg flex items-center justify-center">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
                 </div>
                 <div>
-                    <h3 class="font-semibold text-sm text-white">Role-Based Access Control</h3>
-                    <p class="text-xs text-blue-200">Manajemen role & permission yang fleksibel</p>
+                    <h3 class="font-semibold text-sm text-white">Template Form Dinamis</h3>
+                    <p class="text-xs text-blue-200">Susun struktur penilaian fleksibel per jenis survey</p>
                 </div>
             </div>
 
             <div class="flex items-start space-x-3">
                 <div class="flex-shrink-0 w-8 h-8 bg-blue-500/25 rounded-lg flex items-center justify-center">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
                 </div>
                 <div>
-                    <h3 class="font-semibold text-sm text-white">User & System Management</h3>
-                    <p class="text-xs text-blue-200">CRUD pengguna lengkap & konfigurasi sistem</p>
+                    <h3 class="font-semibold text-sm text-white">Laporan & Dokumentasi</h3>
+                    <p class="text-xs text-blue-200">Pratinjau laporan, export DOCX/PDF, dan foto dokumentasi</p>
                 </div>
             </div>
         </div>
