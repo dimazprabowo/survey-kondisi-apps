@@ -5,6 +5,7 @@ namespace App\Livewire\MasterData;
 use App\Enums\CompanyStatus;
 use App\Exports\CompaniesExport;
 use App\Livewire\Traits\HasNotification;
+use App\Livewire\Traits\HasTableSorting;
 use App\Models\Company;
 use App\Services\CompanyService;
 use App\Traits\HasDynamicLike;
@@ -15,7 +16,7 @@ use Livewire\WithPagination;
 
 class CompanyManagement extends Component
 {
-    use AuthorizesRequests, HasDynamicLike, HasNotification, WithPagination;
+    use AuthorizesRequests, HasDynamicLike, HasNotification, HasTableSorting, WithPagination;
 
     public $search = '';
 
@@ -60,6 +61,7 @@ class CompanyManagement extends Component
     public function mount()
     {
         $this->authorize('viewAny', Company::class);
+        $this->sortField = 'name';
     }
 
     public function rules()
@@ -315,7 +317,7 @@ class CompanyManagement extends Component
 
     public function render(CompanyService $service)
     {
-        $companies = $service->getFiltered($this->search, $this->statusFilter);
+        $companies = $service->getFiltered($this->search, $this->statusFilter, 15, $this->sortField, $this->sortDir);
 
         if ($this->filterChanged) {
             $this->notifySuccess("Ditemukan {$companies->total()} data perusahaan.");

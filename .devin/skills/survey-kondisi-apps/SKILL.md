@@ -37,6 +37,8 @@ triggers:
    - `App\Livewire\Traits\HasMenuItems` -> daftarkan menu baru DI SINI dengan Gate check (jangan hardcode di sidebar)
    - `App\Traits\HasDynamicLike` -> operator LIKE lintas DB (sqlite/mysql)
    - `App\Traits\HasEncryptedRouteKey` -> route-model-binding ID terenkripsi (cegah ID enumeration/IDOR)
+   - `App\Livewire\Traits\HasTableSorting` -> state `sortField`/`sortDir` + `sortBy()` untuk sorting kolom tabel (set default di `mount()`)
+   - `App\Traits\SortsQuery` -> `applySorting()` di Service: whitelist kolom, NULLS handling, fallback, tie-break stabil
    - `App\Services\FileStorageService` -> simpan & pindah file ke storage (jangan copy-paste logic path builder)
 
 # Permission-First (ikuti template)
@@ -81,6 +83,7 @@ Pola full-page form:
 | Select | `<x-searchable-select>` | `components/searchable-select.blade.php` |
 | Select | `<x-multi-searchable-select>` | `components/multi-searchable-select.blade.php` |
 | Filter | `<x-filter-popover>` | `components/filter-popover.blade.php` |
+| Tabel | `<x-sortable-header>` | `components/sortable-header.blade.php` (header kolom sortable: field/sortField/sortDir, spinner + chevron, prop `compact` untuk tabel px-4) |
 | Notif | `<x-toast>` | `components/toast.blade.php` (auto-render di layout) |
 | Notif | `<x-action-message>` | `components/action-message.blade.php` |
 | Spinner | `<x-loading-spinner>` | `components/loading-spinner.blade.php` |
@@ -282,6 +285,44 @@ Setiap perubahan search/filter WAJIB menampilkan toast jumlah hasil — pola `fi
 - JANGAN panggil notifySuccess di hook `updating*` — hasil belum dihitung saat itu; selalu di `render()` setelah query.
 - Bila halaman punya konteks tambahan (mis. folder di Survey Kondisi), ekstrak penyusunan pesan ke method `searchResultMessage()` di component — jangan tulis logic pesan di Blade.
 
+## Sorting Kolom Tabel (WAJIB di SEMUA tabel index)
+Setiap tabel index WAJIB punya sorting kolom server-side dengan 3 lapis reusable (JANGAN duplikat logic per halaman):
+
+1. **Livewire Component** — pakai trait `App\Livewire\Traits\HasTableSorting` (menyediakan `sortField`, `sortDir`, `sortBy()` yang toggle arah + `resetPage()`). Set default di `mount()`:
+   ```php
+   public function mount()
+   {
+       $this->authorize('viewAny', Model::class);
+       $this->sortField = 'name'; // kolom default
+       $this->sortDir = 'asc';    // atau 'desc' bila default-nya terbaru dulu
+   }
+   ```
+   Kirim `$this->sortField, $this->sortDir` ke method `getFiltered` Service.
+
+2. **Service** — pakai trait `App\Traits\SortsQuery`, definisikan whitelist `$sortable` (key = nama field UI, value = kolom/ekspresi SQL aman), lalu:
+   ```php
+   $sortable = [
+       'name' => 'entities.name',
+       'relation' => '(subquery nama relasi ->toSql())',
+       'status' => 'CASE entities.status WHEN ... END', // urutan workflow enum
+   ];
+
+   $this->applySorting($query, $sortable, $sortField, $sortDir, 'name', 'asc', 'entities.id');
+   return $query->paginate($perPage);
+   ```
+   `applySorting()` otomatis: validasi direction, fallback ke default bila field tidak di-whitelist (anti SQL-injection), NULL dianggap terkecil (atas saat asc, bawah saat desc), tie-break kolom stabil (`id`) agar urutan deterministik antar halaman.
+   - Sorting relasi belongsTo pakai subquery `(Model::select('name')->whereColumn(...)->limit(1)->toSql())` — bekerja di SQLite & PostgreSQL.
+   - Sorting `withCount` alias (mis. `users_count`) cukup map ke nama alias-nya.
+   - Kolom ENUM dengan urutan workflow (bukan alfabet) pakai `CASE ... WHEN 'val' THEN n`.
+   - JANGAN buat kolom many-to-many (mis. Role user) sortable — urutan "relasi pertama" ambigu dan subquery-nya rapuh lintas DB.
+   - Kolom turunan komputasi (mis. `age` dari `year_built`) JANGAN dibuat sortable jika arahnya membingungkan — sort kolom sumbernya saja.
+
+3. **Blade** — ganti `<th>` kolom sortable dengan `<x-sortable-header>` (sudah berisi tombol + spinner loading + chevron asc/desc/indifferent + `wire:key`):
+   ```blade
+   <x-sortable-header field="name" :sort-field="$sortField" :sort-dir="$sortDir">Nama</x-sortable-header>
+   ```
+   Kolom non-sortable (Aksi, relasi m2m, kolom turunan) tetap `<th>` biasa dengan styling header yang sama (`font-semibold`). Untuk tabel compact (`px-4 py-2`, mis. impersonate) pakai `:compact="true"`.
+
 # Design System & Responsive (WAJIB, bukan opsional)
 
 ## Prinsip Desain
@@ -368,6 +409,7 @@ JANGAN bocorkan pesan exception mentah ke user.
 - [ ] File (jika ada): async via Job/worker + FileStorageService (tanpa duplikasi path builder)
 - [ ] Export Excel & PDF (jika relevan) + permission-nya
 - [ ] Tidak ada N+1, list paginated, search/filter server-side
+- [ ] Tabel index punya sorting kolom via HasTableSorting + SortsQuery + `<x-sortable-header>` (bukan orderBy duplikat)
 - [ ] Test dasar lulus + Pint bersih
 - [ ] Tidak ada dead code / field mati / duplicate logic
 - [ ] URL aman: ID terenkripsi, tidak ada ID mentah di URL/link
@@ -395,3 +437,5 @@ JANGAN bocorkan pesan exception mentah ke user.
 - `flex-1` tanpa `min-w-0` di dalam flex row -- anak tidak bisa menyusut, overflow di layar sempit
 - Membuat halaman list tanpa toast "Ditemukan N data" saat search/filter berubah -- WAJIB pola `filterChanged` + notify di `render()`
 - Memanggil notify di hook `updating*` untuk hasil filter -- hasil belum dihitung; notify HANYA di `render()` setelah query paginator
+- Membuat sorting kolom dengan `orderBy` manual/duplikat di tiap component -- WAJIB `HasTableSorting` + `SortsQuery` + `<x-sortable-header>`
+- Membuat kolom relasi many-to-many (mis. Role) sortable -- urutan ambigu dan rapuh lintas DB

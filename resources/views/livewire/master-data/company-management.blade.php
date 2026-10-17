@@ -47,13 +47,13 @@
             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-900">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Perusahaan</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">NPWP</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Kontak</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">PIC</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Aksi</th>
+                        <x-sortable-header field="name" :sort-field="$sortField" :sort-dir="$sortDir">Perusahaan</x-sortable-header>
+                        <x-sortable-header field="npwp" :sort-field="$sortField" :sort-dir="$sortDir">NPWP</x-sortable-header>
+                        <x-sortable-header field="email" :sort-field="$sortField" :sort-dir="$sortDir">Kontak</x-sortable-header>
+                        <x-sortable-header field="pic_name" :sort-field="$sortField" :sort-dir="$sortDir">PIC</x-sortable-header>
+                        <x-sortable-header field="users_count" :sort-field="$sortField" :sort-dir="$sortDir">User</x-sortable-header>
+                        <x-sortable-header field="status" :sort-field="$sortField" :sort-dir="$sortDir">Status</x-sortable-header>
+                        <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Aksi</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">

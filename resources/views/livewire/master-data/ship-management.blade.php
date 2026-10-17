@@ -44,13 +44,13 @@
             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nama Kapal</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tahun</th>
+                        <x-sortable-header field="name" :sort-field="$sortField" :sort-dir="$sortDir">Nama Kapal</x-sortable-header>
+                        <x-sortable-header field="year_built" :sort-field="$sortField" :sort-dir="$sortDir">Tahun</x-sortable-header>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Umur</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Jenis</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pemilik/Operator</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Survey</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                        <x-sortable-header field="ship_type" :sort-field="$sortField" :sort-dir="$sortDir">Jenis</x-sortable-header>
+                        <x-sortable-header field="owner" :sort-field="$sortField" :sort-dir="$sortDir">Pemilik/Operator</x-sortable-header>
+                        <x-sortable-header field="surveys_count" :sort-field="$sortField" :sort-dir="$sortDir">Survey</x-sortable-header>
+                        <x-sortable-header field="status" :sort-field="$sortField" :sort-dir="$sortDir">Status</x-sortable-header>
                         <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Aksi</th>
                     </tr>
                 </thead>

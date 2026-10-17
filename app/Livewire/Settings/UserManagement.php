@@ -4,6 +4,7 @@ namespace App\Livewire\Settings;
 
 use App\Exports\UsersExport;
 use App\Livewire\Traits\HasNotification;
+use App\Livewire\Traits\HasTableSorting;
 use App\Models\Company;
 use App\Models\User;
 use App\Services\UserService;
@@ -15,7 +16,7 @@ use Spatie\Permission\Models\Role;
 
 class UserManagement extends Component
 {
-    use AuthorizesRequests, HasNotification, WithPagination;
+    use AuthorizesRequests, HasNotification, HasTableSorting, WithPagination;
 
     protected $paginationTheme = 'tailwind';
 
@@ -73,6 +74,7 @@ class UserManagement extends Component
     public function mount()
     {
         $this->authorize('viewAny', User::class);
+        $this->sortField = 'name';
     }
 
     public function rules()
@@ -347,7 +349,9 @@ class UserManagement extends Component
             $this->search,
             $this->roleFilter,
             $this->isActiveFilter !== '' ? $this->isActiveFilter : null,
-            perPage: 9999
+            perPage: 9999,
+            sortField: $this->sortField,
+            sortDir: $this->sortDir
         );
 
         $pdf = Pdf::loadView('exports.users-pdf', ['users' => $users]);
@@ -365,7 +369,9 @@ class UserManagement extends Component
             $this->search,
             $this->roleFilter,
             $this->isActiveFilter !== '' ? $this->isActiveFilter : null,
-            $this->perPage
+            $this->perPage,
+            $this->sortField,
+            $this->sortDir
         );
 
         if ($this->filterChanged) {

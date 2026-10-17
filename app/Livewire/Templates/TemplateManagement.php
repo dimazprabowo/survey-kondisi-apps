@@ -5,6 +5,7 @@ namespace App\Livewire\Templates;
 use App\Exports\SurveyTemplatesExport;
 use App\Exports\SurveyTemplateStructureExport;
 use App\Livewire\Traits\HasNotification;
+use App\Livewire\Traits\HasTableSorting;
 use App\Models\SurveyTemplate;
 use App\Services\SurveyTemplateService;
 use App\Traits\HasDynamicLike;
@@ -17,7 +18,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class TemplateManagement extends Component
 {
-    use AuthorizesRequests, HasDynamicLike, HasNotification, WithFileUploads, WithPagination;
+    use AuthorizesRequests, HasDynamicLike, HasNotification, HasTableSorting, WithFileUploads, WithPagination;
 
     public $search = '';
 
@@ -45,6 +46,8 @@ class TemplateManagement extends Component
     public function mount()
     {
         $this->authorize('viewAny', SurveyTemplate::class);
+        $this->sortField = 'created_at';
+        $this->sortDir = 'desc';
     }
 
     public function updatingSearch()
@@ -283,7 +286,9 @@ class TemplateManagement extends Component
         $templates = $service->getFiltered(
             $this->search,
             $this->statusFilter,
-            15
+            15,
+            $this->sortField,
+            $this->sortDir
         );
 
         if ($this->filterChanged) {

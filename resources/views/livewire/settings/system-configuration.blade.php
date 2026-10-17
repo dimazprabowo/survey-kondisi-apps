@@ -39,12 +39,12 @@
             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-900">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Key</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Kategori</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Value</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tipe</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Aksi</th>
+                        <x-sortable-header field="key" :sort-field="$sortField" :sort-dir="$sortDir">Key</x-sortable-header>
+                        <x-sortable-header field="category" :sort-field="$sortField" :sort-dir="$sortDir">Kategori</x-sortable-header>
+                        <x-sortable-header field="value" :sort-field="$sortField" :sort-dir="$sortDir">Value</x-sortable-header>
+                        <x-sortable-header field="data_type" :sort-field="$sortField" :sort-dir="$sortDir">Tipe</x-sortable-header>
+                        <x-sortable-header field="is_active" :sort-field="$sortField" :sort-dir="$sortDir">Status</x-sortable-header>
+                        <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Aksi</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">

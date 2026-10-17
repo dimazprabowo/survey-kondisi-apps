@@ -6,6 +6,7 @@ use App\Enums\ConfigCategory;
 use App\Enums\ConfigDataType;
 use App\Exports\SystemConfigurationsExport;
 use App\Livewire\Traits\HasNotification;
+use App\Livewire\Traits\HasTableSorting;
 use App\Models\SystemConfiguration as SystemConfigModel;
 use App\Services\SystemConfigurationService;
 use App\Traits\HasDynamicLike;
@@ -17,7 +18,7 @@ use Livewire\WithPagination;
 
 class SystemConfiguration extends Component
 {
-    use AuthorizesRequests, HasDynamicLike, HasNotification, WithPagination;
+    use AuthorizesRequests, HasDynamicLike, HasNotification, HasTableSorting, WithPagination;
 
     protected $paginationTheme = 'tailwind';
 
@@ -51,6 +52,7 @@ class SystemConfiguration extends Component
     public function mount()
     {
         $this->authorize('viewAny', SystemConfigModel::class);
+        $this->sortField = 'category';
     }
 
     public function rules()
@@ -252,7 +254,7 @@ class SystemConfiguration extends Component
 
     public function render(SystemConfigurationService $service)
     {
-        $configurations = $service->getFiltered($this->search, $this->isActiveFilter !== '' ? $this->isActiveFilter : null);
+        $configurations = $service->getFiltered($this->search, $this->isActiveFilter !== '' ? $this->isActiveFilter : null, 15, $this->sortField, $this->sortDir);
 
         if ($this->filterChanged) {
             $this->notifySuccess("Ditemukan {$configurations->total()} data konfigurasi.");

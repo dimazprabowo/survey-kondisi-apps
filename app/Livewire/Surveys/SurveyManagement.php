@@ -5,6 +5,7 @@ namespace App\Livewire\Surveys;
 use App\Enums\SurveyStatus;
 use App\Exports\SurveysExport;
 use App\Livewire\Traits\HasNotification;
+use App\Livewire\Traits\HasTableSorting;
 use App\Models\Ship;
 use App\Models\Survey;
 use App\Models\SurveyFolder;
@@ -21,7 +22,7 @@ use Livewire\WithPagination;
 
 class SurveyManagement extends Component
 {
-    use AuthorizesRequests, HasDynamicLike, HasNotification, WithPagination;
+    use AuthorizesRequests, HasDynamicLike, HasNotification, HasTableSorting, WithPagination;
 
     public $search = '';
 
@@ -44,11 +45,6 @@ class SurveyManagement extends Component
 
     /** State checkbox "pilih semua" di header — dihitung ulang di render(). */
     public bool $selectAll = false;
-
-    /** Kolom sort aktif — whitelist di SurveyService::getFiltered(). */
-    public string $sortField = 'survey_date';
-
-    public string $sortDir = 'desc';
 
     /** Folder aktif — null berarti root (survey tanpa folder). */
     public ?int $folderId = null;
@@ -89,6 +85,8 @@ class SurveyManagement extends Component
     public function mount()
     {
         $this->authorize('viewAny', Survey::class);
+        $this->sortField = 'survey_date'; // whitelist di SurveyService::getFiltered()
+        $this->sortDir = 'desc';
         $this->folderId = $this->resolveFolderKey();
         if ($this->folderKey && ! $this->folderId) {
             $this->folderKey = null; // ciphertext invalid/folder sudah dihapus
@@ -348,21 +346,6 @@ class SurveyManagement extends Component
             'value' => (string) $f->id,
             'label' => $f->name,
         ])->toArray();
-    }
-
-    /**
-     * Toggle sorting kolom: klik kolom sama = balik arah, kolom baru = asc.
-     */
-    public function sortBy(string $field): void
-    {
-        if ($this->sortField === $field) {
-            $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortField = $field;
-            $this->sortDir = 'asc';
-        }
-
-        $this->resetPage();
     }
 
     public function updatingSearch()

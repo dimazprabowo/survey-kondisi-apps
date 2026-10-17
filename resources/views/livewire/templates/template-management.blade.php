@@ -68,11 +68,11 @@
             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-700/50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nama Template</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Kode</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Kategori</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Surveys</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                        <x-sortable-header field="name" :sort-field="$sortField" :sort-dir="$sortDir">Nama Template</x-sortable-header>
+                        <x-sortable-header field="code" :sort-field="$sortField" :sort-dir="$sortDir">Kode</x-sortable-header>
+                        <x-sortable-header field="categories_count" :sort-field="$sortField" :sort-dir="$sortDir">Kategori</x-sortable-header>
+                        <x-sortable-header field="surveys_count" :sort-field="$sortField" :sort-dir="$sortDir">Surveys</x-sortable-header>
+                        <x-sortable-header field="is_active" :sort-field="$sortField" :sort-dir="$sortDir">Status</x-sortable-header>
                         <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Aksi</th>
                     </tr>
                 </thead>

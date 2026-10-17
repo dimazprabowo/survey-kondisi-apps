@@ -8,18 +8,21 @@ use App\Models\SurveyItemGroup;
 use App\Models\SurveySubCategory;
 use App\Models\SurveyTemplate;
 use App\Traits\HasDynamicLike;
+use App\Traits\SortsQuery;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class SurveyTemplateService
 {
-    use HasDynamicLike;
+    use HasDynamicLike, SortsQuery;
 
     public function getFiltered(
         ?string $search = null,
         ?string $statusFilter = null,
-        int $perPage = 15
+        int $perPage = 15,
+        ?string $sortField = null,
+        string $sortDir = 'desc'
     ): LengthAwarePaginator {
         $query = SurveyTemplate::withCount(['surveys', 'categories']);
 
@@ -38,7 +41,18 @@ class SurveyTemplateService
             $query->where('is_active', false);
         }
 
-        return $query->latest()->paginate($perPage);
+        $sortable = [
+            'name' => 'survey_templates.name',
+            'code' => 'survey_templates.code',
+            'categories_count' => 'categories_count',
+            'surveys_count' => 'surveys_count',
+            'is_active' => 'survey_templates.is_active',
+            'created_at' => 'survey_templates.created_at',
+        ];
+
+        $this->applySorting($query, $sortable, $sortField, $sortDir, 'created_at', 'desc', 'survey_templates.id');
+
+        return $query->paginate($perPage);
     }
 
     public function create(array $data): SurveyTemplate

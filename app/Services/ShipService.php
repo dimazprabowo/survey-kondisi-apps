@@ -4,17 +4,18 @@ namespace App\Services;
 
 use App\Models\Ship;
 use App\Traits\HasDynamicLike;
+use App\Traits\SortsQuery;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class ShipService
 {
-    use HasDynamicLike;
+    use HasDynamicLike, SortsQuery;
 
     /**
      * Query kapal terfilter (dipakai list paginated maupun export non-paginated).
      */
-    public function filteredQuery(?string $search = null, ?string $statusFilter = null)
+    public function filteredQuery(?string $search = null, ?string $statusFilter = null, ?string $sortField = null, string $sortDir = 'asc')
     {
         $query = Ship::withCount('surveys');
 
@@ -33,15 +34,28 @@ class ShipService
             $query->where('status', $statusFilter);
         }
 
-        return $query->orderBy('name');
+        $sortable = [
+            'name' => 'ships.name',
+            'year_built' => 'ships.year_built',
+            'ship_type' => 'ships.ship_type',
+            'owner' => 'ships.owner',
+            'surveys_count' => 'surveys_count',
+            'status' => 'ships.status',
+        ];
+
+        $this->applySorting($query, $sortable, $sortField, $sortDir, 'name', 'asc', 'ships.id');
+
+        return $query;
     }
 
     public function getFiltered(
         ?string $search = null,
         ?string $statusFilter = null,
-        int $perPage = 15
+        int $perPage = 15,
+        ?string $sortField = null,
+        string $sortDir = 'asc'
     ): LengthAwarePaginator {
-        return $this->filteredQuery($search, $statusFilter)->paginate($perPage);
+        return $this->filteredQuery($search, $statusFilter, $sortField, $sortDir)->paginate($perPage);
     }
 
     public function create(array $data, array $certificates = []): Ship

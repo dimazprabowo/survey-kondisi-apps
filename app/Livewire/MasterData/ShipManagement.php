@@ -5,6 +5,7 @@ namespace App\Livewire\MasterData;
 use App\Enums\ShipStatus;
 use App\Exports\ShipsExport;
 use App\Livewire\Traits\HasNotification;
+use App\Livewire\Traits\HasTableSorting;
 use App\Models\Ship;
 use App\Services\ShipService;
 use App\Traits\HasDynamicLike;
@@ -15,7 +16,7 @@ use Livewire\WithPagination;
 
 class ShipManagement extends Component
 {
-    use AuthorizesRequests, HasDynamicLike, HasNotification, WithPagination;
+    use AuthorizesRequests, HasDynamicLike, HasNotification, HasTableSorting, WithPagination;
 
     public $search = '';
 
@@ -32,6 +33,7 @@ class ShipManagement extends Component
     public function mount()
     {
         $this->authorize('viewAny', Ship::class);
+        $this->sortField = 'name';
     }
 
     public function updatingSearch()
@@ -135,7 +137,7 @@ class ShipManagement extends Component
     {
         $this->authorize('exportPdf', Ship::class);
 
-        $ships = $service->filteredQuery($this->search, $this->statusFilter)->get();
+        $ships = $service->filteredQuery($this->search, $this->statusFilter, $this->sortField, $this->sortDir)->get();
 
         $pdf = Pdf::loadView('exports.ships-pdf', ['ships' => $ships]);
         $pdf->setPaper('a4', 'landscape');
@@ -151,7 +153,9 @@ class ShipManagement extends Component
         $ships = $service->getFiltered(
             $this->search,
             $this->statusFilter,
-            15
+            15,
+            $this->sortField,
+            $this->sortDir
         );
 
         if ($this->filterChanged) {

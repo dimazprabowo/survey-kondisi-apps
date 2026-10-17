@@ -11,13 +11,14 @@ use App\Models\SurveyGroupNote;
 use App\Models\SurveyResponse;
 use App\Models\SurveyTemplate;
 use App\Traits\HasDynamicLike;
+use App\Traits\SortsQuery;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class SurveyService
 {
-    use HasDynamicLike;
+    use HasDynamicLike, SortsQuery;
 
     /**
      * @param  int|false|null  $folderId  int = survey dalam folder tsb,
@@ -43,7 +44,6 @@ class SurveyService
             $query->where('survey_folder_id', $folderId);
         }
 
-        $dir = strtolower($sortDir) === 'asc' ? 'asc' : 'desc';
         $sortable = [
             'survey_number' => 'surveys.survey_number',
             'ship' => '('.Ship::select('name')->whereColumn('ships.id', 'surveys.ship_id')->limit(1)->toSql().')',
@@ -56,24 +56,12 @@ class SurveyService
                 ->implode(' ').' ELSE '.count(SurveyStatus::cases()).' END',
         ];
 
-        if (! isset($sortable[$sortField])) {
-            $sortField = 'survey_date';
-            $dir = 'desc';
-        }
+        // Nilai kosong (NULL, badge "-") dianggap nilai terkecil. CASE pada
+        // 'status' mengurutkan mengikuti urutan workflow enum (draft →
+        // in_progress → completed → cancelled), bukan alfabet nilai kolom.
+        $this->applySorting($query, $sortable, $sortField, $sortDir, 'survey_date', 'desc', 'surveys.id');
 
-        $expr = $sortable[$sortField];
-
-        // Nilai kosong (NULL, badge "-") dianggap nilai terkecil: paling atas
-        // saat asc, paling bawah saat desc. CASE pada 'status' mengurutkan
-        // mengikuti urutan workflow enum (draft → in_progress → completed →
-        // cancelled), bukan alfabet nilai kolom.
-        $nullDir = $dir === 'asc' ? 'DESC' : 'ASC';
-
-        return $query
-            ->orderByRaw("$expr IS NULL $nullDir")
-            ->orderByRaw("$expr $dir")
-            ->orderBy('surveys.id', 'desc')
-            ->paginate($perPage);
+        return $query->paginate($perPage);
     }
 
     /**
