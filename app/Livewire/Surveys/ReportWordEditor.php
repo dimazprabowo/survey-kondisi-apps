@@ -26,6 +26,8 @@ class ReportWordEditor extends Component
 
     public ?string $unavailableReason = null;
 
+    public ?string $statusNotice = null;
+
     public function mount(
         Survey $survey,
         SurveyReportService $reportService,
@@ -42,6 +44,12 @@ class ReportWordEditor extends Component
             return;
         }
 
+        if ($this->report->file_status === FileStatus::Processing) {
+            $this->unavailableReason = 'Laporan sedang digenerate ulang. Buka kembali editor setelah proses selesai agar dokumen yang tampil adalah versi terbaru.';
+
+            return;
+        }
+
         if (! $this->report->edited_file_path
             && ($this->report->file_status !== FileStatus::Completed || ! $this->report->file_path)) {
             $this->unavailableReason = 'File laporan belum tersedia. Generate DOCX terlebih dahulu.';
@@ -54,6 +62,10 @@ class ReportWordEditor extends Component
             $this->unavailableReason = 'File laporan tidak ditemukan di storage. Generate ulang laporan.';
 
             return;
+        }
+
+        if ($this->report->file_status === FileStatus::Failed) {
+            $this->statusNotice = 'Generate terakhir gagal — dokumen yang dibuka adalah versi edit sebelumnya. Generate ulang untuk membuat versi terbaru.';
         }
 
         $this->apiJsUrl = $onlyOffice->apiJsUrl();

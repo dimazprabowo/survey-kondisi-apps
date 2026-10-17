@@ -260,6 +260,12 @@ class ReportEditor extends Component
             return;
         }
 
+        if ($this->report->file_status === FileStatus::Processing) {
+            $this->notifyWarning('Laporan sedang digenerate. Tunggu proses selesai agar editor membuka versi terbaru.');
+
+            return;
+        }
+
         if (! $this->report->edited_file_path
             && ($this->report->file_status !== FileStatus::Completed || ! $this->report->file_path)) {
             $this->notifyWarning('Generate DOCX terlebih dahulu sebelum edit Word.');

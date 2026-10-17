@@ -251,4 +251,49 @@ class OnlyOfficeReportTest extends TestCase
 
         $this->assertNull($report->fresh()->edited_file_path);
     }
+
+    public function test_word_editor_blocked_while_report_is_regenerating(): void
+    {
+        Gate::before(fn () => true);
+        $report = $this->makeReport();
+        Storage::disk('local')->put('local/survey-reports/alpha/edited.docx', 'EDITED');
+        $report->update([
+            'file_status' => FileStatus::Processing,
+            'edited_file_path' => 'local/survey-reports/alpha/edited.docx',
+            'edited_file_name' => 'edited.docx',
+            'edited_at' => now(),
+        ]);
+
+        Livewire::test(ReportWordEditor::class, ['survey' => $report->survey])
+            ->assertSet('editorConfig', [])
+            ->assertSet('unavailableReason', 'Laporan sedang digenerate ulang. Buka kembali editor setelah proses selesai agar dokumen yang tampil adalah versi terbaru.');
+    }
+
+    public function test_edit_word_redirect_blocked_while_report_is_processing(): void
+    {
+        Gate::before(fn () => true);
+        $report = $this->makeReport();
+        $report->update(['file_status' => FileStatus::Processing]);
+
+        Livewire::test(\App\Livewire\Surveys\ReportEditor::class, ['survey' => $report->survey])
+            ->call('editWord')
+            ->assertNoRedirect();
+    }
+
+    public function test_word_editor_warns_when_opening_previous_edited_version_after_failed_generate(): void
+    {
+        Gate::before(fn () => true);
+        $report = $this->makeReport();
+        Storage::disk('local')->put('local/survey-reports/alpha/edited.docx', 'EDITED');
+        $report->update([
+            'file_status' => FileStatus::Failed,
+            'edited_file_path' => 'local/survey-reports/alpha/edited.docx',
+            'edited_file_name' => 'edited.docx',
+            'edited_at' => now(),
+        ]);
+
+        Livewire::test(ReportWordEditor::class, ['survey' => $report->survey])
+            ->assertSet('unavailableReason', null)
+            ->assertSet('statusNotice', 'Generate terakhir gagal — dokumen yang dibuka adalah versi edit sebelumnya. Generate ulang untuk membuat versi terbaru.');
+    }
 }

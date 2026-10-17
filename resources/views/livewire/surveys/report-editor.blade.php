@@ -1111,7 +1111,8 @@
                         </x-loading-button>
                         @can('survey_reports_edit_word')
                             <x-loading-button type="button" wire:click.preserve-scroll="editWord" target="editWord" variant="warning" size="lg"
-                                loadingText="Memuat..." icon="edit" class="w-full sm:w-auto" title="Buka laporan di editor Word (OnlyOffice)">
+                                loadingText="Memuat..." icon="edit" class="w-full sm:w-auto" title="Buka laporan di editor Word (OnlyOffice)"
+                                :disabled="$report->file_status === \App\Enums\FileStatus::Processing">
                                 Edit Word
                             </x-loading-button>
                         @endcan
