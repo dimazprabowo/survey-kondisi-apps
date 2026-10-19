@@ -142,6 +142,7 @@ class SurveyReportDocxBuilder
 
         $xml = $zip->getFromName('word/document.xml');
         $data['documentationRelationships'] = $this->injectDocumentationImages($zip, $data);
+        $data['categoryHeadingNumId'] = $this->registerCategoryHeadingNumbering($zip);
         $blocks = $this->buildBlocks($data);
 
         foreach ($blocks as $marker => $blockXml) {
@@ -228,6 +229,54 @@ class SurveyReportDocxBuilder
         }
 
         return $injected;
+    }
+
+    /**
+     * Daftarkan list penomoran khusus judul kategori BAB III; return numId baru.
+     *
+     * Judul kategori memakai pStyle Heading2 yang mewarisi numbering multilevel
+     * template (numId 2 -> abstractNum 9, lvlText "%1%2" + isLgl). Word merender
+     * level induk (numFmt=none) sebagai kosong sehingga nomor tampil "1, 2, 3",
+     * tetapi OnlyOffice ikut merender counter induk -> "11, 12". Agar identik di
+     * kedua renderer, judul kategori diberi numPr eksplisit ke list desimal satu
+     * level ini alih-alih mewarisi dari style.
+     */
+    protected function registerCategoryHeadingNumbering(\ZipArchive $zip): ?int
+    {
+        $numbering = $zip->getFromName('word/numbering.xml');
+        if ($numbering === false) {
+            return null;
+        }
+
+        preg_match_all('/w:abstractNumId="(\d+)"/', $numbering, $abstractIds);
+        preg_match_all('/<w:num w:numId="(\d+)"/', $numbering, $numIds);
+        $abstractNumId = ($abstractIds[1] ? max(array_map('intval', $abstractIds[1])) : 0) + 1;
+        $numId = ($numIds[1] ? max(array_map('intval', $numIds[1])) : 0) + 1;
+
+        // Indent + tab mengikuti level Heading2 asli (abstractNum 9, ilvl 1)
+        // agar posisi nomor & teks tidak berubah.
+        $abstract = '<w:abstractNum w:abstractNumId="'.$abstractNumId.'">'
+            .'<w:multiLevelType w:val="singleLevel"/>'
+            .'<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>'
+            .'<w:lvlText w:val="%1"/><w:lvlJc w:val="left"/>'
+            .'<w:pPr><w:tabs><w:tab w:val="num" w:pos="737"/></w:tabs>'
+            .'<w:ind w:left="737" w:hanging="737"/></w:pPr></w:lvl>'
+            .'</w:abstractNum>';
+        $num = '<w:num w:numId="'.$numId.'"><w:abstractNumId w:val="'.$abstractNumId.'"/></w:num>';
+
+        // Skema w:numbering: seluruh w:abstractNum mendahului seluruh w:num.
+        $numSection = strpos($numbering, '<w:num ');
+        if ($numSection === false) {
+            $numbering = str_replace('</w:numbering>', $abstract.$num.'</w:numbering>', $numbering);
+        } else {
+            $numbering = substr_replace($numbering, $abstract, $numSection, 0);
+            $numbering = str_replace('</w:numbering>', $num.'</w:numbering>', $numbering);
+        }
+
+        $this->validateXml($numbering, 'word/numbering.xml');
+        $zip->addFromString('word/numbering.xml', $numbering);
+
+        return $numId;
     }
 
     /**
@@ -647,7 +696,15 @@ class SurveyReportDocxBuilder
 
             // Kategori ke-2 dst mulai di halaman baru; kategori pertama tetap
             // menyambung heading "BAB III." (yang sudah pageBreakBefore sendiri).
-            $xml .= $tp(strtoupper($cat->label), ['style' => 'Heading2', 'line' => 360, 'pageBreakBefore' => $catIndex > 0]);
+            // numId khusus (bukan warisan Heading2) agar nomor kategori tampil
+            // "1, 2, 3" identik di Word maupun OnlyOffice — lihat
+            // registerCategoryHeadingNumbering().
+            $xml .= $tp(strtoupper($cat->label), [
+                'style' => 'Heading2',
+                'line' => 360,
+                'pageBreakBefore' => $catIndex > 0,
+                'numId' => $data['categoryHeadingNumId'] ?? 0,
+            ]);
             $specTables = $this->bab3SpecTables($cat, 'before');
             $xml .= $specTables;
             $legend = $this->scoreLegend($cat);

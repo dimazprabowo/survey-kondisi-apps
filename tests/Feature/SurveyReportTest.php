@@ -467,6 +467,58 @@ class SurveyReportTest extends TestCase
         }
     }
 
+    public function test_judul_kategori_bab3_memakai_numbering_tersendiri_agar_konsisten_di_onlyoffice(): void
+    {
+        $survey = $this->createSurvey();
+        $survey->update(['structure' => [
+            'categories' => [
+                ['id' => 1, 'label' => 'Hull & Construction', 'order_num' => 1, 'subCategories' => []],
+                ['id' => 2, 'label' => 'Engine Room', 'order_num' => 2, 'subCategories' => []],
+            ],
+        ]]);
+        $service = new SurveyReportService(new SurveyService);
+        $report = $service->getOrCreate($survey);
+        $path = app(SurveyReportDocxBuilder::class)->build($report);
+
+        try {
+            $zip = new \ZipArchive;
+            $this->assertTrue($zip->open($path, \ZipArchive::CHECKCONS) === true);
+            $document = $zip->getFromName('word/document.xml');
+            $numbering = $zip->getFromName('word/numbering.xml');
+            $zip->close();
+
+            // List desimal satu level khusus judul kategori didaftarkan — bukan
+            // warisan "%1%2" Heading2 yang dirender "11, 12" oleh OnlyOffice.
+            preg_match_all('/<w:num w:numId="(\d+)"/', $numbering, $nums);
+            preg_match_all('/w:abstractNumId="(\d+)"/', $numbering, $abstracts);
+            $newNumId = max(array_map('intval', $nums[1]));
+            $newAbstractId = max(array_map('intval', $abstracts[1]));
+            $this->assertStringContainsString(
+                '<w:num w:numId="'.$newNumId.'"><w:abstractNumId w:val="'.$newAbstractId.'"/></w:num>',
+                $numbering
+            );
+            $this->assertMatchesRegularExpression(
+                '/<w:abstractNum w:abstractNumId="'.$newAbstractId.'">.*?<w:numFmt w:val="decimal"\/>.*?<w:lvlText w:val="%1"\/>/s',
+                $numbering
+            );
+
+            // Semua judul kategori Heading2 membawa numPr eksplisit ke numId baru.
+            preg_match_all('/<w:p\b.*?<\/w:p>/s', $document, $paragraphs);
+            $heading2 = array_filter(
+                $paragraphs[0],
+                fn ($paragraph) => str_contains($paragraph, 'w:pStyle w:val="Heading2"')
+            );
+            $this->assertNotEmpty($heading2);
+            foreach ($heading2 as $paragraph) {
+                $this->assertStringContainsString('<w:numId w:val="'.$newNumId.'"/>', $paragraph);
+            }
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
     public function test_generate_sukses_menghapus_revisi_edit_lama(): void
     {
         Storage::fake('local');

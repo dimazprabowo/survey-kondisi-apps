@@ -245,6 +245,18 @@ Jika ada ambiguitas yang berdampak besar -> TANYA dulu, jangan berasumsi.
 - Untuk notifikasi/chat/data live: broadcast Event + listen via Livewire (`#[On('echo:...')]`).
 - Broadcast harus ShouldBroadcast, kanal privat di-authorize di `routes/channels.php`.
 - Jangan polling jika bisa broadcast.
+- `resources/js/echo.js` adalah konfigurasi Echo kanonik — JANGAN ubah/duplikat konfigurasinya. Versi baku:
+  ```js
+  window.Echo = new Echo({
+      broadcaster: 'reverb',
+      key: import.meta.env.VITE_REVERB_APP_KEY,
+      wsHost: import.meta.env.VITE_REVERB_HOST,
+      wsPort: Number(import.meta.env.VITE_REVERB_PORT || 443),
+      wssPort: Number(import.meta.env.VITE_REVERB_PORT || 443),
+      forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https',
+      enabledTransports: ['ws', 'wss'],
+  });
+  ```
 
 # UX Detail (wajib, bukan opsional)
 - Setiap tabel: empty state (ikon + pesan), loading state, dan pagination.
