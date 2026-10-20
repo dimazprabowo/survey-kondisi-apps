@@ -139,7 +139,7 @@
         markDirty() {
             this.dirty = true;
         },
-        // Timestamp "Draft tersimpan" — dipakai untuk autosave lokal dan
+        // Timestamp 'Draft tersimpan' — dipakai untuk autosave lokal dan
         // sinkron dari kolaborator (iso dari saved_at event broadcast).
         markSavedAt(iso = null) {
             const d = iso ? new Date(iso) : new Date();
