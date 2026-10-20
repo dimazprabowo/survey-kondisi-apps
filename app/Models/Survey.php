@@ -76,6 +76,41 @@ class Survey extends Model
         return $this->hasOne(SurveyReport::class);
     }
 
+    public function accessRequests(): HasMany
+    {
+        return $this->hasMany(SurveyAccessRequest::class);
+    }
+
+    public function approvedAccessRequests(): HasMany
+    {
+        return $this->accessRequests()->approved();
+    }
+
+    /**
+     * Pemilik survey (created_by). Nilai null (survey lama/seeder) dianggap
+     * tanpa owner — aksi hanya dibatasi permission agar tidak lock-out.
+     */
+    public function isOwnedBy(User $user): bool
+    {
+        return $this->created_by === null || (int) $this->created_by === (int) $user->id;
+    }
+
+    /**
+     * Boleh diedit oleh owner atau kolaborator dengan akses approved.
+     * Memakai relasi yang sudah eager-loaded (di-filter user aktif) bila ada
+     * untuk menghindari N+1 di halaman list.
+     */
+    public function isEditableBy(User $user): bool
+    {
+        if ($this->isOwnedBy($user)) {
+            return true;
+        }
+
+        return $this->relationLoaded('approvedAccessRequests')
+            ? $this->approvedAccessRequests->contains('user_id', $user->id)
+            : $this->approvedAccessRequests()->where('user_id', $user->id)->exists();
+    }
+
     public function scopeDraft($query)
     {
         return $query->where('status', SurveyStatus::Draft);

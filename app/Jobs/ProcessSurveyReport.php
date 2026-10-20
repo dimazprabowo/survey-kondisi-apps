@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Enums\FileStatus;
 use App\Models\SurveyReport;
+use App\Models\User;
 use App\Services\FileStorageService;
 use App\Services\NotificationService;
 use App\Services\SurveyReportDocxBuilder;
@@ -119,13 +120,26 @@ class ProcessSurveyReport implements ShouldQueue
 
     private function notifyUser(string $title, string $message, string $type): void
     {
-        if (! $this->userId) {
-            return;
-        }
-
         $report = SurveyReport::with('survey')->find($this->reportId);
         $actionUrl = $report?->survey ? route('surveys.report', $report->survey) : null;
 
-        NotificationService::send($this->userId, $title, $message, $type, null, $actionUrl);
+        if ($this->userId) {
+            NotificationService::send($this->userId, $title, $message, $type, null, $actionUrl);
+        }
+
+        // Pemilik survey ikut diberi tahu (kecuali dia sendiri yang generate) —
+        // kolaborator akses edit sengaja tidak ikut dispam.
+        $ownerId = $report?->survey?->created_by;
+        if ($ownerId && $ownerId !== $this->userId) {
+            $generator = $this->userId ? (User::find($this->userId)?->name ?? 'Pengguna lain') : 'Sistem';
+            NotificationService::send(
+                $ownerId,
+                $title,
+                "Survey {$report->survey->survey_number} — oleh {$generator}. {$message}",
+                $type,
+                null,
+                $actionUrl
+            );
+        }
     }
 }

@@ -2,14 +2,17 @@
 
 namespace App\Services;
 
+use App\Enums\SurveyAccessStatus;
 use App\Enums\SurveyItemType;
 use App\Enums\SurveyStatus;
 use App\Models\Ship;
 use App\Models\Survey;
+use App\Models\SurveyAccessRequest;
 use App\Models\SurveyFolder;
 use App\Models\SurveyGroupNote;
 use App\Models\SurveyResponse;
 use App\Models\SurveyTemplate;
+use App\Models\User;
 use App\Traits\HasDynamicLike;
 use App\Traits\SortsQuery;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -34,7 +37,15 @@ class SurveyService
         string $sortDir = 'desc',
         int|false|null $folderId = null
     ): LengthAwarePaginator {
-        $query = Survey::with(['ship:id,name,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
+        // approvedAccessRequests di-scope ke user aktif agar gate @can('update'/'delete')
+        // per baris tidak memicu N+1 (Survey::isEditableBy memakai relasi ter-load).
+        $query = Survey::with([
+            'ship:id,name,year_built',
+            'creator:id,name',
+            'template:id,name,code',
+            'folder:id,name',
+            'approvedAccessRequests' => fn ($q) => $q->where('user_id', auth()->id()),
+        ]);
 
         $this->applyFilters($query, $search, $statusFilter, $shipId);
 
@@ -283,6 +294,82 @@ class SurveyService
     public function delete(Survey $survey): void
     {
         $survey->delete();
+    }
+
+    /**
+     * Ajukan permintaan akses edit ke pemilik survey. Re-request setelah
+     * ditolak me-reset record ke pending (unik per survey-user).
+     */
+    public function requestEditAccess(Survey $survey, User $requester): SurveyAccessRequest
+    {
+        $request = DB::transaction(function () use ($survey, $requester) {
+            return SurveyAccessRequest::updateOrCreate(
+                ['survey_id' => $survey->id, 'user_id' => $requester->id],
+                [
+                    'status' => SurveyAccessStatus::Pending,
+                    'decided_by' => null,
+                    'decided_at' => null,
+                ]
+            );
+        });
+
+        if ($survey->created_by) {
+            NotificationService::send(
+                $survey->created_by,
+                'Permintaan Akses Edit Survey',
+                "{$requester->name} meminta akses edit untuk survey {$survey->survey_number}.",
+                'warning',
+                null,
+                route('surveys.show', $survey)
+            );
+        }
+
+        return $request;
+    }
+
+    /**
+     * Setujui/tolak permintaan akses. Dipanggil setelah authorize 'manageAccess'.
+     */
+    public function decideAccessRequest(SurveyAccessRequest $request, bool $approve, User $decider): void
+    {
+        DB::transaction(function () use ($request, $approve, $decider) {
+            $request->update([
+                'status' => $approve ? SurveyAccessStatus::Approved : SurveyAccessStatus::Rejected,
+                'decided_by' => $decider->id,
+                'decided_at' => now(),
+            ]);
+        });
+
+        $survey = $request->survey;
+        NotificationService::send(
+            $request->user_id,
+            'Permintaan Akses Edit '.($approve ? 'Disetujui' : 'Ditolak'),
+            $approve
+                ? "Anda kini dapat mengedit survey {$survey->survey_number}."
+                : "Permintaan akses edit untuk survey {$survey->survey_number} ditolak oleh pemilik.",
+            $approve ? 'success' : 'danger',
+            null,
+            $approve ? route('surveys.show', $survey) : null
+        );
+    }
+
+    /**
+     * Cabut akses kolaborator yang sudah disetujui. Dipanggil setelah
+     * authorize 'manageAccess'.
+     */
+    public function revokeAccess(SurveyAccessRequest $request): void
+    {
+        DB::transaction(fn () => $request->delete());
+
+        $survey = $request->survey;
+        NotificationService::send(
+            $request->user_id,
+            'Akses Edit Survey Dicabut',
+            "Akses edit Anda untuk survey {$survey->survey_number} telah dicabut oleh pemilik.",
+            'warning',
+            null,
+            route('surveys.show', $survey)
+        );
     }
 
     public function saveResponse(int $surveyId, int $itemId, array $data): void

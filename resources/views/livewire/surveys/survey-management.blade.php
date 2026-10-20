@@ -264,7 +264,7 @@
                                             wire:key="btn-duplicate-{{ $survey->id }}"
                                             title="Duplikasi (tanpa nilai respon)" />
                                     @endcan
-                                    @can('surveys_update')
+                                    @can('update', $survey)
                                         <x-loading-button wire:click="openMoveModal({{ $survey->id }})"
                                             target="openMoveModal({{ $survey->id }})"
                                             variant="icon-amber"
@@ -280,7 +280,7 @@
                                             wire:key="btn-edit-{{ $survey->id }}"
                                             title="Edit" />
                                     @endcan
-                                    @can('surveys_delete')
+                                    @can('delete', $survey)
                                         <x-loading-button wire:click="confirmDelete({{ $survey->id }})"
                                             target="confirmDelete({{ $survey->id }})"
                                             variant="icon-red" icon="delete"

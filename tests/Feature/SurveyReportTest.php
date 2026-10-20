@@ -561,4 +561,55 @@ class SurveyReportTest extends TestCase
         $this->assertSame(FileStatus::Processing, $report->file_status);
         Queue::assertPushed(ProcessSurveyReport::class);
     }
+
+    public function test_generate_notifikasi_owner_dan_generator_bukan_kolaborator(): void
+    {
+        Storage::fake('local');
+        $owner = User::factory()->create();
+        $generator = User::factory()->create();
+        $collaborator = User::factory()->create();
+        $survey = $this->createSurvey();
+        $survey->update(['created_by' => $owner->id]);
+        \App\Models\SurveyAccessRequest::create([
+            'survey_id' => $survey->id,
+            'user_id' => $collaborator->id,
+            'status' => 'approved',
+        ]);
+
+        $service = new SurveyReportService(new SurveyService);
+        $report = $service->getOrCreate($survey);
+
+        (new ProcessSurveyReport($report->id, $generator->id))->handle(
+            app(SurveyReportDocxBuilder::class),
+            app(\App\Services\FileStorageService::class),
+        );
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $generator->id,
+            'title' => 'Laporan Survey Selesai',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $owner->id,
+            'title' => 'Laporan Survey Selesai',
+        ]);
+        // Kolaborator akses edit tidak ikut dinotifikasi
+        $this->assertDatabaseMissing('notifications', ['user_id' => $collaborator->id]);
+    }
+
+    public function test_generate_oleh_owner_hanya_notifikasi_sekali(): void
+    {
+        Storage::fake('local');
+        $survey = $this->createSurvey(); // created_by = $this->user
+
+        $service = new SurveyReportService(new SurveyService);
+        $report = $service->getOrCreate($survey);
+
+        (new ProcessSurveyReport($report->id, $this->user->id))->handle(
+            app(SurveyReportDocxBuilder::class),
+            app(\App\Services\FileStorageService::class),
+        );
+
+        $this->assertSame(1, \App\Models\Notification::where('user_id', $this->user->id)
+            ->where('title', 'Laporan Survey Selesai')->count());
+    }
 }

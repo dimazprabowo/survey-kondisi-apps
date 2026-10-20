@@ -179,6 +179,22 @@ return new class extends Migration
             $table->index('survey_number');
         });
 
+        // 4b. Permintaan akses edit survey — non-owner mengajukan ke pemilik
+        // (surveys.created_by). Status approved menjadikan user kolaborator;
+        // satu request per pasangan survey-user (re-request me-reset status).
+        Schema::create('survey_access_requests', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('survey_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
+            $table->foreignId('decided_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('decided_at')->nullable();
+            $table->timestamps();
+
+            $table->unique(['survey_id', 'user_id']);
+            $table->index(['survey_id', 'status']);
+        });
+
         // 5. Survey responses (per item, simpan scores + qty + dates)
         Schema::create('survey_responses', function (Blueprint $table) {
             $table->id();
@@ -285,6 +301,7 @@ return new class extends Migration
         Schema::dropIfExists('survey_reports');
         Schema::dropIfExists('survey_group_notes');
         Schema::dropIfExists('survey_responses');
+        Schema::dropIfExists('survey_access_requests');
         Schema::dropIfExists('surveys');
         Schema::dropIfExists('survey_folders');
         Schema::dropIfExists('survey_items');

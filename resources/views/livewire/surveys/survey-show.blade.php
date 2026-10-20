@@ -40,7 +40,7 @@
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
                 <div>
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ $survey->survey_number }}</h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ $survey->ship?->name }}</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ $survey->ship_display_name }}</p>
                 </div>
                 <div class="mt-2 sm:mt-0 flex items-center gap-3">
                     <span class="px-2 py-1 text-xs font-medium rounded-full {{ $survey->status->badgeClass() }}">
@@ -58,7 +58,7 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                 <div>
                     <div class="text-xs text-gray-500 dark:text-gray-400">Template</div>
                     <div class="text-gray-900 dark:text-white">{{ $survey->template?->name ?? ($survey->structure['template_name'] ?? '-') }}</div>
@@ -75,7 +75,33 @@
                     <div class="text-xs text-gray-500 dark:text-gray-400">Lokasi</div>
                     <div class="text-gray-900 dark:text-white">{{ $survey->location ?? '-' }}</div>
                 </div>
+                <div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Pemilik Data</div>
+                    <div class="text-gray-900 dark:text-white">{{ $survey->creator?->name ?? '-' }}</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Update Terakhir</div>
+                    <div class="text-gray-900 dark:text-white">{{ $survey->updater?->name ?? '-' }}</div>
+                    @if($survey->updated_at)
+                        <div class="text-xs text-gray-400 dark:text-gray-500">{{ $survey->updated_at->diffForHumans() }}</div>
+                    @endif
+                </div>
             </div>
+
+            @php $shipSummary = $this->shipSummary; @endphp
+            @if(collect($shipSummary)->filter(fn ($v) => filled($v))->isNotEmpty())
+                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Data Kapal</div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                        @foreach($shipSummary as $label => $value)
+                            <div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">{{ $label }}</div>
+                                <div class="text-gray-900 dark:text-white">{{ $value ?? '-' }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
 
             @if($survey->notes)
                 <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -85,6 +111,73 @@
             @endif
         </div>
     </div>
+
+    <!-- Panel Akses Edit — hanya tampil untuk pemilik survey -->
+    @can('manageAccess', $survey)
+        @if($pendingRequests->isNotEmpty() || $collaborators->isNotEmpty())
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
+                <div class="px-4 py-5 sm:p-6">
+                    <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Akses Edit Survey</h4>
+
+                    @if($pendingRequests->isNotEmpty())
+                        <div class="mb-4">
+                            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Permintaan Menunggu</div>
+                            <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+                                @foreach($pendingRequests as $req)
+                                    <li wire:key="access-pending-{{ $req->id }}" class="py-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ $req->requester->name }}</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">Diajukan {{ $req->created_at->diffForHumans() }}</div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <x-loading-button wire:click="approveAccess({{ $req->id }})"
+                                                target="approveAccess({{ $req->id }})"
+                                                variant="success" size="sm" loadingText="..." icon="check"
+                                                wire:key="btn-approve-access-{{ $req->id }}" title="Setujui">
+                                                Setujui
+                                            </x-loading-button>
+                                            <x-loading-button wire:click="rejectAccess({{ $req->id }})"
+                                                target="rejectAccess({{ $req->id }})"
+                                                variant="danger" size="sm" loadingText="..." icon="close"
+                                                wire:key="btn-reject-access-{{ $req->id }}" title="Tolak">
+                                                Tolak
+                                            </x-loading-button>
+                                        </div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    @if($collaborators->isNotEmpty())
+                        <div>
+                            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Kolaborator</div>
+                            <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+                                @foreach($collaborators as $req)
+                                    <li wire:key="access-collab-{{ $req->id }}" class="py-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+                                        <div class="min-w-0 flex items-center gap-2">
+                                            <span class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ $req->requester->name }}</span>
+                                            <span class="px-2 py-0.5 text-xs font-medium rounded-full {{ $req->status->badgeClass() }}">{{ $req->status->label() }}</span>
+                                        </div>
+                                        <x-loading-button wire:click="revokeAccess({{ $req->id }})"
+                                            target="revokeAccess({{ $req->id }})"
+                                            variant="icon-red" loadingText="..."
+                                            class="px-2.5 py-1.5 gap-1.5 text-sm font-medium rounded-lg border border-red-200 dark:border-red-800/60 hover:border-red-300 dark:hover:border-red-700"
+                                            wire:key="btn-revoke-access-{{ $req->id }}" title="Cabut akses edit {{ $req->requester->name }}">
+                                            <x-slot:icon>
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632ZM22 10.5h-6"/></svg>
+                                            </x-slot:icon>
+                                            Cabut Akses
+                                        </x-loading-button>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        @endif
+    @endcan
 
     <!-- Category Tabs -->
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
@@ -313,10 +406,23 @@
                     Laporan
                 </x-loading-button>
             @endcan
-            @can('surveys_update', $survey)
+            @can('update', $survey)
                 <x-loading-button wire:click="editSurvey" target="editSurvey" variant="primary" size="md" loadingText="Memuat..." icon="edit" class="w-full sm:w-auto">
                     Edit Survey
                 </x-loading-button>
+            @else
+                @if(auth()->user()->can('surveys_update'))
+                    @php $myRequest = $this->myAccessRequest; @endphp
+                    @if($myRequest?->status === \App\Enums\SurveyAccessStatus::Pending)
+                        <span class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 w-full sm:w-auto justify-center" title="Permintaan akses menunggu persetujuan pemilik">
+                            Menunggu Persetujuan Pemilik
+                        </span>
+                    @else
+                        <x-loading-button wire:click="requestAccess" target="requestAccess" variant="warning" size="md" loadingText="Mengirim..." icon="send" class="w-full sm:w-auto">
+                            {{ $myRequest?->status === \App\Enums\SurveyAccessStatus::Rejected ? 'Ajukan Ulang Akses Edit' : 'Minta Akses Edit' }}
+                        </x-loading-button>
+                    @endif
+                @endif
             @endcan
         </div>
     </div>

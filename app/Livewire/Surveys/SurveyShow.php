@@ -4,6 +4,7 @@ namespace App\Livewire\Surveys;
 
 use App\Livewire\Traits\HasNotification;
 use App\Models\Survey;
+use App\Models\SurveyAccessRequest;
 use App\Models\SurveyCategory;
 use App\Services\SurveyService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -26,7 +27,7 @@ class SurveyShow extends Component
     public function mount(Survey $survey)
     {
         $this->authorize('view', $survey);
-        $this->survey = $survey->load(['ship', 'creator', 'template']);
+        $this->survey = $survey->load(['ship', 'creator', 'updater', 'template']);
 
         $firstCat = $this->categories->first();
         $this->activeCategory = $firstCat?->id ?? 1;
@@ -83,6 +84,30 @@ class SurveyShow extends Component
             ->orderBy('order_num')
             ->get()
             ->groupBy('survey_item_group_id');
+    }
+
+    /**
+     * Ringkasan particulars kapal dari snapshot survey — hanya field kunci
+     * identitas/klasifikasi untuk header detail (label => value).
+     */
+    public function getShipSummaryProperty(): array
+    {
+        $labels = \App\Services\ShipService::fieldLabels();
+        $fields = [
+            'imo_number', 'call_sign', 'ship_type', 'flag',
+            'year_built', 'gross_tonnage', 'class_name', 'owner',
+        ];
+
+        $summary = [];
+        foreach ($fields as $field) {
+            $value = $this->survey->shipSnapshotValue($field);
+            if ($value instanceof \BackedEnum) {
+                $value = method_exists($value, 'label') ? $value->label() : $value->value;
+            }
+            $summary[$labels[$field] ?? $field] = $value;
+        }
+
+        return $summary;
     }
 
     public function setCategory($categoryId): void
@@ -156,12 +181,87 @@ class SurveyShow extends Component
         return $this->redirect(route('surveys.index'), navigate: true);
     }
 
+    /**
+     * Request akses edit milik user aktif (bila ada) — dipakai untuk
+     * status tombol "Minta Akses Edit" di action bar.
+     */
+    public function getMyAccessRequestProperty(): ?SurveyAccessRequest
+    {
+        return $this->survey->accessRequests()
+            ->where('user_id', auth()->id())
+            ->first();
+    }
+
+    public function requestAccess(SurveyService $service): void
+    {
+        if (! auth()->user()->can('surveys_update')) {
+            $this->notifyError('Anda tidak memiliki izin mengedit survey.');
+
+            return;
+        }
+
+        if ($this->survey->isEditableBy(auth()->user())) {
+            $this->notifyInfo('Anda sudah memiliki akses edit survey ini.');
+
+            return;
+        }
+
+        if (! $this->survey->created_by) {
+            $this->notifyError('Survey ini tidak memiliki pemilik untuk dimintai akses.');
+
+            return;
+        }
+
+        $request = $service->requestEditAccess($this->survey, auth()->user());
+        $this->notifySuccess(
+            $request->wasRecentlyCreated
+                ? 'Permintaan akses edit dikirim ke pemilik survey.'
+                : 'Permintaan akses edit dikirim ulang ke pemilik survey.'
+        );
+    }
+
+    public function approveAccess($id, SurveyService $service): void
+    {
+        $this->authorize('manageAccess', $this->survey);
+
+        $request = $this->survey->accessRequests()->pending()->findOrFail($id);
+        $service->decideAccessRequest($request, true, auth()->user());
+        $this->notifySuccess("Akses edit untuk {$request->requester->name} disetujui.");
+    }
+
+    public function rejectAccess($id, SurveyService $service): void
+    {
+        $this->authorize('manageAccess', $this->survey);
+
+        $request = $this->survey->accessRequests()->pending()->findOrFail($id);
+        $service->decideAccessRequest($request, false, auth()->user());
+        $this->notifySuccess("Permintaan akses {$request->requester->name} ditolak.");
+    }
+
+    public function revokeAccess($id, SurveyService $service): void
+    {
+        $this->authorize('manageAccess', $this->survey);
+
+        $request = $this->survey->accessRequests()->approved()->findOrFail($id);
+        $name = $request->requester->name;
+        $service->revokeAccess($request);
+        $this->notifySuccess("Akses edit {$name} dicabut.");
+    }
+
     public function render()
     {
+        $isOwner = auth()->user()->can('manageAccess', $this->survey);
+
         return view('livewire.surveys.survey-show', [
             'categories' => $this->categories,
             'responses' => $this->responses,
             'groupNotes' => $this->groupNotes,
+            'pendingRequests' => $isOwner
+                ? $this->survey->accessRequests()->pending()->with('requester:id,name')->oldest()->get()
+                : collect(),
+            'collaborators' => $isOwner
+                ? $this->survey->accessRequests()->approved()->with('requester:id,name')->oldest('decided_at')->get()
+                : collect(),
         ]);
     }
 }

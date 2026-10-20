@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             SurveyTemplateSeeder::class,
             ShipSeeder::class,
             SurveySeeder::class,
+            SurveyAccessRequestSeeder::class,
             SurveyReportSeeder::class,
         ]);
     }

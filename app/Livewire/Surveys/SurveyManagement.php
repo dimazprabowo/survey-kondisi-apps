@@ -235,8 +235,15 @@ class SurveyManagement extends Component
     public function openBulkMoveModal()
     {
         abort_if($this->selected === [], 404);
-        Survey::whereIn('id', array_map('intval', $this->selected))->get()
-            ->each(fn (Survey $s) => $this->authorize('update', $s));
+
+        try {
+            Survey::whereIn('id', array_map('intval', $this->selected))->get()
+                ->each(fn (Survey $s) => $this->authorize('update', $s));
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->notifyError('Ada survey yang tidak dapat Anda pindahkan (bukan pemilik).');
+
+            return;
+        }
 
         $this->movingSurveyId = null;
         $this->movingSurveyIds = array_map('intval', $this->selected);

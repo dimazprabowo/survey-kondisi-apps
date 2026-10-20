@@ -58,6 +58,38 @@ class UserSeeder extends Seeder
             $inspektur->assignRole('inspektur');
         }
 
+        // Inspektur tambahan — dipakai SurveyAccessRequestSeeder untuk contoh
+        // permintaan akses edit (pending + approved)
+        $inspektur2 = User::firstOrCreate(
+            ['email' => 'inspektur2@app.com'],
+            [
+                'name' => 'Inspektur Bima Aditya',
+                'password' => Hash::make('password'),
+                'phone' => '021-1234570',
+                'position' => 'Inspektur',
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]
+        );
+        if (! $inspektur2->hasRole('inspektur')) {
+            $inspektur2->assignRole('inspektur');
+        }
+
+        $inspektur3 = User::firstOrCreate(
+            ['email' => 'inspektur3@app.com'],
+            [
+                'name' => 'Inspektur Citra Ayu',
+                'password' => Hash::make('password'),
+                'phone' => '021-1234571',
+                'position' => 'Inspektur',
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]
+        );
+        if (! $inspektur3->hasRole('inspektur')) {
+            $inspektur3->assignRole('inspektur');
+        }
+
         // User
         $user = User::firstOrCreate(
             ['email' => 'user@app.com'],
