@@ -3,7 +3,7 @@
 namespace App\Livewire\Profile;
 
 use App\Livewire\Traits\HasNotification;
-use App\Models\Company;
+use App\Services\CompanyService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -113,7 +113,7 @@ class ManageCompany extends Component
         $this->resetErrorBag();
     }
 
-    public function save()
+    public function save(CompanyService $service)
     {
         if (! Auth::user()->can('manage_own_company')) {
             $this->notifyError('Anda tidak memiliki izin untuk mengelola perusahaan');
@@ -133,8 +133,7 @@ class ManageCompany extends Component
 
             if ($this->isEditMode) {
                 // Update existing company
-                $company = $user->company;
-                $company->update([
+                $service->update($user->company, [
                     'code' => $this->code,
                     'name' => $this->name,
                     'email' => $this->email,
@@ -149,7 +148,7 @@ class ManageCompany extends Component
                 $message = 'Informasi perusahaan berhasil diperbarui!';
             } else {
                 // Create new company and assign to user
-                $company = Company::create([
+                $company = $service->create([
                     'code' => $this->code,
                     'name' => $this->name,
                     'email' => $this->email,

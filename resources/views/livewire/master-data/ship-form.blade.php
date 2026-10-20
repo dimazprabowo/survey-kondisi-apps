@@ -204,8 +204,8 @@
 
                 <div class="space-y-4">
                     @forelse($certificates as $index => $cert)
-                        <div wire:key="cert-{{ $cert['row_key'] }}-{{ $index }}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
-                            <div class="sm:col-span-2 lg:col-span-2">
+                        <div wire:key="cert-{{ $cert['row_key'] }}-{{ $index }}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                            <div class="sm:col-span-2 lg:col-span-1">
                                 <x-input-label for="cert_type_{{ $index }}" value="Jenis Sertifikat" />
                                 <x-text-input wire:model="certificates.{{ $index }}.certificate_type" id="cert_type_{{ $index }}" type="text" class="mt-1 block w-full" placeholder="Contoh: Special Survey" />
                                 <x-input-error :messages="$errors->get('certificates.'.$index.'.certificate_type')" class="mt-2" />

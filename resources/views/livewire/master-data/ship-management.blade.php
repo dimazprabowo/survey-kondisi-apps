@@ -20,7 +20,7 @@
         </x-filter-popover>
 
         <!-- Action Buttons -->
-        <div class="flex items-center gap-2 w-full md:w-auto">
+        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
             @can('ships_export_excel')
                 <x-loading-button wire:click="exportExcel" target="exportExcel" variant="success" size="md" loadingText="Exporting..." title="Export Excel" icon="excel">
                     Excel

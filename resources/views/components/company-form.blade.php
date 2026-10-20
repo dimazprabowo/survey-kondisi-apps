@@ -1,41 +1,34 @@
 @props(['editMode' => false, 'showStatus' => false])
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {{-- Code --}}
     <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Kode <span class="text-red-500">*</span>
-        </label>
-        <input wire:model="code" type="text" 
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            placeholder="Contoh: COMP001">
-        @error('code') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+        <x-input-label for="company_code" value="Kode" :required="true" />
+        <x-text-input wire:model="code" id="company_code" type="text" class="mt-1 block w-full"
+            placeholder="Contoh: COMP001" />
+        <x-input-error :messages="$errors->get('code')" class="mt-1" />
     </div>
 
     {{-- Name --}}
     <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Nama Perusahaan <span class="text-red-500">*</span>
-        </label>
-        <input wire:model="name" type="text" 
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            placeholder="Nama perusahaan">
-        @error('name') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+        <x-input-label for="company_name" value="Nama Perusahaan" :required="true" />
+        <x-text-input wire:model="name" id="company_name" type="text" class="mt-1 block w-full"
+            placeholder="Nama perusahaan" />
+        <x-input-error :messages="$errors->get('name')" class="mt-1" />
     </div>
 
-    {{-- NPWP --}}
+    {{-- NPWP (masked input, strip non-digit ke nilai model) --}}
     <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            NPWP <span class="text-red-500">*</span>
-        </label>
-        <input 
-            type="text" 
+        <x-input-label for="company_npwp" value="NPWP" :required="true" />
+        <input
+            id="company_npwp"
+            type="text"
             x-data="{
                 npwp: @entangle('npwp'),
                 formatNpwp(value) {
                     let digits = value.replace(/\D/g, '').substring(0, 16);
                     let len = digits.length;
-                    
+
                     if (len <= 15) {
                         // Format lama: XX.XXX.XXX.X-XXX.XXX
                         let formatted = '';
@@ -63,84 +56,77 @@
             x-init="$watch('npwp', value => { if(value) npwp = value.replace(/\D/g, '').substring(0, 16); })"
             :value="displayValue()"
             @input="npwp = $event.target.value.replace(/\D/g, '').substring(0, 16); $event.target.value = formatNpwp($event.target.value)"
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono"
+            class="mt-1 w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-blue-500 dark:focus:border-blue-600 focus:ring-blue-500 dark:focus:ring-blue-600 rounded-md shadow-sm font-mono"
             placeholder="XX.XXX.XXX.X-XXX.XXX">
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Format lama (15 digit) atau baru (16 digit)</p>
-        @error('npwp') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+        <x-input-error :messages="$errors->get('npwp')" class="mt-1" />
     </div>
 
     {{-- Email --}}
     <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
-        <input wire:model="email" type="email" 
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            placeholder="email@perusahaan.com">
-        @error('email') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+        <x-input-label for="company_email" value="Email" />
+        <x-text-input wire:model="email" id="company_email" type="email" class="mt-1 block w-full"
+            placeholder="email@perusahaan.com" />
+        <x-input-error :messages="$errors->get('email')" class="mt-1" />
     </div>
 
     {{-- Phone --}}
     <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Telepon</label>
-        <input wire:model="phone" type="text" 
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            placeholder="021-1234567">
-        @error('phone') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+        <x-input-label for="company_phone" value="Telepon" />
+        <x-text-input wire:model="phone" id="company_phone" type="text" class="mt-1 block w-full"
+            placeholder="021-1234567" />
+        <x-input-error :messages="$errors->get('phone')" class="mt-1" />
     </div>
 
     {{-- Address --}}
-    <div class="md:col-span-2">
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Alamat</label>
-        <textarea wire:model="address" rows="2" 
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+    <div class="sm:col-span-2">
+        <x-input-label for="company_address" value="Alamat" />
+        <textarea wire:model="address" id="company_address" rows="2"
+            class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-blue-500 dark:focus:border-blue-600 focus:ring-blue-500 dark:focus:ring-blue-600 rounded-md shadow-sm"
             placeholder="Alamat lengkap perusahaan"></textarea>
-        @error('address') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+        <x-input-error :messages="$errors->get('address')" class="mt-1" />
     </div>
 
     {{-- Divider --}}
-    <div class="md:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+    <div class="sm:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
         <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Person In Charge (PIC)</h4>
     </div>
 
     {{-- PIC Name --}}
     <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nama PIC</label>
-        <input wire:model="pic_name" type="text" 
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            placeholder="Nama person in charge">
-        @error('pic_name') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+        <x-input-label for="company_pic_name" value="Nama PIC" />
+        <x-text-input wire:model="pic_name" id="company_pic_name" type="text" class="mt-1 block w-full"
+            placeholder="Nama person in charge" />
+        <x-input-error :messages="$errors->get('pic_name')" class="mt-1" />
     </div>
 
     {{-- PIC Email --}}
     <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email PIC</label>
-        <input wire:model="pic_email" type="email" 
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            placeholder="pic@perusahaan.com">
-        @error('pic_email') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+        <x-input-label for="company_pic_email" value="Email PIC" />
+        <x-text-input wire:model="pic_email" id="company_pic_email" type="email" class="mt-1 block w-full"
+            placeholder="pic@perusahaan.com" />
+        <x-input-error :messages="$errors->get('pic_email')" class="mt-1" />
     </div>
 
     {{-- PIC Phone --}}
     <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Telepon PIC</label>
-        <input wire:model="pic_phone" type="text" 
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            placeholder="08123456789">
-        @error('pic_phone') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+        <x-input-label for="company_pic_phone" value="Telepon PIC" />
+        <x-text-input wire:model="pic_phone" id="company_pic_phone" type="text" class="mt-1 block w-full"
+            placeholder="08123456789" />
+        <x-input-error :messages="$errors->get('pic_phone')" class="mt-1" />
     </div>
 
-    {{-- Status (only for admin) --}}
+    {{-- Status (hanya ditampilkan bila caller mengizinkan) --}}
     @if($showStatus)
-    <div class="md:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Status <span class="text-red-500">*</span>
-        </label>
-        <select wire:model="status" 
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
-            <option value="active">Aktif</option>
-            <option value="inactive">Tidak Aktif</option>
-            <option value="suspended">Suspended</option>
+    <div class="sm:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+        <x-input-label for="company_status" value="Status" :required="true" />
+        <select wire:model="status" id="company_status"
+            class="mt-1 w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-blue-500 dark:focus:border-blue-600 focus:ring-blue-500 dark:focus:ring-blue-600 rounded-md shadow-sm">
+            @foreach(\App\Enums\CompanyStatus::cases() as $statusCase)
+                <option value="{{ $statusCase->value }}">{{ $statusCase->label() }}</option>
+            @endforeach
         </select>
-        @error('status') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
+        <x-input-error :messages="$errors->get('status')" class="mt-1" />
     </div>
     @endif
 </div>

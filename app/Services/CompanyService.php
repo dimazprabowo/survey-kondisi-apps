@@ -5,19 +5,15 @@ namespace App\Services;
 use App\Models\Company;
 use App\Traits\HasDynamicLike;
 use App\Traits\SortsQuery;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class CompanyService
 {
     use HasDynamicLike, SortsQuery;
 
-    public function getFiltered(
-        ?string $search = null,
-        ?string $statusFilter = null,
-        int $perPage = 15,
-        ?string $sortField = null,
-        string $sortDir = 'asc'
-    ): LengthAwarePaginator {
+    public function filteredQuery(?string $search = null, ?string $statusFilter = null): Builder
+    {
         $query = Company::withCount('users');
 
         if ($search) {
@@ -35,6 +31,18 @@ class CompanyService
             $query->where('status', $statusFilter);
         }
 
+        return $query;
+    }
+
+    public function getFiltered(
+        ?string $search = null,
+        ?string $statusFilter = null,
+        int $perPage = 15,
+        ?string $sortField = null,
+        string $sortDir = 'asc'
+    ): LengthAwarePaginator {
+        $query = $this->filteredQuery($search, $statusFilter);
+
         $sortable = [
             'name' => 'companies.name',
             'npwp' => 'companies.npwp',
@@ -51,11 +59,19 @@ class CompanyService
 
     public function create(array $data): Company
     {
+        if (isset($data['code'])) {
+            $data['code'] = strtoupper($data['code']);
+        }
+
         return Company::create($data);
     }
 
     public function update(Company $company, array $data): Company
     {
+        if (isset($data['code'])) {
+            $data['code'] = strtoupper($data['code']);
+        }
+
         $company->update($data);
 
         return $company;

@@ -8,7 +8,6 @@ use App\Livewire\Traits\HasNotification;
 use App\Livewire\Traits\HasTableSorting;
 use App\Models\Company;
 use App\Services\CompanyService;
-use App\Traits\HasDynamicLike;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Component;
@@ -16,7 +15,7 @@ use Livewire\WithPagination;
 
 class CompanyManagement extends Component
 {
-    use AuthorizesRequests, HasDynamicLike, HasNotification, HasTableSorting, WithPagination;
+    use AuthorizesRequests, HasNotification, HasTableSorting, WithPagination;
 
     public $search = '';
 
@@ -170,7 +169,7 @@ class CompanyManagement extends Component
 
         try {
             $data = [
-                'code' => strtoupper($this->code),
+                'code' => $this->code,
                 'name' => $this->name,
                 'email' => $this->email,
                 'phone' => $this->phone,
@@ -290,19 +289,7 @@ class CompanyManagement extends Component
     {
         $this->authorize('exportPdf', Company::class);
 
-        $operator = $this->getLikeOperator();
-        $companies = Company::withCount('users')
-            ->when($this->search, function ($q) use ($operator) {
-                $q->where(function ($q) use ($operator) {
-                    $q->where('code', $operator, "%{$this->search}%")
-                        ->orWhere('name', $operator, "%{$this->search}%")
-                        ->orWhere('email', $operator, "%{$this->search}%")
-                        ->orWhere('pic_name', $operator, "%{$this->search}%");
-                });
-            })
-            ->when($this->statusFilter !== null && $this->statusFilter !== '', function ($q) {
-                $q->where('status', $this->statusFilter);
-            })
+        $companies = $service->filteredQuery($this->search, $this->statusFilter)
             ->orderBy('name')
             ->get();
 

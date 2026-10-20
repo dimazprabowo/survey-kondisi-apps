@@ -63,7 +63,7 @@ trait HasMenuItems
             $masterDataChildren[] = [
                 'name' => 'Kapal',
                 'route' => 'master-data.ships',
-                'active' => $req->routeIs('master-data.ships'),
+                'active' => $req->routeIs('master-data.ships*'),
             ];
         }
         if ($perms['survey_templates_view']) {

@@ -20,7 +20,7 @@
         </x-filter-popover>
 
         <!-- Action Buttons -->
-        <div class="flex items-center gap-2 w-full md:w-auto">
+        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
             @can('companies_export_excel')
                 <x-loading-button wire:click="exportExcel" target="exportExcel" variant="success" size="md" loadingText="Exporting..." title="Export Excel" icon="excel">
                     Excel
@@ -32,10 +32,7 @@
                 </x-loading-button>
             @endcan
             @can('companies_create')
-                <x-loading-button wire:click="create" target="create" variant="primary" size="md" loadingText="Memuat..." class="flex-1 md:flex-none">
-                    <x-slot:icon>
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                    </x-slot:icon>
+                <x-loading-button wire:click="create" target="create" variant="primary" size="md" loadingText="Memuat..." icon="plus" class="flex-1 md:flex-none">
                     Tambah Perusahaan
                 </x-loading-button>
             @endcan
@@ -104,14 +101,7 @@
                                         wire:key="toggle-status-{{ $company->id }}"
                                         title="Aktifkan/Nonaktifkan" />
                                 @else
-                                    @php
-                                        $statusColors = [
-                                            'active' => 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
-                                            'inactive' => 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400',
-                                            'suspended' => 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
-                                        ];
-                                    @endphp
-                                    <span class="px-2 py-1 text-xs font-medium rounded-full {{ $statusColors[$company->status->value] ?? $statusColors['inactive'] }}">
+                                    <span class="px-2 py-1 text-xs font-medium rounded-full {{ $company->status->badgeClass() }}">
                                         {{ $company->status->label() }}
                                     </span>
                                 @endcan
