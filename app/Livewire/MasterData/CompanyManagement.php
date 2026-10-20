@@ -100,6 +100,14 @@ class CompanyManagement extends Component
         ];
     }
 
+    protected function messages(): array
+    {
+        return [
+            'code.unique' => 'Kode perusahaan sudah digunakan.',
+            'npwp.unique' => 'NPWP sudah terdaftar untuk perusahaan lain.',
+        ];
+    }
+
     public function updatingSearch()
     {
         $this->resetPage();
@@ -160,6 +168,11 @@ class CompanyManagement extends Component
 
     public function save(CompanyService $service)
     {
+        // Service menormalisasi code ke uppercase — samakan sebelum validasi
+        // agar pengecekan unique memakai nilai yang benar-benar disimpan.
+        $this->code = strtoupper(trim((string) $this->code));
+        $this->npwp = trim((string) $this->npwp);
+
         try {
             $this->validate();
         } catch (\Illuminate\Validation\ValidationException $e) {

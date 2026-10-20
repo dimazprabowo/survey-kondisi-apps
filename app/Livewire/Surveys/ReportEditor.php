@@ -437,6 +437,12 @@ class ReportEditor extends Component
     public function render()
     {
         return view('livewire.surveys.report-editor', [
+            // Particulars laporan dari snapshot survey (immutable); survey
+            // lama tanpa snapshot jatuh kembali ke relasi ship.
+            'ship' => app(\App\Services\ShipService::class)->hydrateFromSnapshot(
+                $this->survey->ship_snapshot ?? [],
+                $this->survey->ship
+            ),
             'bab3Categories' => app(SurveyService::class)->hydrateStructure($this->survey->structure),
             'responses' => $this->responses,
             'groupNotes' => SurveyGroupNote::where('survey_id', $this->survey->id)

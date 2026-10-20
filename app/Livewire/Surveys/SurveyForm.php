@@ -2,25 +2,40 @@
 
 namespace App\Livewire\Surveys;
 
+use App\Enums\ShipClassStatus;
 use App\Enums\SurveyStatus;
 use App\Livewire\Traits\HasNotification;
 use App\Models\Ship;
 use App\Models\Survey;
 use App\Models\SurveyTemplate;
+use App\Services\ShipService;
 use App\Services\SurveyService;
 use App\Services\SurveyTemplateService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class SurveyForm extends Component
 {
     use AuthorizesRequests, HasNotification;
 
+    // Nilai opsi "Kapal Baru" pada select kapal — kapal belum ada di master;
+    // record dibuat saat sinkron (tombol Update Master / konfirmasi Selesai).
+    protected const NEW_SHIP_VALUE = 'new';
+
     public ?Survey $survey = null;
 
     public bool $editMode = false;
+
+    // Wizard: 1 = Informasi Survey, 2 = Data Kapal, 3 = Penilaian & CAP.
+    // Tersinkron ke query string (?step=) agar bertahan saat refresh &
+    // tombol Back browser mundur ke langkah sebelumnya.
+    #[Url(as: 'step', history: true)]
+    public int $activeStep = 1;
 
     // Header fields
     public $surveyId;
@@ -40,6 +55,24 @@ class SurveyForm extends Component
     public $status = 'draft';
 
     public $notes;
+
+    // Snapshot data kapal (tersimpan di surveys.ship_snapshot — laporan
+    // membaca snapshot ini, bukan relasi ship live, agar historis stabil).
+    public array $shipData = [];
+
+    public array $shipCertificates = [];
+
+    // True saat opsi "Kapal Baru" dipilih — snapshot diisi manual; ship_id
+    // survey null sampai record master dibuat lewat sinkron.
+    public bool $isNewShip = false;
+
+    // Toggle edit pada langkah Data Kapal — default OFF agar snapshot tidak
+    // terubah tak sengaja (auto-ON untuk Kapal Baru).
+    public bool $editShipData = false;
+
+    // Konteks modal sinkron kapal: 'save' = konfirmasi simpan Selesai,
+    // 'manual' = tombol Update Master di langkah Data Kapal.
+    public string $shipSyncMode = 'save';
 
     // Dynamic responses: [item_id => ['scores' => [label => value], 'qty' => '', 'specification' => '', 'date_issued' => '', 'date_expired' => '']]
     public $responses = [];
@@ -99,13 +132,24 @@ class SurveyForm extends Component
             $this->survey = $survey;
             $this->editMode = true;
             $this->surveyId = $survey->id;
-            $this->ship_id = $survey->ship_id;
+            // Survey "Kapal Baru" (ship_id null) tampil sebagai opsi sentinel.
+            if ($survey->ship_id === null) {
+                $this->isNewShip = true;
+                $this->editShipData = true;
+                $this->ship_id = self::NEW_SHIP_VALUE;
+            } else {
+                $this->ship_id = $survey->ship_id;
+            }
             $this->survey_template_id = $survey->survey_template_id;
             $this->survey_date = $survey->survey_date?->format('Y-m-d');
             $this->surveyor = $survey->surveyor;
             $this->location = $survey->location;
             $this->status = $survey->status->value;
             $this->notes = $survey->notes;
+
+            // Snapshot kapal: dari ship_snapshot tersimpan; fallback isi
+            // dari master kapal untuk survey lama tanpa snapshot.
+            $this->loadShipData($survey);
 
             // Working copy struktur: snapshot tersimpan (fallback bangun ulang
             // dari template untuk data lama yang belum punya structure)
@@ -122,6 +166,7 @@ class SurveyForm extends Component
 
             // Restore draft if exists (auto-recovery after reload)
             $this->hasDraft = $this->loadDraft();
+            $this->restoreActiveTab();
 
             // Deep-link kategori dari preview laporan/halaman detail (override tab draft)
             $categoryParam = request()->query('category');
@@ -148,6 +193,7 @@ class SurveyForm extends Component
             $this->authorize('create', Survey::class);
             $this->survey_date = now()->format('Y-m-d');
             $this->status = SurveyStatus::Draft->value;
+            $this->shipData = $this->emptyShipData();
 
             // Template dari query param (dari template picker modal) atau default
             $templateParam = request()->query('template');
@@ -193,7 +239,11 @@ class SurveyForm extends Component
 
             // Restore draft if exists (auto-recovery after reload)
             $this->hasDraft = $this->loadDraft();
+            $this->restoreActiveTab();
         }
+
+        // Clamp ?step= dari query string (URL bisa diedit manual)
+        $this->activeStep = max(1, min(3, $this->activeStep));
     }
 
     protected function loadResponses(): void
@@ -307,7 +357,9 @@ class SurveyForm extends Component
     public function rules()
     {
         return [
-            'ship_id' => ['required', 'exists:ships,id'],
+            'ship_id' => $this->isNewShip
+                ? ['required', Rule::in([self::NEW_SHIP_VALUE])]
+                : ['required', 'exists:ships,id'],
             // Template beku di snapshot saat survey dibuat; di edit mode boleh
             // null bila template sumber sudah dihapus.
             'survey_template_id' => $this->editMode
@@ -319,12 +371,46 @@ class SurveyForm extends Component
             'status' => ['required', 'string', 'in:'.implode(',', SurveyStatus::values())],
             'notes' => ['nullable', 'string', 'max:5000'],
             'groupNotes.*.*' => ['nullable', 'string', 'max:500'],
+            // Snapshot data kapal — particulars dipakai laporan dan (saat
+            // completed) ditimpa balik ke master data kapal.
+            'shipData.name' => ['required', 'string', 'max:255'],
+            'shipData.year_built' => ['nullable', 'integer', 'min:1900', 'max:'.(int) now()->format('Y')],
+            'shipData.imo_number' => ['nullable', 'string', 'max:20'],
+            'shipData.ship_type' => ['nullable', 'string', 'max:255'],
+            'shipData.flag' => ['nullable', 'string', 'max:255'],
+            'shipData.gross_tonnage' => ['nullable', 'string', 'max:20'],
+            'shipData.net_tonnage' => ['nullable', 'string', 'max:20'],
+            'shipData.owner' => ['nullable', 'string', 'max:255'],
+            'shipData.operator' => ['nullable', 'string', 'max:255'],
+            'shipData.call_sign' => ['nullable', 'string', 'max:20'],
+            'shipData.loa' => ['nullable', 'string', 'max:20'],
+            'shipData.lpp' => ['nullable', 'string', 'max:20'],
+            'shipData.breadth' => ['nullable', 'string', 'max:20'],
+            'shipData.depth' => ['nullable', 'string', 'max:20'],
+            'shipData.draft' => ['nullable', 'string', 'max:20'],
+            'shipData.dwt' => ['nullable', 'string', 'max:20'],
+            'shipData.builder' => ['nullable', 'string', 'max:255'],
+            'shipData.port_of_registry' => ['nullable', 'string', 'max:255'],
+            'shipData.hull_material' => ['nullable', 'string', 'max:100'],
+            'shipData.class_name' => ['nullable', 'string', 'max:255'],
+            'shipData.class_notations' => ['nullable', 'string', 'max:255'],
+            'shipData.class_status' => ['required', 'string', 'in:'.implode(',', ShipClassStatus::values())],
+            'shipData.main_engine' => ['nullable', 'string', 'max:255'],
+            'shipData.main_engine_power' => ['nullable', 'string', 'max:255'],
+            'shipData.aux_engine' => ['nullable', 'string', 'max:255'],
+            'shipData.aux_engine_power' => ['nullable', 'string', 'max:255'],
+            'shipCertificates' => ['array'],
+            'shipCertificates.*.certificate_type' => ['nullable', 'string', 'max:255'],
+            'shipCertificates.*.last_date' => ['nullable', 'date'],
+            'shipCertificates.*.next_1_date' => ['nullable', 'date'],
+            'shipCertificates.*.next_2_date' => ['nullable', 'date'],
+            'shipCertificates.*.postpone_date' => ['nullable', 'date'],
         ];
     }
 
     public function validationAttributes()
     {
-        return [
+        $attributes = [
             'ship_id' => 'kapal',
             'survey_template_id' => 'template',
             'survey_date' => 'tanggal survey',
@@ -334,14 +420,29 @@ class SurveyForm extends Component
             'notes' => 'catatan',
             'groupNotes.*.*' => 'catatan grup item',
         ];
+
+        foreach (ShipService::fieldLabels() as $field => $label) {
+            $attributes["shipData.{$field}"] = strtolower($label);
+        }
+
+        return $attributes + [
+            'shipCertificates.*.certificate_type' => 'jenis sertifikat',
+            'shipCertificates.*.last_date' => 'tanggal last',
+            'shipCertificates.*.next_1_date' => 'tanggal next 1',
+            'shipCertificates.*.next_2_date' => 'tanggal next 2',
+            'shipCertificates.*.postpone_date' => 'tanggal postpone',
+        ];
     }
 
     public function getShipOptionsProperty(): array
     {
-        return Ship::active()->orderBy('name')->get()->map(fn ($ship) => [
+        return collect([[
+            'value' => self::NEW_SHIP_VALUE,
+            'label' => '+ Kapal Baru (belum terdaftar di master)',
+        ]])->merge(Ship::active()->orderBy('name')->get()->map(fn ($ship) => [
             'value' => (string) $ship->id,
             'label' => $ship->name.($ship->year_built ? ' ('.$ship->year_built.')' : ''),
-        ])->toArray();
+        ]))->toArray();
     }
 
     public function getStatusOptionsProperty(): array
@@ -350,6 +451,165 @@ class SurveyForm extends Component
             'value' => $case->value,
             'label' => $case->label(),
         ])->toArray();
+    }
+
+    public function getShipClassStatusOptionsProperty(): array
+    {
+        return collect(ShipClassStatus::cases())->map(fn ($case) => [
+            'value' => $case->value,
+            'label' => $case->label(),
+        ])->toArray();
+    }
+
+    /**
+     * Preview sinkron master kapal untuk modal konfirmasi — target kapal
+     * (Call Sign → fallback ship_id, atau "buat baru") + daftar field yang
+     * akan ditimpa. Null bila tidak ada target atau tidak ada perubahan.
+     */
+    public function getShipSyncPreviewProperty(): ?array
+    {
+        $preview = $this->buildShipSyncPreview();
+
+        if (! $preview) {
+            return null;
+        }
+
+        $diff = $preview['diff'];
+
+        if (empty($diff['fields']) && ! $diff['certificates_changed']) {
+            return null;
+        }
+
+        return $preview;
+    }
+
+    /**
+     * Nilai default kosong semua kolom snapshot kapal.
+     */
+    protected function emptyShipData(): array
+    {
+        $data = array_fill_keys(ShipService::SNAPSHOT_FIELDS, null);
+        $data['class_status'] = ShipClassStatus::Active->value;
+
+        return $data;
+    }
+
+    /**
+     * Isi shipData/shipCertificates dari snapshot tersimpan (edit mode),
+     * fallback dari master kapal untuk survey lama tanpa snapshot.
+     */
+    protected function loadShipData(Survey $survey): void
+    {
+        $this->shipData = $this->emptyShipData();
+        $snapshot = $survey->ship_snapshot;
+
+        if (is_array($snapshot) && is_array($snapshot['attributes'] ?? null)) {
+            $this->shipData = array_merge($this->shipData, $snapshot['attributes']);
+            $this->shipCertificates = $this->certificatesWithKeys($snapshot['certificates'] ?? []);
+        } elseif ($survey->ship) {
+            $this->fillShipData($survey->ship);
+        }
+    }
+
+    /**
+     * Isi form snapshot dari record kapal (saat kapal dipilih/diganti).
+     */
+    protected function fillShipData(Ship $ship): void
+    {
+        $snapshot = app(ShipService::class)->snapshotFromShip($ship);
+        $this->shipData = array_merge($this->emptyShipData(), $snapshot['attributes']);
+        $this->shipCertificates = $this->certificatesWithKeys($snapshot['certificates']);
+    }
+
+    /**
+     * Tambahkan row_key stabil ke baris sertifikat agar wire:key tidak
+     * bergeser saat baris dihapus/di-reorder (hindari stale wire:model).
+     */
+    protected function certificatesWithKeys(array $certificates): array
+    {
+        return array_map(fn ($cert) => [
+            'row_key' => $cert['row_key'] ?? (string) Str::uuid(),
+            'certificate_type' => $cert['certificate_type'] ?? '',
+            'last_date' => $cert['last_date'] ?? '',
+            'next_1_date' => $cert['next_1_date'] ?? '',
+            'next_2_date' => $cert['next_2_date'] ?? '',
+            'postpone_date' => $cert['postpone_date'] ?? '',
+        ], $certificates);
+    }
+
+    /**
+     * Ganti kapal → isi ulang snapshot dari kapal baru (data editan pada
+     * snapshot kapal sebelumnya sengaja dibuang — kapal berbeda). Opsi
+     * "Kapal Baru" mengosongkan snapshot untuk diisi manual.
+     */
+    public function updatedShipId($value): void
+    {
+        $this->isNewShip = $value === self::NEW_SHIP_VALUE;
+
+        if ($this->isNewShip) {
+            $this->shipData = $this->emptyShipData();
+            $this->shipCertificates = [];
+            $this->editShipData = true;
+
+            return;
+        }
+
+        $ship = $value ? Ship::find($value) : null;
+
+        if ($ship) {
+            $this->fillShipData($ship);
+        } else {
+            $this->shipData = $this->emptyShipData();
+            $this->shipCertificates = [];
+        }
+    }
+
+    /**
+     * Toggle mode edit pada langkah Data Kapal — default terkunci agar
+     * snapshot tidak berubah tak sengaja.
+     */
+    public function toggleEditShipData(): void
+    {
+        $this->authorizeFormMutation();
+        $this->editShipData = ! $this->editShipData;
+    }
+
+    public function addShipCertificate(): void
+    {
+        $this->authorizeFormMutation();
+        $this->shipCertificates[] = $this->certificatesWithKeys([[]])[0];
+    }
+
+    public function confirmRemoveShipCertificate(int $index): void
+    {
+        $this->authorizeFormMutation();
+
+        if (! isset($this->shipCertificates[$index])) {
+            return;
+        }
+
+        $name = trim($this->shipCertificates[$index]['certificate_type'] ?? '');
+        $preview = $name !== '' ? "\"{$name}\"" : 'ini';
+
+        $this->dispatch('confirm-remove-cert',
+            action: 'removeShipCertificate',
+            actionParams: [$index],
+            title: 'Hapus Sertifikat',
+            message: "Sertifikat {$preview} akan dihapus dari data kapal survey ini.",
+            confirmText: 'Ya, Hapus',
+            cancelText: 'Batal',
+            type: 'danger',
+        );
+    }
+
+    public function removeShipCertificate(int $index): void
+    {
+        $this->authorizeFormMutation();
+        unset($this->shipCertificates[$index]);
+        $this->shipCertificates = array_values($this->shipCertificates);
+        $this->dispatch('confirm-remove-cert-close');
+        $this->dispatch('ship-data-changed');
+        $this->notifyInfo('Sertifikat berhasil dihapus.');
     }
 
     public function getCategoriesProperty()
@@ -457,11 +717,13 @@ class SurveyForm extends Component
         $this->activeSubCategory = $this->categories
             ->firstWhere('id', $categoryId)
             ?->subCategories->first()?->id;
+        $this->persistActiveTab();
     }
 
     public function setSubCategory($subCategoryId): void
     {
         $this->activeSubCategory = $subCategoryId;
+        $this->persistActiveTab();
     }
 
     /**
@@ -522,16 +784,109 @@ class SurveyForm extends Component
 
     public function save(SurveyService $service)
     {
+        $this->normalizeShipInputs();
+
         try {
             $this->validate();
         } catch (\Illuminate\Validation\ValidationException $e) {
+            // Lompat ke langkah wizard yang berisi error agar langsung terlihat.
+            $this->activeStep = $this->stepForErrorKeys($e->validator->errors()->keys());
             $this->notifyValidationError($e);
             throw $e;
         }
 
+        // Status Selesai + snapshot kapal beda dari master → tampilkan modal
+        // konfirmasi dulu; survey & master baru tersimpan saat user setuju
+        // (user bisa batal lalu memperbaiki data kapal di form).
+        if ($this->offerShipSync()) {
+            return;
+        }
+
+        return $this->persistSurvey($service, false);
+    }
+
+    /**
+     * Navigasi wizard — maju melewati validasi per-langkah, mundur bebas.
+     */
+    public function goToStep(int $step): void
+    {
+        while ($this->activeStep < $step && $this->activeStep < 3) {
+            $this->validateStep($this->activeStep);
+            $this->activeStep++;
+        }
+
+        $this->activeStep = max(1, min(3, $step));
+    }
+
+    public function nextStep(): void
+    {
+        $this->goToStep($this->activeStep + 1);
+    }
+
+    public function prevStep(): void
+    {
+        $this->activeStep = max(1, $this->activeStep - 1);
+    }
+
+    /**
+     * Validasi subset field milik langkah tertentu — mencegah user maju
+     * membawa field wajib yang belum diisi.
+     */
+    protected function validateStep(int $step): void
+    {
+        $rules = match ($step) {
+            1 => array_intersect_key($this->rules(), array_flip([
+                'ship_id', 'survey_template_id', 'survey_date', 'status',
+            ])),
+            2 => array_filter(
+                $this->rules(),
+                fn ($key) => str_starts_with($key, 'shipData.') || str_starts_with($key, 'shipCertificates'),
+                ARRAY_FILTER_USE_KEY
+            ),
+            default => [],
+        };
+
+        if (empty($rules)) {
+            return;
+        }
+
+        try {
+            $this->validate($rules);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->notifyValidationError($e);
+            throw $e;
+        }
+    }
+
+    /**
+     * Langkah wizard pemilik field yang gagal validasi — untuk auto-jump
+     * saat simpan gagal.
+     */
+    protected function stepForErrorKeys(array $keys): int
+    {
+        foreach ($keys as $key) {
+            if (str_starts_with($key, 'shipData.') || str_starts_with($key, 'shipCertificates')) {
+                return 2;
+            }
+            if (str_starts_with($key, 'groupNotes')) {
+                return 3;
+            }
+        }
+
+        return 1;
+    }
+
+    /**
+     * Simpan survey ke DB (create/update + responses + notes + ship_snapshot).
+     * $syncShip = true → satu transaksi sekaligus menimpa master data kapal
+     * dari snapshot (alur confirm modal saat status Selesai).
+     */
+    protected function persistSurvey(SurveyService $service, bool $syncShip)
+    {
         try {
             $data = [
-                'ship_id' => $this->ship_id,
+                // "Kapal Baru" → ship_id null; master dibuat saat sinkron.
+                'ship_id' => $this->isNewShip ? null : $this->ship_id,
                 'survey_template_id' => $this->survey_template_id,
                 'survey_date' => $this->survey_date,
                 'surveyor' => $this->surveyor,
@@ -541,22 +896,35 @@ class SurveyForm extends Component
                 // Struktur survey ikut tersimpan — hasil snapshot (create) atau
                 // working copy yang mungkin sudah dipangkas (edit).
                 'structure' => $this->structureTree,
+                // Snapshot particulars + sertifikat kapal saat survey diisi.
+                'ship_snapshot' => $this->buildShipSnapshot(),
             ];
 
             if ($this->editMode) {
                 $survey = Survey::findOrFail($this->surveyId);
                 $this->authorize('update', $survey);
-                $service->update($survey, $data);
-                $service->saveResponses($survey->id, $this->responses, $this->groupNotes);
+                $survey = $syncShip
+                    ? $service->saveWithShipSync($survey, $data, $this->responses, $this->groupNotes)
+                    : tap($survey, function () use ($service, $survey, $data) {
+                        $service->update($survey, $data);
+                        $service->saveResponses($survey->id, $this->responses, $this->groupNotes);
+                    });
                 $this->clearDraft();
-                $this->notifySuccess('Survey berhasil diupdate!');
+                $this->notifySuccess($syncShip
+                    ? 'Survey diupdate & master data kapal berhasil disinkronkan!'
+                    : 'Survey berhasil diupdate!');
             } else {
                 $this->authorize('create', Survey::class);
                 $data['survey_folder_id'] = $this->survey_folder_id;
-                $survey = $service->create($data);
-                $service->saveResponses($survey->id, $this->responses, $this->groupNotes);
+                $survey = $syncShip
+                    ? $service->saveWithShipSync(null, $data, $this->responses, $this->groupNotes)
+                    : tap($service->create($data), function ($survey) use ($service) {
+                        $service->saveResponses($survey->id, $this->responses, $this->groupNotes);
+                    });
                 $this->clearDraft();
-                $this->notifySuccess('Survey berhasil dibuat!');
+                $this->notifySuccess($syncShip
+                    ? 'Survey dibuat & master data kapal berhasil disinkronkan!'
+                    : 'Survey berhasil dibuat!');
             }
 
             // Deep-link kembali ke tab kategori/sub kategori yang sedang diedit
@@ -579,6 +947,318 @@ class SurveyForm extends Component
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
         }
+    }
+
+    /**
+     * Normalisasi input snapshot kapal sebelum validasi (trim, kosong →
+     * null, uppercase IMO/Call Sign) agar yang divalidasi = yang tersimpan.
+     */
+    protected function normalizeShipInputs(): void
+    {
+        $this->shipData = array_merge($this->emptyShipData(), $this->normalizedShipData());
+    }
+
+    /**
+     * Attributes snapshot kapal yang sudah dinormalisasi (tanpa mengubah state).
+     */
+    protected function normalizedShipData(): array
+    {
+        $normalized = app(ShipService::class)->normalizeData($this->shipData);
+
+        return array_intersect_key($normalized, array_flip(ShipService::SNAPSHOT_FIELDS));
+    }
+
+    /**
+     * Snapshot {attributes, certificates} untuk kolom surveys.ship_snapshot.
+     */
+    protected function buildShipSnapshot(): array
+    {
+        return [
+            'attributes' => $this->normalizedShipData(),
+            'certificates' => app(ShipService::class)->normalizedCertificates($this->shipCertificates),
+        ];
+    }
+
+    /**
+     * Data preview sinkron master: kapal target (Call Sign → fallback
+     * ship_id) + diff field/sertifikat. Untuk "Kapal Baru" tanpa kecocokan,
+     * target null + flag creating (record master akan dibuat).
+     */
+    protected function buildShipSyncPreview(): ?array
+    {
+        $shipService = app(ShipService::class);
+        $data = $this->normalizedShipData();
+        $target = $shipService->resolveForSnapshot($data, $this->isNewShip ? null : (int) $this->ship_id);
+
+        if (! $target) {
+            if (! $this->isNewShip) {
+                return null;
+            }
+
+            // Tidak ada master yang cocok — record baru akan dibuat; diff
+            // melawan kapal kosong menampilkan seluruh isian sebagai "baru".
+            return [
+                'target' => null,
+                'creating' => true,
+                'matched_by_call_sign' => false,
+                'diff' => $shipService->snapshotDiff(new Ship, $data, $this->shipCertificates),
+            ];
+        }
+
+        return [
+            'target' => $target,
+            'creating' => false,
+            // Match lewat Call Sign menghasilkan kapal berbeda dari yang
+            // dipilih di form → tampilkan sebagai peringatan di modal.
+            'matched_by_call_sign' => $target->id !== (int) $this->ship_id,
+            'diff' => $shipService->snapshotDiff($target, $data, $this->shipCertificates),
+        ];
+    }
+
+    /**
+     * Cek IMO/Call Sign snapshot tidak bentrok dengan kapal LAIN sebelum
+     * ditimpa/dibuat — mencegah unique violation di level DB. $target null
+     * pada alur "Kapal Baru" (cek ke semua kapal, tanpa pengecualian).
+     */
+    protected function assertShipIdentifiersFree(?Ship $target): void
+    {
+        $imoRule = Rule::unique('ships', 'imo_number');
+        $callSignRule = Rule::unique('ships', 'call_sign');
+
+        if ($target) {
+            $imoRule->ignore($target->id);
+            $callSignRule->ignore($target->id);
+        }
+
+        try {
+            Validator::make([
+                'shipData' => [
+                    'imo_number' => $this->shipData['imo_number'] ?? null,
+                    'call_sign' => $this->shipData['call_sign'] ?? null,
+                ],
+            ], [
+                'shipData.imo_number' => ['nullable', 'string', 'max:20', $imoRule],
+                'shipData.call_sign' => ['nullable', 'string', 'max:20', $callSignRule],
+            ], attributes: [
+                'shipData.imo_number' => 'nomor IMO',
+                'shipData.call_sign' => 'call sign',
+            ])->validate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->notifyValidationError($e);
+            throw $e;
+        }
+    }
+
+    /**
+     * Bila status Selesai dan snapshot berbeda dari master → buka modal
+     * konfirmasi sinkron (return true = save di-intercept, belum persist).
+     */
+    protected function offerShipSync(): bool
+    {
+        if ($this->status !== SurveyStatus::Completed->value) {
+            return false;
+        }
+
+        $preview = $this->buildShipSyncPreview();
+
+        if (! $preview) {
+            return false;
+        }
+
+        $this->assertShipIdentifiersFree($preview['target']);
+
+        $diff = $preview['diff'];
+        if (empty($diff['fields']) && ! $diff['certificates_changed']) {
+            // Tidak ada perubahan pada master → simpan normal tanpa modal.
+            return false;
+        }
+
+        $this->shipSyncMode = 'save';
+        $this->dispatch('open-modal', 'survey-ship-sync-modal');
+
+        return true;
+    }
+
+    /**
+     * Tombol "Tarik Master" menimpa seluruh isian Data Kapal — minta
+     * konfirmasi dulu agar koreksi sementara tidak hilang tak sengaja.
+     */
+    public function confirmReloadShipFromMaster(): void
+    {
+        $this->authorizeFormMutation();
+
+        $this->dispatch('confirm-pull-master',
+            action: 'reloadShipFromMaster',
+            title: 'Tarik Data dari Master?',
+            message: 'Seluruh isian Data Kapal (particulars & sertifikat) akan ditimpa dengan data dari Master Data. Perubahan yang belum disimpan akan hilang.',
+            confirmText: 'Ya, Tarik Data',
+            cancelText: 'Batal',
+            type: 'warning',
+        );
+    }
+
+    /**
+     * Tombol "Tarik Master" di langkah Data Kapal — isi ulang snapshot dari
+     * record master yang cocok (Call Sign → ship_id). Berguna bila master
+     * baru saja dikoreksi dan survey ingin mengikuti data terkini.
+     */
+    public function reloadShipFromMaster(): void
+    {
+        $this->authorizeFormMutation();
+        $this->dispatch('confirm-pull-master-close');
+        $this->normalizeShipInputs();
+
+        $target = app(ShipService::class)->resolveForSnapshot(
+            $this->normalizedShipData(),
+            $this->isNewShip ? null : (int) $this->ship_id
+        );
+
+        if (! $target) {
+            $this->notifyInfo('Tidak ada kapal yang cocok di master data.');
+
+            return;
+        }
+
+        $this->fillShipData($target);
+        $this->dispatch('ship-data-changed');
+        $this->notifySuccess('Data kapal dimuat ulang dari master data.');
+    }
+
+    /**
+     * Tombol "Update Master Kapal" di langkah Data Kapal — buka modal diff
+     * yang sama; konfirmasi hanya menimpa master (survey tidak tersimpan).
+     */
+    public function updateMasterShip(): void
+    {
+        $this->authorizeFormMutation();
+        $this->normalizeShipInputs();
+        $this->validateShipInputs();
+
+        $preview = $this->buildShipSyncPreview();
+
+        if (! $preview) {
+            $this->notifyInfo('Tidak ada kapal yang cocok untuk disinkronkan.');
+
+            return;
+        }
+
+        $this->assertShipIdentifiersFree($preview['target']);
+
+        $diff = $preview['diff'];
+        if (empty($diff['fields']) && ! $diff['certificates_changed']) {
+            $this->notifyInfo('Tidak ada perubahan data kapal pada master.');
+
+            return;
+        }
+
+        $this->shipSyncMode = 'manual';
+        $this->dispatch('open-modal', 'survey-ship-sync-modal');
+    }
+
+    /**
+     * Validasi subset field kapal (particulars + sertifikat) — dipakai alur
+     * Update Master yang tidak menyimpan seluruh form.
+     */
+    protected function validateShipInputs(): void
+    {
+        $rules = array_filter(
+            $this->rules(),
+            fn ($key) => str_starts_with($key, 'shipData.') || str_starts_with($key, 'shipCertificates'),
+            ARRAY_FILTER_USE_KEY
+        );
+
+        try {
+            Validator::make(
+                ['shipData' => $this->shipData, 'shipCertificates' => $this->shipCertificates],
+                $rules,
+                attributes: $this->validationAttributes()
+            )->validate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->notifyValidationError($e);
+            throw $e;
+        }
+    }
+
+    /**
+     * Konfirmasi modal mode 'manual': timpa master data kapal dari snapshot
+     * form (atau buat record baru untuk "Kapal Baru") — tanpa menyimpan survey.
+     */
+    protected function applySnapshotToMaster(): void
+    {
+        $this->authorizeFormMutation();
+        $this->validateShipInputs();
+
+        $shipService = app(ShipService::class);
+        $data = $this->normalizedShipData();
+        $certificates = $shipService->normalizedCertificates($this->shipCertificates);
+        $target = $shipService->resolveForSnapshot($data, $this->isNewShip ? null : (int) $this->ship_id);
+
+        try {
+            if ($target) {
+                $shipService->update($target, $data, $certificates);
+                $message = 'Master data kapal berhasil diperbarui.';
+            } elseif ($this->isNewShip) {
+                $ship = $shipService->create($data, $certificates);
+                // Form kini menunjuk kapal sungguhan; di edit mode tautkan
+                // survey ke record baru agar relasi konsisten.
+                $this->ship_id = (string) $ship->id;
+                $this->isNewShip = false;
+                if ($this->editMode) {
+                    $this->survey->update(['ship_id' => $ship->id]);
+                }
+                $message = 'Kapal baru berhasil dibuat di Master Data.';
+            } else {
+                $this->notifyInfo('Tidak ada kapal yang cocok untuk disinkronkan.');
+                $this->dispatch('close-modal', 'survey-ship-sync-modal');
+
+                return;
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Sinkron master kapal gagal: '.$e->getMessage());
+            $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
+            $this->dispatch('close-modal', 'survey-ship-sync-modal');
+
+            return;
+        }
+
+        $this->dispatch('close-modal', 'survey-ship-sync-modal');
+        $this->notifySuccess($message);
+    }
+
+    /**
+     * Confirm modal: 'save' → simpan survey + timpa master; 'manual' → timpa
+     * master saja (survey tetap di form).
+     */
+    public function confirmShipSync(SurveyService $service)
+    {
+        $this->normalizeShipInputs();
+
+        if ($this->shipSyncMode === 'manual') {
+            $this->applySnapshotToMaster();
+
+            return;
+        }
+
+        try {
+            $this->validate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->dispatch('close-modal', 'survey-ship-sync-modal');
+            $this->notifyValidationError($e);
+            throw $e;
+        }
+
+        $this->dispatch('close-modal', 'survey-ship-sync-modal');
+
+        return $this->persistSurvey($service, true);
+    }
+
+    /**
+     * Batal di modal sinkron — survey belum tersimpan; user kembali ke form
+     * untuk memperbaiki data kapal bila ada yang salah.
+     */
+    public function closeShipSyncModal(): void
+    {
+        $this->dispatch('close-modal', 'survey-ship-sync-modal');
     }
 
     public function cancel()
@@ -760,6 +1440,8 @@ class SurveyForm extends Component
             $this->activeCategory = $this->nodeParentId;
             $this->activeSubCategory = $id;
         }
+
+        $this->persistActiveTab();
     }
 
     /**
@@ -1327,6 +2009,8 @@ class SurveyForm extends Component
         if (! $activeCat?->subCategories->contains('id', $this->activeSubCategory)) {
             $this->activeSubCategory = $activeCat?->subCategories->first()?->id;
         }
+
+        $this->persistActiveTab();
     }
 
     /**
@@ -1338,6 +2022,50 @@ class SurveyForm extends Component
         return $this->editMode
             ? 'survey_draft_edit_'.$this->surveyId
             : 'survey_draft_create_'.$this->survey_template_id;
+    }
+
+    /**
+     * Session key untuk posisi tab kategori aktif — dipisah dari draft
+     * agar tersimpan langsung saat ganti tab (tidak menunggu interval
+     * auto-save) dan bertahan saat refresh meski auto-save nonaktif.
+     */
+    protected function tabKey(): string
+    {
+        return $this->draftKey().'_tab';
+    }
+
+    /**
+     * Persist posisi tab (UI state murni) ke session — dipanggil setiap
+     * kali tab aktif berubah: setCategory, setSubCategory, append node,
+     * dan fixActiveTabs.
+     */
+    protected function persistActiveTab(): void
+    {
+        session()->put($this->tabKey(), [
+            'category' => $this->activeCategory,
+            'sub' => $this->activeSubCategory,
+        ]);
+    }
+
+    /**
+     * Restore posisi tab dari session — dipanggil di mount setelah
+     * loadDraft agar nilai terbaru (yang ditulis tiap ganti tab) menang
+     * atas copy di draft, dan tetap bisa di-override deep-link ?category=.
+     */
+    protected function restoreActiveTab(): void
+    {
+        $tab = session()->get($this->tabKey());
+        $activeCat = $this->categories->firstWhere('id', $tab['category'] ?? null);
+
+        if (! $activeCat) {
+            return;
+        }
+
+        $this->activeCategory = $activeCat->id;
+        $subId = $tab['sub'] ?? null;
+        $this->activeSubCategory = $activeCat->subCategories->contains('id', $subId)
+            ? $subId
+            : $activeCat->subCategories->first()?->id;
     }
 
     /**
@@ -1353,6 +2081,10 @@ class SurveyForm extends Component
 
         session()->put($this->draftKey(), [
             'ship_id' => $this->ship_id,
+            'is_new_ship' => $this->isNewShip,
+            'edit_ship_data' => $this->editShipData,
+            'shipData' => $this->shipData,
+            'shipCertificates' => $this->shipCertificates,
             'survey_date' => $this->survey_date,
             'surveyor' => $this->surveyor,
             'location' => $this->location,
@@ -1379,7 +2111,17 @@ class SurveyForm extends Component
         }
 
         $this->ship_id = $draft['ship_id'];
+        $this->isNewShip = (bool) ($draft['is_new_ship'] ?? ($draft['ship_id'] === self::NEW_SHIP_VALUE));
+        $this->editShipData = (bool) ($draft['edit_ship_data'] ?? $this->isNewShip);
         $this->survey_date = $draft['survey_date'];
+
+        // Snapshot kapal ikut draft — override isian dari ship/master.
+        if (is_array($draft['shipData'] ?? null)) {
+            $this->shipData = array_merge($this->emptyShipData(), $draft['shipData']);
+        }
+        if (is_array($draft['shipCertificates'] ?? null)) {
+            $this->shipCertificates = $this->certificatesWithKeys($draft['shipCertificates']);
+        }
         $this->surveyor = $draft['surveyor'];
         $this->location = $draft['location'];
         $this->status = $draft['status'];
@@ -1425,6 +2167,7 @@ class SurveyForm extends Component
     protected function clearDraft(): void
     {
         session()->forget($this->draftKey());
+        session()->forget($this->tabKey());
     }
 
     public function render()

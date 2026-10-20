@@ -7,6 +7,7 @@ use App\Models\SurveyTemplate;
 use App\Services\SurveyTemplateService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class TemplateForm extends Component
@@ -160,7 +161,7 @@ class TemplateForm extends Component
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'code' => ['required', 'string', 'max:50'],
+            'code' => ['required', 'string', 'max:50', Rule::unique('survey_templates', 'code')->ignore($this->templateId)],
             'description' => ['nullable', 'string', 'max:5000'],
             'is_active' => ['boolean'],
             'is_default' => ['boolean'],
@@ -189,6 +190,13 @@ class TemplateForm extends Component
             'categories.*.sub_categories.*.name' => 'nama sub kategori',
             'categories.*.sub_categories.*.item_groups.*.name' => 'nama item group',
             'categories.*.sub_categories.*.item_groups.*.items.*.name' => 'nama item',
+        ];
+    }
+
+    protected function messages(): array
+    {
+        return [
+            'code.unique' => 'Kode template sudah digunakan.',
         ];
     }
 
@@ -498,6 +506,10 @@ class TemplateForm extends Component
 
     public function save(SurveyTemplateService $service)
     {
+        // Service menormalisasi code ke uppercase — samakan sebelum validasi
+        // agar pengecekan unique memakai nilai yang benar-benar disimpan.
+        $this->code = strtoupper(trim((string) $this->code));
+
         try {
             $this->validate();
         } catch (\Illuminate\Validation\ValidationException $e) {

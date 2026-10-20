@@ -3,6 +3,7 @@
     'title' => 'Hapus Data',
     'message' => 'Yakin ingin menghapus data ini?',
     'itemName' => '',
+    'note' => '',
     'confirmMethod' => 'delete',
 ])
 
@@ -17,12 +18,15 @@
                     </svg>
                 </div>
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-1">{{ $title }}</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                <p class="text-sm text-gray-500 dark:text-gray-400 {{ $note ? 'mb-2' : 'mb-6' }}">
                     {{ $message }}
                     @if($itemName)
                         <span class="font-semibold text-gray-700 dark:text-white">{{ $itemName }}</span>?
                     @endif
                 </p>
+                @if($note)
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mb-6">{{ $note }}</p>
+                @endif
                 <div class="flex items-center justify-center gap-3">
                     <x-cancel-button wire:click="$set('{{ $attributes->wire('model')->value() }}', false)" target="$set('{{ $attributes->wire('model')->value() }}', false)" />
                     <x-loading-button wire:click="{{ $confirmMethod }}"

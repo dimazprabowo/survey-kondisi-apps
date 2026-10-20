@@ -37,7 +37,7 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
 
     public function query()
     {
-        $query = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
+        $query = Survey::with(['ship:id,name,call_sign,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
 
         (new SurveyService)->applyFilters($query, $this->search, $this->statusFilter, $this->shipId);
 
@@ -61,7 +61,7 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
             'Nomor Survey',
             'Folder',
             'Kapal',
-            'Kode Kapal',
+            'Call Sign',
             'Tahun Pembuatan',
             'Template',
             'Tanggal Survey',
@@ -80,8 +80,8 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
         return [
             $survey->survey_number,
             $survey->folder?->name ?? '-',
-            $survey->ship?->name ?? '-',
-            $survey->ship?->code ?? '-',
+            $survey->ship_display_name ?? '-',
+            $survey->ship?->call_sign ?? ($survey->ship_snapshot['attributes']['call_sign'] ?? '-'),
             $survey->ship?->year_built ?? '-',
             $survey->template?->name ?? ($survey->structure['template_name'] ?? '-'),
             $survey->survey_date?->format('d M Y') ?? '-',

@@ -364,10 +364,18 @@ class SurveyReportService
             ? (float) $survey->overall_cap_score
             : $this->surveyService->overallAvg($categories, $responses);
 
+        // Laporan membaca snapshot data kapal yang tersimpan di survey —
+        // perubahan master kapal setelah survey tidak mengubah laporan lama.
+        // Survey lama tanpa snapshot jatuh kembali ke relasi ship.
+        $ship = app(ShipService::class)->hydrateFromSnapshot(
+            $survey->ship_snapshot ?? [],
+            $survey->ship
+        );
+
         return [
             'report' => $report,
             'survey' => $survey,
-            'ship' => $survey->ship,
+            'ship' => $ship,
             'categories' => $categories,
             'responses' => $responses,
             'groupNotes' => $groupNotes,
@@ -392,7 +400,7 @@ class SurveyReportService
             ->with('ship:id,year_built')
             ->get()
             ->map(function ($s) {
-                $yearBuilt = $s->ship?->year_built;
+                $yearBuilt = $s->shipSnapshotValue('year_built');
                 if (! $yearBuilt || ! $s->survey_date) {
                     return null;
                 }
@@ -407,9 +415,9 @@ class SurveyReportService
             ->all();
 
         $current = null;
-        if ($survey->overall_cap_score !== null && $survey->ship?->year_built && $survey->survey_date) {
+        if ($survey->overall_cap_score !== null && $survey->shipSnapshotValue('year_built') && $survey->survey_date) {
             $current = [
-                'x' => (float) ($survey->survey_date->format('Y') - $survey->ship->year_built),
+                'x' => (float) ($survey->survey_date->format('Y') - $survey->shipSnapshotValue('year_built')),
                 'y' => (float) $survey->overall_cap_score,
             ];
         }
@@ -422,7 +430,7 @@ class SurveyReportService
      */
     protected function executiveSummaryDefault(Survey $survey): string
     {
-        $shipName = $survey->ship?->name ?? 'kapal';
+        $shipName = $survey->shipSnapshotValue('name') ?? 'kapal';
         $dateStr = $survey->survey_date?->translatedFormat('d F Y') ?? '-';
         $location = $survey->location;
 
@@ -438,7 +446,7 @@ class SurveyReportService
      */
     protected function executiveSummaryLegacyDefault(Survey $survey): string
     {
-        $shipName = $survey->ship?->name ?? 'kapal';
+        $shipName = $survey->shipSnapshotValue('name') ?? 'kapal';
         $dateStr = $survey->survey_date?->translatedFormat('d F Y');
         $location = $survey->location;
 

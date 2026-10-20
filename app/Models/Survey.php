@@ -25,6 +25,7 @@ class Survey extends Model
         'survey_template_id',
         'survey_folder_id',
         'structure',
+        'ship_snapshot',
         'survey_date',
         'surveyor',
         'location',
@@ -38,6 +39,7 @@ class Survey extends Model
         'status' => SurveyStatus::class,
         'survey_date' => 'date',
         'structure' => 'array',
+        'ship_snapshot' => 'array',
         'overall_cap_score' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -82,6 +84,24 @@ class Survey extends Model
     public function scopeCompleted($query)
     {
         return $query->where('status', SurveyStatus::Completed);
+    }
+
+    /**
+     * Nilai particulars kapal dari ship_snapshot; fallback ke relasi ship
+     * live untuk survey lama yang belum punya snapshot.
+     */
+    public function shipSnapshotValue(string $key, mixed $default = null): mixed
+    {
+        return $this->ship_snapshot['attributes'][$key] ?? $this->ship?->{$key} ?? $default;
+    }
+
+    /**
+     * Nama kapal untuk tampilan list/eksport — snapshot diprioritaskan agar
+     * survey "Kapal Baru" (ship_id null) dan survey lama tetap terbaca.
+     */
+    public function getShipDisplayNameAttribute(): ?string
+    {
+        return $this->ship?->name ?? $this->ship_snapshot['attributes']['name'] ?? null;
     }
 
     /**

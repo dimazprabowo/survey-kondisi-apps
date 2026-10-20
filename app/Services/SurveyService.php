@@ -34,7 +34,7 @@ class SurveyService
         string $sortDir = 'desc',
         int|false|null $folderId = null
     ): LengthAwarePaginator {
-        $query = Survey::with(['ship:id,name,code,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
+        $query = Survey::with(['ship:id,name,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
 
         $this->applyFilters($query, $search, $statusFilter, $shipId);
 
@@ -260,6 +260,24 @@ class SurveyService
         });
 
         return $survey->fresh();
+    }
+
+    /**
+     * Simpan survey (create/update + responses + notes) SEKALIGUS menimpa
+     * master data kapal dari ship_snapshot — satu transaksi atomic, dipakai
+     * saat status completed dan user mengonfirmasi modal sinkron. Bila
+     * sinkron kapal gagal, survey ikut rollback (tidak tersimpan setengah).
+     */
+    public function saveWithShipSync(?Survey $survey, array $data, array $responses, array $groupNotes = []): Survey
+    {
+        return DB::transaction(function () use ($survey, $data, $responses, $groupNotes) {
+            $survey = $survey ? $this->update($survey, $data) : $this->create($data);
+
+            $this->saveResponses($survey->id, $responses, $groupNotes);
+            app(ShipService::class)->applySnapshotFromSurvey($survey->fresh());
+
+            return $survey->fresh();
+        });
     }
 
     public function delete(Survey $survey): void

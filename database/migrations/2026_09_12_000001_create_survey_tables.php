@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -13,14 +14,14 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->integer('year_built')->nullable();
-            $table->string('imo_number', 20)->nullable();
+            $table->string('imo_number', 20)->nullable()->unique();
             $table->string('ship_type')->nullable();
             $table->string('flag')->nullable();
             $table->string('gross_tonnage', 20)->nullable();
             $table->string('owner')->nullable();
             $table->string('operator')->nullable();
             // Ship particulars (dipakai BAB II laporan survey)
-            $table->string('call_sign', 20)->unique()->nullable();
+            $table->string('call_sign', 20)->nullable();
             $table->string('net_tonnage', 20)->nullable();
             $table->string('loa', 20)->nullable();
             $table->string('lpp', 20)->nullable();
@@ -47,6 +48,11 @@ return new class extends Migration
             $table->index('status');
             $table->index('name');
         });
+
+        // Unique case-insensitive: call sign maritim resminya alfabet kapital (ITU),
+        // 'yb1ab' & 'YB1AB' adalah kapal yang sama. Expression index valid di
+        // PostgreSQL & SQLite; NULL tidak ikut diunikkan (boleh banyak NULL).
+        DB::statement('CREATE UNIQUE INDEX ships_call_sign_upper_unique ON ships (UPPER(call_sign))');
 
         // 1b. Ship certificates — repeater Status Class pada laporan (BAB II)
         Schema::create('ship_certificates', function (Blueprint $table) {
@@ -140,13 +146,21 @@ return new class extends Migration
         Schema::create('surveys', function (Blueprint $table) {
             $table->id();
             $table->string('survey_number', 50)->unique();
-            $table->foreignId('ship_id')->constrained()->cascadeOnDelete();
+            // Nullable + nullOnDelete: survey boleh menyimpan snapshot kapal yang
+            // belum ada di master (opsi "Kapal Baru" — master dibuat saat sinkron),
+            // dan survey + snapshot-nya tetap utuh bila kapal master dihapus.
+            $table->foreignId('ship_id')->nullable()->constrained()->nullOnDelete();
             // Folder opsional — null berarti survey tampil di root index.
             $table->foreignId('survey_folder_id')->nullable()->constrained('survey_folders')->nullOnDelete();
             // Snapshot: template hanya cetakan — survey menyimpan struktur sendiri
             // saat dibuat, sehingga perubahan template tidak merusak survey lama.
             $table->foreignId('survey_template_id')->nullable()->constrained()->nullOnDelete();
             $table->json('structure')->nullable();
+            // Snapshot particulars + sertifikat kapal saat survey diisi — laporan
+            // membaca snapshot ini sehingga perubahan master kapal tidak mengubah
+            // survey/laporan lama. Saat status completed, snapshot ditimpakan balik
+            // ke master data kapal yang cocok (Call Sign → fallback ship_id).
+            $table->json('ship_snapshot')->nullable();
             $table->date('survey_date');
             $table->string('surveyor')->nullable();
             $table->string('location')->nullable();

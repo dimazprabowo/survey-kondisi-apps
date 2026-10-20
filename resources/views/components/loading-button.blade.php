@@ -5,6 +5,7 @@
     'loadingText' => null,
     'icon' => null,
     'iconClass' => null,
+    'iconPosition' => 'left',
     'loading' => false,
 ])
 
@@ -50,6 +51,9 @@
         'plus'    => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>',
         'send'    => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>',
         'download'=> '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>',
+        'upload'  => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"/>',
+        'import'  => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25"/>',
+        'export'  => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15"/>',
         'pdf'     => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>',
         'excel'   => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>',
         'copy'    => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/>',
@@ -94,7 +98,7 @@
     @endif
 
     {{-- Icon (hidden during loading) --}}
-    @if($hasIcon)
+    @if($hasIcon && $iconPosition === 'left')
         <span @if($target && ! $loading) wire:loading.class="hidden" wire:target="{{ $target }}" @endif class="{{ $loading ? 'hidden' : 'inline-flex' }}">
             @if($hasIconProp && isset($builtinIcons[$icon]))
                 <svg class="{{ $finalIconClass }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,5 +118,18 @@
         <span wire:loading wire:target="{{ $target }}">{{ $loadingText }}</span>
     @else
         {{ $slot }}
+    @endif
+
+    {{-- Icon kanan (mis. tombol "Lanjut" dengan panah) --}}
+    @if($hasIcon && $iconPosition === 'right')
+        <span @if($target && ! $loading) wire:loading.class="hidden" wire:target="{{ $target }}" @endif class="{{ $loading ? 'hidden' : 'inline-flex' }}">
+            @if($hasIconProp && isset($builtinIcons[$icon]))
+                <svg class="{{ $finalIconClass }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {!! $builtinIcons[$icon] !!}
+                </svg>
+            @elseif($hasIconSlot)
+                {{ $icon }}
+            @endif
+        </span>
     @endif
 </button>

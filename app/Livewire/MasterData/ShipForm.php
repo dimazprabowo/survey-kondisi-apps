@@ -130,10 +130,32 @@ class ShipForm extends Component
         $this->certificates[] = $this->emptyCertificate();
     }
 
+    public function confirmRemoveCertificate($index): void
+    {
+        if (! isset($this->certificates[$index])) {
+            return;
+        }
+
+        $name = trim($this->certificates[$index]['certificate_type'] ?? '');
+        $preview = $name !== '' ? "\"{$name}\"" : 'ini';
+
+        $this->dispatch('confirm-remove-cert',
+            action: 'removeCertificate',
+            actionParams: [$index],
+            title: 'Hapus Sertifikat',
+            message: "Sertifikat {$preview} akan dihapus dari kapal ini.",
+            confirmText: 'Ya, Hapus',
+            cancelText: 'Batal',
+            type: 'danger',
+        );
+    }
+
     public function removeCertificate($index): void
     {
         unset($this->certificates[$index]);
         $this->certificates = array_values($this->certificates);
+        $this->dispatch('confirm-remove-cert-close');
+        $this->notifyInfo('Sertifikat berhasil dihapus.');
     }
 
     public function rules()
@@ -141,14 +163,27 @@ class ShipForm extends Component
         return [
             'name' => ['required', 'string', 'max:255'],
             'year_built' => ['nullable', 'integer', 'min:1900', 'max:'.(int) now()->format('Y')],
-            'imo_number' => ['nullable', 'string', 'max:20'],
+            'imo_number' => ['nullable', 'string', 'max:20', Rule::unique('ships', 'imo_number')->ignore($this->ship?->id)],
             'ship_type' => ['nullable', 'string', 'max:100'],
             'flag' => ['nullable', 'string', 'max:100'],
             'gross_tonnage' => ['nullable', 'string', 'max:20'],
             'net_tonnage' => ['nullable', 'string', 'max:20'],
             'owner' => ['nullable', 'string', 'max:255'],
             'operator' => ['nullable', 'string', 'max:255'],
-            'call_sign' => ['nullable', 'string', 'max:20', Rule::unique('ships', 'call_sign')->ignore($this->ship?->id)],
+            // Unique case-insensitive — selaras functional index UPPER(call_sign);
+            // Rule::unique biasa case-sensitive sehingga bisa miss varian kapital.
+            'call_sign' => [
+                'nullable', 'string', 'max:20',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $exists = Ship::whereRaw('UPPER(call_sign) = ?', [strtoupper((string) $value)])
+                        ->when($this->ship?->id, fn ($query, $id) => $query->where('ships.id', '!=', $id))
+                        ->exists();
+
+                    if ($exists) {
+                        $fail('Call sign sudah digunakan oleh kapal lain.');
+                    }
+                },
+            ],
             'loa' => ['nullable', 'string', 'max:20'],
             'lpp' => ['nullable', 'string', 'max:20'],
             'breadth' => ['nullable', 'string', 'max:20'],
@@ -177,40 +212,50 @@ class ShipForm extends Component
 
     public function validationAttributes()
     {
-        return [
-            'name' => 'nama kapal',
-            'year_built' => 'tahun pembuatan',
-            'imo_number' => 'nomor IMO',
-            'ship_type' => 'jenis kapal',
-            'flag' => 'bendera',
-            'gross_tonnage' => 'gross tonnage',
-            'net_tonnage' => 'net tonnage',
-            'owner' => 'pemilik',
-            'operator' => 'operator',
-            'call_sign' => 'call sign',
-            'loa' => 'LOA',
-            'lpp' => 'LPP',
-            'breadth' => 'breadth',
-            'depth' => 'tinggi (depth)',
-            'draft' => 'draft',
-            'dwt' => 'DWT',
-            'builder' => 'galangan pembangun',
-            'port_of_registry' => 'pelabuhan registrasi',
-            'hull_material' => 'material lambung',
-            'class_name' => 'kelas',
-            'class_notations' => 'notasi kelas',
-            'main_engine' => 'main engine',
-            'main_engine_power' => 'daya main engine',
-            'aux_engine' => 'auxiliary engine',
-            'aux_engine_power' => 'daya auxiliary engine',
+        // Label kolom dari satu sumber (ShipService) — lowercase untuk
+        // pesan validasi, Title Case dipakai tampilan diff sinkron survey.
+        $attributes = array_map('strtolower', ShipService::fieldLabels());
+
+        return $attributes + [
             'status' => 'status',
-            'class_status' => 'status kelas',
             'certificates.*.certificate_type' => 'jenis sertifikat',
             'certificates.*.last_date' => 'tanggal terakhir',
             'certificates.*.next_1_date' => 'tanggal next 1',
             'certificates.*.next_2_date' => 'tanggal next 2',
             'certificates.*.postpone_date' => 'tanggal postpone',
         ];
+    }
+
+    protected function messages(): array
+    {
+        return [
+            'imo_number.unique' => 'Nomor IMO sudah digunakan oleh kapal lain.',
+        ];
+    }
+
+    /**
+     * Trim string, kosong → null, uppercase identifier unik agar nilai yang
+     * divalidasi persis sama dengan yang disimpan ('' melanggar kolom unik).
+     */
+    protected function normalizeInputs(): void
+    {
+        $fields = [
+            'name', 'imo_number', 'ship_type', 'flag', 'gross_tonnage', 'net_tonnage',
+            'owner', 'operator', 'call_sign', 'loa', 'lpp', 'breadth', 'depth',
+            'draft', 'dwt', 'builder', 'port_of_registry', 'hull_material',
+            'class_name', 'class_notations', 'main_engine', 'main_engine_power',
+            'aux_engine', 'aux_engine_power',
+        ];
+
+        foreach ($fields as $field) {
+            if (is_string($this->{$field})) {
+                $value = trim($this->{$field});
+                $this->{$field} = $value === '' ? null : $value;
+            }
+        }
+
+        $this->imo_number = $this->imo_number ? strtoupper($this->imo_number) : null;
+        $this->call_sign = $this->call_sign ? strtoupper($this->call_sign) : null;
     }
 
     public function getClassStatusOptionsProperty(): array
@@ -230,6 +275,8 @@ class ShipForm extends Component
 
     public function save(ShipService $service)
     {
+        $this->normalizeInputs();
+
         try {
             $this->validate();
         } catch (\Illuminate\Validation\ValidationException $e) {

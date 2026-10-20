@@ -121,6 +121,11 @@ class ManageCompany extends Component
             return;
         }
 
+        // Service menormalisasi code ke uppercase — samakan sebelum validasi
+        // agar pengecekan unique memakai nilai yang benar-benar disimpan.
+        $this->code = strtoupper(trim((string) $this->code));
+        $this->npwp = trim((string) $this->npwp);
+
         try {
             $this->validate();
         } catch (\Illuminate\Validation\ValidationException $e) {

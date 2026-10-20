@@ -233,8 +233,8 @@
                                     <x-text-input wire:model="certificates.{{ $index }}.postpone_date" id="cert_postpone_{{ $index }}" type="date" class="mt-1 block w-full" />
                                     <x-input-error :messages="$errors->get('certificates.'.$index.'.postpone_date')" class="mt-2" />
                                 </div>
-                                <x-loading-button type="button" wire:click="removeCertificate({{ $index }})"
-                                    target="removeCertificate({{ $index }})"
+                                <x-loading-button type="button" wire:click="confirmRemoveCertificate({{ $index }})"
+                                    target="confirmRemoveCertificate({{ $index }})"
                                     variant="icon-red" icon="delete"
                                     wire:key="btn-remove-cert-{{ $cert['row_key'] }}-{{ $index }}"
                                     title="Hapus sertifikat" />
@@ -257,4 +257,6 @@
             </x-loading-button>
         </div>
     </form>
+
+    <x-confirm-modal eventName="confirm-remove-cert" />
 </div>

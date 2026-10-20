@@ -215,6 +215,10 @@ class TemplateManagement extends Component
     {
         $this->authorize('import', SurveyTemplate::class);
 
+        // Service menormalisasi code ke uppercase — samakan sebelum validasi
+        // agar pengecekan unique memakai nilai yang benar-benar disimpan.
+        $this->importCode = strtoupper(trim($this->importCode));
+
         $this->validate([
             'importFile' => file_upload_validation_rule('template-import', true),
             'importMode' => 'required|in:new,existing',

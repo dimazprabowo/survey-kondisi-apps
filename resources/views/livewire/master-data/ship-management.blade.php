@@ -111,14 +111,14 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 @can('ships_update')
-                                    <select wire:change="updateClassStatus({{ $ship->id }}, $event.target.value)"
-                                        wire:loading.attr="disabled" wire:target="updateClassStatus({{ $ship->id }})"
-                                        wire:key="select-class-status-{{ $ship->id }}"
-                                        class="text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-blue-500 dark:focus:border-blue-600 focus:ring-blue-500 dark:focus:ring-blue-600 py-1.5 pl-2.5 pr-8 disabled:opacity-60">
-                                        @foreach(\App\Enums\ShipClassStatus::cases() as $classStatus)
-                                            <option value="{{ $classStatus->value }}" @selected($ship->class_status === $classStatus)>{{ $classStatus->label() }}</option>
-                                        @endforeach
-                                    </select>
+                                    <div class="w-40 -my-1" wire:key="select-class-status-{{ $ship->id }}">
+                                        <x-searchable-select
+                                            wire:model.live="classStatusEdits.{{ $ship->id }}"
+                                            :options="$this->classStatusOptions"
+                                            :clearable="false"
+                                            placeholder="Pilih status kelas"
+                                            searchPlaceholder="Cari status kelas..." />
+                                    </div>
                                 @else
                                     <span class="px-2 py-1 text-xs font-medium rounded-full {{ $ship->class_status?->badgeClass() ?? '' }}">
                                         {{ $ship->class_status?->label() ?? '-' }}
@@ -135,13 +135,11 @@
                                             title="Edit" />
                                     @endcan
                                     @can('ships_delete')
-                                        @if($ship->surveys_count === 0)
-                                            <x-loading-button wire:click="confirmDelete({{ $ship->id }})"
-                                                target="confirmDelete({{ $ship->id }})"
-                                                variant="icon-red" icon="delete"
-                                                wire:key="btn-delete-{{ $ship->id }}"
-                                                title="Hapus" />
-                                        @endif
+                                        <x-loading-button wire:click="confirmDelete({{ $ship->id }})"
+                                            target="confirmDelete({{ $ship->id }})"
+                                            variant="icon-red" icon="delete"
+                                            wire:key="btn-delete-{{ $ship->id }}"
+                                            title="Hapus" />
                                     @endcan
                                 </div>
                             </td>
@@ -172,6 +170,7 @@
         title="Hapus Kapal"
         message="Apakah Anda yakin ingin menghapus kapal"
         :itemName="$deletingShipName"
+        :note="$deletingShipSurveysCount > 0 ? $deletingShipSurveysCount.' data survey terkait tetap tersimpan (snapshot tidak ikut terhapus).' : ''"
         confirmMethod="delete"
     />
 </div>

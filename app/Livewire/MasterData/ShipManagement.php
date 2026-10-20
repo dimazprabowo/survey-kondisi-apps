@@ -31,6 +31,10 @@ class ShipManagement extends Component
 
     public $deletingShipName;
 
+    public int $deletingShipSurveysCount = 0;
+
+    public array $classStatusEdits = [];
+
     public function mount()
     {
         $this->authorize('viewAny', Ship::class);
@@ -77,6 +81,7 @@ class ShipManagement extends Component
         $ship = Ship::findOrFail($id);
         $this->deletingShipId = $ship->id;
         $this->deletingShipName = $ship->name;
+        $this->deletingShipSurveysCount = $ship->surveys()->count();
         $this->showDeleteModal = true;
     }
 
@@ -85,13 +90,6 @@ class ShipManagement extends Component
         try {
             $ship = Ship::findOrFail($this->deletingShipId);
             $this->authorize('delete', $ship);
-
-            if ($ship->surveys()->exists()) {
-                $this->notifyError('Kapal tidak dapat dihapus karena masih memiliki survey terkait.');
-                $this->showDeleteModal = false;
-
-                return;
-            }
 
             $service->delete($ship);
             $this->notifySuccess('Kapal berhasil dihapus!');
@@ -118,6 +116,12 @@ class ShipManagement extends Component
         }
     }
 
+    public function updatedClassStatusEdits($value, $key): void
+    {
+        $this->updateClassStatus($key, $value, app(ShipService::class));
+        unset($this->classStatusEdits[$key]);
+    }
+
     public function updateClassStatus($id, $value, ShipService $service)
     {
         try {
@@ -141,6 +145,14 @@ class ShipManagement extends Component
     public function getStatusOptionsProperty(): array
     {
         return collect(ShipStatus::cases())->map(fn ($case) => [
+            'value' => $case->value,
+            'label' => $case->label(),
+        ])->toArray();
+    }
+
+    public function getClassStatusOptionsProperty(): array
+    {
+        return collect(ShipClassStatus::cases())->map(fn ($case) => [
             'value' => $case->value,
             'label' => $case->label(),
         ])->toArray();
@@ -178,6 +190,10 @@ class ShipManagement extends Component
             $this->sortField,
             $this->sortDir
         );
+
+        foreach ($ships as $ship) {
+            $this->classStatusEdits[$ship->id] ??= $ship->class_status->value;
+        }
 
         if ($this->filterChanged) {
             $this->notifySuccess("Ditemukan {$ships->total()} data kapal.");

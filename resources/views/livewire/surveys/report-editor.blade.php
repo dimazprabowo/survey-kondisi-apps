@@ -101,7 +101,7 @@
     @php
         // Gaya "paper mode" — lembar meniru halaman Word; input borderless
         // dengan garis putus-putus sebagai affordance area yang bisa diisi.
-        $ship = $survey->ship;
+        // $ship dihydrate dari snapshot survey oleh ReportEditor::render().
         $canvas = 'rounded-xl bg-gray-200/70 dark:bg-gray-950/60 border border-gray-200 dark:border-gray-800 p-2 sm:p-5 lg:p-8';
         $sheet = 'mx-auto w-full max-w-4xl rounded-sm bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 px-5 py-8 sm:px-10 sm:py-10 lg:px-16 lg:py-14 text-[15px] leading-7 text-gray-900 dark:text-gray-100';
         $times = "font-family:Garamond,'Times New Roman',serif";

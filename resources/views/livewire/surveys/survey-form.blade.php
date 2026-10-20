@@ -181,6 +181,7 @@
     x-on:change="handleInput($event)"
     x-on:keydown="handleKeydown($event)"
     x-on:group-note-removed.window="onFieldChange()"
+    x-on:ship-data-changed.window="onFieldChange()"
     x-on:structure-node-removed.window="onFieldChange()"
     x-on:structure-node-saved.window="onFieldChange()"
 >
@@ -195,30 +196,86 @@
         </ol>
     </nav>
 
+    <!-- Wizard: 1 Informasi Survey → 2 Data Kapal → 3 Penilaian & CAP.
+         Klik step maju melewati validasi per-langkah; mundur bebas. -->
+    <nav class="mb-6 px-2 sm:px-8" aria-label="Langkah form survey">
+        @php
+            $wizardSteps = [
+                1 => 'Informasi Survey',
+                2 => 'Data Kapal',
+                3 => 'Penilaian & CAP',
+            ];
+        @endphp
+        <ol class="flex items-start w-full">
+            @foreach($wizardSteps as $stepNum => $stepLabel)
+                @php
+                    $stepActive = $activeStep === $stepNum;
+                    $stepDone = $activeStep > $stepNum;
+                    $stepCircleClass = $stepDone
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-500 dark:border-green-400 text-green-600 dark:text-green-400'
+                        : ($stepActive
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/30 ring-4 ring-blue-100 dark:ring-blue-900/40'
+                            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 group-hover:border-blue-400 group-hover:text-blue-500 dark:group-hover:border-blue-500');
+                    $stepLabelClass = $stepActive
+                        ? 'text-blue-600 dark:text-blue-400 font-semibold'
+                        : ($stepDone
+                            ? 'text-green-600 dark:text-green-400 font-medium'
+                            : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300');
+                    $stepConnectorClass = $stepDone ? 'bg-green-500 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-700';
+                @endphp
+                <li class="flex flex-col items-center" wire:key="step-{{ $stepNum }}">
+                    <button type="button" wire:click="goToStep({{ $stepNum }})" wire:target="goToStep({{ $stepNum }})"
+                        wire:loading.attr="disabled" wire:key="btn-step-{{ $stepNum }}"
+                        @if($stepActive) aria-current="step" @endif
+                        title="{{ $stepLabel }}"
+                        class="group flex flex-col items-center gap-1.5 w-16 sm:w-28 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                        <span class="flex items-center justify-center w-10 h-10 rounded-full border-2 text-sm font-semibold transition-colors duration-200 {{ $stepCircleClass }}">
+                            <svg wire:loading wire:target="goToStep({{ $stepNum }})" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span wire:loading.class="hidden" wire:target="goToStep({{ $stepNum }})" class="inline-flex">
+                                @if($stepDone)
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                @else
+                                    {{ $stepNum }}
+                                @endif
+                            </span>
+                        </span>
+                        <span class="text-xs sm:text-sm text-center leading-tight transition-colors {{ $stepLabelClass }}">{{ $stepLabel }}</span>
+                    </button>
+                </li>
+                @if(! $loop->last)
+                    <li class="flex-1 h-10 flex items-center px-1 sm:px-3" aria-hidden="true" wire:key="step-conn-{{ $stepNum }}">
+                        <div class="h-0.5 w-full rounded transition-colors duration-200 {{ $stepConnectorClass }}"></div>
+                    </li>
+                @endif
+            @endforeach
+        </ol>
+    </nav>
+
     <form wire:submit="save">
-        <!-- Header Section -->
+        @if($activeStep === 1)
+        <!-- Langkah 1 — Informasi Survey -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
             <div class="px-4 py-5 sm:p-6">
-                <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
+                <div class="border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
                         Informasi Survey
                     </h3>
-                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Edit Struktur</span>
-                            <x-toggle-switch wire:click="toggleEditStructure" :active="$editStructure" target="toggleEditStructure" activeColor="amber" title="Aktifkan/nonaktifkan mode edit struktur (tambah, ubah, hapus kategori/sub kategori/grup item/item)" />
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Auto Save</span>
-                            <x-toggle-switch wire:click="toggleAutoSave" :active="$autoSave" target="toggleAutoSave" activeColor="green" title="Aktifkan/nonaktifkan penyimpanan draft otomatis" />
-                        </div>
-                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <x-input-label for="ship_id" value="Kapal" :required="true" />
                         <x-searchable-select wire:model="ship_id" :options="$this->shipOptions" placeholder="Pilih kapal" searchPlaceholder="Cari kapal..." class="autosave-field" data-model="ship_id" />
+                        @if($isNewShip)
+                            <p class="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                                Kapal baru — isi particulars di langkah Data Kapal; record master dibuat saat sinkron.
+                            </p>
+                        @endif
                         <x-input-error :messages="$errors->get('ship_id')" class="mt-2" />
                     </div>
                     <div>
@@ -257,11 +314,268 @@
             </div>
         </div>
 
+        @endif
+
+        @if($activeStep === 2)
+        <!-- Langkah 2 — Data Kapal (snapshot — auto-isi dari kapal terpilih,
+             dapat dikoreksi saat toggle Edit aktif; sinkron ke master kapal
+             yang cocok berdasarkan Call Sign lewat tombol Update Master
+             atau konfirmasi saat status Selesai disimpan) -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
+                    <div class="min-w-0">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Data Kapal</h3>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Snapshot data kapal saat survey diisi — tersimpan bersama survey &amp; dipakai laporan.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Edit Data Kapal</span>
+                            <x-toggle-switch wire:click="toggleEditShipData" :active="$editShipData" target="toggleEditShipData" activeColor="blue" title="Kunci/buka pengeditan data kapal" />
+                        </div>
+                        <x-loading-button type="button" wire:click="confirmReloadShipFromMaster" target="confirmReloadShipFromMaster" variant="secondary" size="sm" loadingText="Memuat..." icon="import" title="Isi ulang data kapal dari Master Data (menimpa isian snapshot saat ini)">
+                            Tarik Master
+                        </x-loading-button>
+                        <x-loading-button type="button" wire:click="updateMasterShip" target="updateMasterShip" variant="warning" size="sm" loadingText="Memproses..." icon="export" title="Timpa/buat record kapal di Master Data dari data snapshot ini">
+                            Update Master Kapal
+                        </x-loading-button>
+                    </div>
+                </div>
+
+                @unless($editShipData)
+                    <p class="mb-4 rounded-lg bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                        Data kapal terkunci — aktifkan toggle <span class="font-medium">Edit Data Kapal</span> untuk mengubah.
+                    </p>
+                @endunless
+
+                <fieldset @disabled(! $editShipData) class="{{ $editShipData ? '' : 'opacity-60' }}">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <x-input-label for="ship_name" value="Nama Kapal" :required="true" />
+                        <x-text-input wire:model="shipData.name" id="ship_name" type="text" class="mt-1 block w-full autosave-field" placeholder="Nama kapal" />
+                        <x-input-error :messages="$errors->get('shipData.name')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_year_built" value="Tahun Pembuatan" />
+                        <x-text-input wire:model="shipData.year_built" id="ship_year_built" type="number" min="1900" max="{{ (int) now()->format('Y') }}" class="mt-1 block w-full autosave-field" placeholder="Tahun pembuatan" />
+                        <x-input-error :messages="$errors->get('shipData.year_built')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_imo_number" value="Nomor IMO" />
+                        <x-text-input wire:model="shipData.imo_number" id="ship_imo_number" type="text" class="mt-1 block w-full autosave-field" placeholder="Nomor IMO" />
+                        <x-input-error :messages="$errors->get('shipData.imo_number')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_call_sign" value="Call Sign" />
+                        <x-text-input wire:model="shipData.call_sign" id="ship_call_sign" type="text" class="mt-1 block w-full autosave-field" placeholder="Call sign" />
+                        <x-input-error :messages="$errors->get('shipData.call_sign')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_type" value="Jenis Kapal" />
+                        <x-text-input wire:model="shipData.ship_type" id="ship_type" type="text" class="mt-1 block w-full autosave-field" placeholder="Contoh: FERRY RO-RO" />
+                        <x-input-error :messages="$errors->get('shipData.ship_type')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_flag" value="Bendera" />
+                        <x-text-input wire:model="shipData.flag" id="ship_flag" type="text" class="mt-1 block w-full autosave-field" placeholder="Bendera kapal" />
+                        <x-input-error :messages="$errors->get('shipData.flag')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_gross_tonnage" value="Gross Tonnage" />
+                        <x-text-input wire:model="shipData.gross_tonnage" id="ship_gross_tonnage" type="text" class="mt-1 block w-full autosave-field" placeholder="Gross tonnage" />
+                        <x-input-error :messages="$errors->get('shipData.gross_tonnage')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_net_tonnage" value="Net Tonnage" />
+                        <x-text-input wire:model="shipData.net_tonnage" id="ship_net_tonnage" type="text" class="mt-1 block w-full autosave-field" placeholder="Net tonnage" />
+                        <x-input-error :messages="$errors->get('shipData.net_tonnage')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_owner" value="Pemilik" />
+                        <x-text-input wire:model="shipData.owner" id="ship_owner" type="text" class="mt-1 block w-full autosave-field" placeholder="Pemilik kapal" />
+                        <x-input-error :messages="$errors->get('shipData.owner')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_operator" value="Operator" />
+                        <x-text-input wire:model="shipData.operator" id="ship_operator" type="text" class="mt-1 block w-full autosave-field" placeholder="Operator kapal" />
+                        <x-input-error :messages="$errors->get('shipData.operator')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_class_status" value="Status Kelas" :required="true" />
+                        <x-searchable-select wire:model="shipData.class_status" :options="$this->shipClassStatusOptions" placeholder="Pilih status kelas" searchPlaceholder="Cari status kelas..." class="autosave-field" />
+                        <x-input-error :messages="$errors->get('shipData.class_status')" class="mt-2" />
+                    </div>
+                </div>
+
+                <h4 class="mt-6 mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">Dimensi &amp; Particulars</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <x-input-label for="ship_loa" value="Length Overall (LOA)" />
+                        <div class="relative mt-1">
+                            <x-text-input wire:model="shipData.loa" id="ship_loa" type="text" class="block w-full pr-9 autosave-field" placeholder="Contoh: 43,35" />
+                            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500 dark:text-gray-400">m</span>
+                        </div>
+                        <x-input-error :messages="$errors->get('shipData.loa')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_lpp" value="Length Between Perpendiculars (LPP)" />
+                        <div class="relative mt-1">
+                            <x-text-input wire:model="shipData.lpp" id="ship_lpp" type="text" class="block w-full pr-9 autosave-field" placeholder="Contoh: 38,50" />
+                            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500 dark:text-gray-400">m</span>
+                        </div>
+                        <x-input-error :messages="$errors->get('shipData.lpp')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_breadth" value="Breadth (B)" />
+                        <div class="relative mt-1">
+                            <x-text-input wire:model="shipData.breadth" id="ship_breadth" type="text" class="block w-full pr-9 autosave-field" placeholder="Contoh: 12,00" />
+                            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500 dark:text-gray-400">m</span>
+                        </div>
+                        <x-input-error :messages="$errors->get('shipData.breadth')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_depth" value="Tinggi (Depth)" />
+                        <div class="relative mt-1">
+                            <x-text-input wire:model="shipData.depth" id="ship_depth" type="text" class="block w-full pr-9 autosave-field" placeholder="Contoh: 03,00" />
+                            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500 dark:text-gray-400">m</span>
+                        </div>
+                        <x-input-error :messages="$errors->get('shipData.depth')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_draft" value="Draft" />
+                        <div class="relative mt-1">
+                            <x-text-input wire:model="shipData.draft" id="ship_draft" type="text" class="block w-full pr-9 autosave-field" placeholder="Contoh: 02,00" />
+                            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-500 dark:text-gray-400">m</span>
+                        </div>
+                        <x-input-error :messages="$errors->get('shipData.draft')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_dwt" value="DWT" />
+                        <x-text-input wire:model="shipData.dwt" id="ship_dwt" type="text" class="mt-1 block w-full autosave-field" placeholder="Deadweight tonnage" />
+                        <x-input-error :messages="$errors->get('shipData.dwt')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_builder" value="Galangan Pembangun" />
+                        <x-text-input wire:model="shipData.builder" id="ship_builder" type="text" class="mt-1 block w-full autosave-field" placeholder="Nama galangan" />
+                        <x-input-error :messages="$errors->get('shipData.builder')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_port_of_registry" value="Pelabuhan Registrasi" />
+                        <x-text-input wire:model="shipData.port_of_registry" id="ship_port_of_registry" type="text" class="mt-1 block w-full autosave-field" placeholder="Contoh: JAKARTA" />
+                        <x-input-error :messages="$errors->get('shipData.port_of_registry')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_hull_material" value="Material Lambung" />
+                        <x-text-input wire:model="shipData.hull_material" id="ship_hull_material" type="text" class="mt-1 block w-full autosave-field" placeholder="Contoh: STEEL" />
+                        <x-input-error :messages="$errors->get('shipData.hull_material')" class="mt-2" />
+                    </div>
+                </div>
+
+                <h4 class="mt-6 mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">Kelas &amp; Permesinan</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <x-input-label for="ship_class_name" value="Kelas" />
+                        <x-text-input wire:model="shipData.class_name" id="ship_class_name" type="text" class="mt-1 block w-full autosave-field" placeholder="Contoh: BIRO KLASIFIKASI INDONESIA" />
+                        <x-input-error :messages="$errors->get('shipData.class_name')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_class_notations" value="Notasi Kelas" />
+                        <x-text-input wire:model="shipData.class_notations" id="ship_class_notations" type="text" class="mt-1 block w-full autosave-field" placeholder="Notasi kelas" />
+                        <x-input-error :messages="$errors->get('shipData.class_notations')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_main_engine" value="Main Engine" />
+                        <x-text-input wire:model="shipData.main_engine" id="ship_main_engine" type="text" class="mt-1 block w-full autosave-field" placeholder="Merek/tipe main engine" />
+                        <x-input-error :messages="$errors->get('shipData.main_engine')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_main_engine_power" value="Daya Main Engine" />
+                        <x-text-input wire:model="shipData.main_engine_power" id="ship_main_engine_power" type="text" class="mt-1 block w-full autosave-field" placeholder="Contoh: 2 x 650 HP/1450 RPM" />
+                        <x-input-error :messages="$errors->get('shipData.main_engine_power')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_aux_engine" value="Auxiliary Engine" />
+                        <x-text-input wire:model="shipData.aux_engine" id="ship_aux_engine" type="text" class="mt-1 block w-full autosave-field" placeholder="Merek/tipe auxiliary engine" />
+                        <x-input-error :messages="$errors->get('shipData.aux_engine')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="ship_aux_engine_power" value="Daya Auxiliary Engine" />
+                        <x-text-input wire:model="shipData.aux_engine_power" id="ship_aux_engine_power" type="text" class="mt-1 block w-full autosave-field" placeholder="Contoh: 2 x 150 BHP" />
+                        <x-input-error :messages="$errors->get('shipData.aux_engine_power')" class="mt-2" />
+                    </div>
+                </div>
+
+                <div class="mt-6 border-b border-gray-200 dark:border-gray-700 pb-2 mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <h4 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Status Class</h4>
+                    <x-loading-button type="button" wire:click="addShipCertificate" target="addShipCertificate" variant="secondary" size="sm" loadingText="Menambah..." icon="plus" wire:key="btn-add-ship-cert">
+                        Tambah Sertifikat
+                    </x-loading-button>
+                </div>
+                <div class="space-y-4">
+                    @forelse($shipCertificates as $index => $cert)
+                        <div wire:key="ship-cert-{{ $cert['row_key'] }}-{{ $index }}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                            <div class="sm:col-span-2 lg:col-span-1">
+                                <x-input-label for="ship_cert_type_{{ $index }}" value="Jenis Sertifikat" />
+                                <x-text-input wire:model="shipCertificates.{{ $index }}.certificate_type" id="ship_cert_type_{{ $index }}" type="text" class="mt-1 block w-full autosave-field" placeholder="Contoh: Special Survey" />
+                                <x-input-error :messages="$errors->get('shipCertificates.'.$index.'.certificate_type')" class="mt-2" />
+                            </div>
+                            <div>
+                                <x-input-label for="ship_cert_last_{{ $index }}" value="Last" />
+                                <x-text-input wire:model="shipCertificates.{{ $index }}.last_date" id="ship_cert_last_{{ $index }}" type="date" class="mt-1 block w-full autosave-field" />
+                                <x-input-error :messages="$errors->get('shipCertificates.'.$index.'.last_date')" class="mt-2" />
+                            </div>
+                            <div>
+                                <x-input-label for="ship_cert_next1_{{ $index }}" value="Next 1" />
+                                <x-text-input wire:model="shipCertificates.{{ $index }}.next_1_date" id="ship_cert_next1_{{ $index }}" type="date" class="mt-1 block w-full autosave-field" />
+                                <x-input-error :messages="$errors->get('shipCertificates.'.$index.'.next_1_date')" class="mt-2" />
+                            </div>
+                            <div>
+                                <x-input-label for="ship_cert_next2_{{ $index }}" value="Next 2" />
+                                <x-text-input wire:model="shipCertificates.{{ $index }}.next_2_date" id="ship_cert_next2_{{ $index }}" type="date" class="mt-1 block w-full autosave-field" />
+                                <x-input-error :messages="$errors->get('shipCertificates.'.$index.'.next_2_date')" class="mt-2" />
+                            </div>
+                            <div class="flex items-end gap-2">
+                                <div class="flex-1 min-w-0">
+                                    <x-input-label for="ship_cert_postpone_{{ $index }}" value="Postpone" />
+                                    <x-text-input wire:model="shipCertificates.{{ $index }}.postpone_date" id="ship_cert_postpone_{{ $index }}" type="date" class="mt-1 block w-full autosave-field" />
+                                    <x-input-error :messages="$errors->get('shipCertificates.'.$index.'.postpone_date')" class="mt-2" />
+                                </div>
+                                <x-loading-button type="button" wire:click="confirmRemoveShipCertificate({{ $index }})"
+                                    target="confirmRemoveShipCertificate({{ $index }})"
+                                    variant="icon-red" icon="delete"
+                                    wire:key="btn-remove-ship-cert-{{ $cert['row_key'] }}-{{ $index }}"
+                                    title="Hapus sertifikat" />
+                            </div>
+                        </div>
+                    @empty
+                        <div class="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
+                            Belum ada sertifikat. Klik "Tambah Sertifikat" untuk menambahkan.
+                        </div>
+                    @endforelse
+                </div>
+                </fieldset>
+            </div>
+        </div>
+        @endif
+
+        @if($activeStep === 3)
+        <!-- Langkah 3 — Penilaian & CAP -->
         <!-- Overall CAP Score (live) -->
         <x-survey-cap-rating :score="$this->calculateOverallAvg()" />
 
         <!-- Category Tabs -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Penilaian Survey</h3>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Edit Struktur</span>
+                        <x-toggle-switch wire:click="toggleEditStructure" :active="$editStructure" target="toggleEditStructure" activeColor="amber" title="Aktifkan/nonaktifkan mode edit struktur (tambah, ubah, hapus kategori/sub kategori/grup item/item)" />
+                    </div>
+                </div>
+            </div>
             <div class="border-b border-gray-200 dark:border-gray-700 overflow-x-auto custom-scrollbar">
                 <nav class="flex space-x-2 px-4 py-2 min-w-max" aria-label="Tabs">
                     @foreach($categories as $cat)
@@ -663,19 +977,37 @@
                 @endforeach
             </div>
         </div>
+        @endif
 
         <!-- Action Bar (Sticky, width matches cards above; offset dari tepi
              viewport agar tidak mepet — terlihat mengambang, tidak tertutup chrome) -->
         <div class="sticky bottom-3 sm:bottom-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-3 px-4 sm:px-6 z-10">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-end">
-                <!-- Draft auto-save indicator -->
-                <div class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mr-auto" x-show="lastSaved" x-cloak>
-                    <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                    </svg>
-                    <span>Draft tersimpan <span x-text="lastSaved"></span></span>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mr-auto">
+                    <!-- Toggle penyimpanan draft otomatis — global, berlaku semua langkah -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Auto Save</span>
+                        <x-toggle-switch wire:click="toggleAutoSave" :active="$autoSave" target="toggleAutoSave" activeColor="green" title="Aktifkan/nonaktifkan penyimpanan draft otomatis" />
+                    </div>
+                    <!-- Draft auto-save indicator -->
+                    <div class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500" x-show="lastSaved" x-cloak>
+                        <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span>Draft tersimpan <span x-text="lastSaved"></span></span>
+                    </div>
                 </div>
                 <x-cancel-button x-on:click="requestCancel()" target="cancel" class="w-full sm:w-auto sm:min-w-[160px]" />
+                @if($activeStep > 1)
+                    <x-loading-button type="button" wire:click="prevStep" target="prevStep" variant="secondary" size="lg" icon="arrow-left" class="w-full sm:w-auto sm:min-w-[160px]">
+                        Kembali
+                    </x-loading-button>
+                @endif
+                @if($activeStep < 3)
+                    <x-loading-button type="button" wire:click="nextStep" target="nextStep" variant="secondary" size="lg" icon="arrow-right" iconPosition="right" loadingText="Memeriksa..." class="w-full sm:w-auto sm:min-w-[160px]">
+                        Lanjut
+                    </x-loading-button>
+                @endif
                 <x-loading-button type="submit" target="save" variant="primary" size="lg" loadingText="Menyimpan..." class="w-full sm:w-auto sm:min-w-[160px]">
                     {{ $editMode ? 'Update Survey' : 'Simpan Survey' }}
                 </x-loading-button>
@@ -753,8 +1085,104 @@
         </div>
     </x-modal>
 
+    <!-- Modal konfirmasi sinkron data kapal ke master (status Selesai) -->
+    <x-modal name="survey-ship-sync-modal" maxWidth="xl" focusable>
+        @php
+            $preview = $this->shipSyncPreview;
+            $syncTarget = $preview['target'] ?? null;
+            $syncDiff = $preview['diff'] ?? ['fields' => [], 'certificates_changed' => false];
+        @endphp
+        <div class="px-4 py-4 sm:p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
+                {{ $shipSyncMode === 'manual' ? 'Update Master Data Kapal?' : 'Simpan Data Kapal ke Master Data?' }}
+            </h3>
+
+            @if($shipSyncMode === 'manual')
+                <p class="text-sm text-gray-600 dark:text-gray-300">
+                    Data kapal dari form ini akan {{ ($preview['creating'] ?? false) ? 'membuat record baru' : 'menimpa' }}
+                    di Master Data Kapal{{ ($preview['creating'] ?? false) ? '' : ' berikut (dicocokkan via Call Sign)' }}:
+                </p>
+            @else
+                <p class="text-sm text-gray-600 dark:text-gray-300">
+                    Status survey diset <span class="font-semibold">Selesai</span>. Data kapal dari survey ini akan
+                    {{ ($preview['creating'] ?? false) ? 'membuat record baru' : 'menimpa master data kapal berikut (dicocokkan via Call Sign)' }}
+                    di Master Data Kapal:
+                </p>
+            @endif
+
+            @if($preview['creating'] ?? false)
+                <div class="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2">
+                    <span class="text-sm font-semibold text-green-900 dark:text-green-200">{{ $shipData['name'] ?? 'Kapal Baru' }}</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                        Kapal baru — akan dibuat di Master Data
+                    </span>
+                </div>
+            @elseif($syncTarget)
+                <div class="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2">
+                    <span class="text-sm font-semibold text-blue-900 dark:text-blue-200">{{ $syncTarget->name }}</span>
+                    @if($syncTarget->call_sign)
+                        <span class="text-xs text-blue-700 dark:text-blue-300">Call Sign: {{ $syncTarget->call_sign }}</span>
+                    @endif
+                    @if($preview['matched_by_call_sign'] ?? false)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                            title="Call Sign survey cocok dengan kapal lain di master — kapal ini yang akan diperbarui, bukan kapal yang dipilih di form.">
+                            Ditimpa berdasarkan Call Sign
+                        </span>
+                    @endif
+                </div>
+            @endif
+
+            @if(!empty($syncDiff['fields']))
+                <div class="mt-4 max-h-64 overflow-y-auto custom-scrollbar rounded-lg border border-gray-200 dark:border-gray-700">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Field</th>
+                                <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Master Saat Ini</th>
+                                <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Data Survey</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700/60 bg-white dark:bg-gray-800">
+                            @foreach($syncDiff['fields'] as $field)
+                                <tr wire:key="sync-diff-{{ $field['key'] }}">
+                                    <td class="px-3 py-2 text-xs font-medium text-gray-900 dark:text-white">{{ $field['label'] }}</td>
+                                    <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">{{ $field['old'] ?? '—' }}</td>
+                                    <td class="px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300">{{ $field['new'] ?? '—' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+
+            @if($syncDiff['certificates_changed'] ?? false)
+                <p class="mt-3 text-xs text-gray-600 dark:text-gray-300">
+                    Daftar sertifikat Status Class akan diperbarui
+                    ({{ $syncDiff['old_cert_count'] ?? 0 }} → {{ $syncDiff['new_cert_count'] ?? 0 }} sertifikat).
+                </p>
+            @endif
+
+            @if($shipSyncMode !== 'manual')
+                <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                    Jika ada data kapal yang salah, pilih Batal lalu perbaiki di langkah
+                    <span class="font-medium">Data Kapal</span> pada form sebelum menyimpan kembali.
+                </p>
+            @endif
+
+            <div class="mt-6 flex flex-col sm:flex-row sm:justify-end gap-3">
+                <x-cancel-button wire:click="closeShipSyncModal" target="closeShipSyncModal" class="w-full sm:w-auto" />
+                <x-loading-button wire:click="confirmShipSync" target="confirmShipSync" variant="primary" size="lg"
+                    loadingText="Menyimpan..." class="w-full sm:w-auto" wire:key="btn-confirm-ship-sync">
+                    {{ $shipSyncMode === 'manual' ? 'Update Master Kapal' : 'Simpan & Update Master Kapal' }}
+                </x-loading-button>
+            </div>
+        </div>
+    </x-modal>
+
     <!-- Modal konfirmasi buang perubahan saat Batal -->
     <x-confirm-modal eventName="confirm-cancel-survey" />
     <x-confirm-modal eventName="confirm-remove-note" />
     <x-confirm-modal eventName="confirm-remove-node" />
+    <x-confirm-modal eventName="confirm-pull-master" />
+    <x-confirm-modal eventName="confirm-remove-cert" />
 </div>

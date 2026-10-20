@@ -134,7 +134,7 @@ class ShipSeeder extends Seeder
                 'hull_material' => 'Steel',
                 'class_name' => 'BKI',
                 'class_notations' => 'A100 — RORO Passenger Ship',
-                'call_sign' => 'YB'.($ship->id + 2000).$fake->lexify('??'),
+                'call_sign' => 'YB'.($ship->id + 2000).strtoupper($fake->lexify('??')),
                 'main_engine' => $fake->randomElement($mainEngines),
                 'main_engine_power' => '2 x '.$fake->numberBetween(5, 12).'00 kW',
                 'aux_engine' => $fake->randomElement($auxEngines),
