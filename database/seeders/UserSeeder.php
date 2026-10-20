@@ -42,6 +42,22 @@ class UserSeeder extends Seeder
             $admin->assignRole('admin');
         }
 
+        // Inspektur
+        $inspektur = User::firstOrCreate(
+            ['email' => 'inspektur@app.com'],
+            [
+                'name' => 'Inspektur Demo',
+                'password' => Hash::make('password'),
+                'phone' => '021-1234569',
+                'position' => 'Inspektur',
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]
+        );
+        if (! $inspektur->hasRole('inspektur')) {
+            $inspektur->assignRole('inspektur');
+        }
+
         // User
         $user = User::firstOrCreate(
             ['email' => 'user@app.com'],
@@ -82,9 +98,9 @@ class UserSeeder extends Seeder
                     'email_verified_at' => now(),
                 ]
             );
-            if (! $extraUser->hasRole('user')) {
-                $extraUser->assignRole('user');
-            }
+            $extraUser->syncRoles(
+                str_contains($extra['position'], 'Staff Administrasi') ? ['user'] : ['inspektur']
+            );
         }
     }
 }
