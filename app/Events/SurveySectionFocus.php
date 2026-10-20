@@ -21,6 +21,7 @@ class SurveySectionFocus implements ShouldBroadcastNow
         public int $userId,
         public string $userName,
         public ?int $subCategoryId,
+        public ?int $categoryId = null,
     ) {}
 
     public function broadcastOn(): array
@@ -35,6 +36,7 @@ class SurveySectionFocus implements ShouldBroadcastNow
             'user_id' => $this->userId,
             'user_name' => $this->userName,
             'sub_category_id' => $this->subCategoryId,
+            'category_id' => $this->categoryId,
         ];
     }
 }

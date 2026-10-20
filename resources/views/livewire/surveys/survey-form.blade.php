@@ -7,6 +7,7 @@
         myId: {{ (int) auth()->id() }},
         collaborators: [],
         focusMap: {},
+        focusCatMap: {},
         // Sinkron per-field: pendingRemote = batch perubahan kolaborator
         // yang menunggu diterapkan; pendingSince = awal ketikan lokal yang
         // belum tersinkron (batas tunggu maksimum saat mengetik terus);
@@ -71,11 +72,13 @@
                 .leaving((member) => {
                     this.collaborators = this.collaborators.filter((c) => c.id !== member.id);
                     delete this.focusMap[member.id];
+                    delete this.focusCatMap[member.id];
                 })
                 .error((e) => console.warn('[collab] gagal join presence channel', e))
                 .listen('SurveySectionFocus', (e) => {
                     if (e.user_id === this.myId) return;
                     this.focusMap[e.user_id] = e.sub_category_id;
+                    this.focusCatMap[e.user_id] = e.category_id;
                 })
                 .listen('SurveyContentUpdated', (e) => {
                     if (e.user_id === this.myId) return;
@@ -94,6 +97,9 @@
                 });
             // Broadcast posisi tab saat join + setiap pindah sub kategori
             this.$wire.$watch('activeSubCategory', (v) => { if (v) this.$wire.broadcastFocus(v); });
+            // Pindah kategori juga broadcast — kategori tanpa sub mengirim
+            // null agar chip lama di remote ikut bersih.
+            this.$wire.$watch('activeCategory', () => this.$wire.broadcastFocus(this.$wire.activeSubCategory || null));
             if (this.$wire.activeSubCategory) this.$wire.broadcastFocus(this.$wire.activeSubCategory);
         },
         collaboratorById(id) {
@@ -102,6 +108,12 @@
         focusedOnSub(subId) {
             return Object.keys(this.focusMap)
                 .filter((uid) => this.focusMap[uid] === subId)
+                .map((uid) => this.collaboratorById(uid))
+                .filter(Boolean);
+        },
+        focusedOnCat(catId) {
+            return Object.keys(this.focusCatMap)
+                .filter((uid) => this.focusCatMap[uid] === catId)
                 .map((uid) => this.collaboratorById(uid))
                 .filter(Boolean);
         },
@@ -772,6 +784,16 @@
                                     </span>
                                 @endif
                             </button>
+                            <!-- Penanda kolaborator yang sedang membuka kategori ini -->
+                            <span class="inline-flex -space-x-1.5 mx-0.5" x-data="{ get here() { return focusedOnCat({{ $cat->id }}) } }" x-show="here.length" x-cloak>
+                                <template x-for="c in here.slice(0, 2)" :key="'focus-cat-' + c.id">
+                                    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-bold text-white ring-1 ring-white dark:ring-gray-800 cursor-default"
+                                        :class="colorFor(c.id)" :title="c.name + ' sedang di sini'" x-text="initialsOf(c.name)"></span>
+                                </template>
+                                <span x-show="here.length > 2"
+                                    class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-bold bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200 ring-1 ring-white dark:ring-gray-800 cursor-default"
+                                    :title="namesOf(here.slice(2)) + ' sedang di sini'" x-text="'+' + (here.length - 2)"></span>
+                            </span>
                             @if($editStructure)
                                 <x-loading-button wire:click="moveStructureNode('category', {{ $cat->id }}, 'up')"
                                     target="moveStructureNode('category', {{ $cat->id }}, 'up')"

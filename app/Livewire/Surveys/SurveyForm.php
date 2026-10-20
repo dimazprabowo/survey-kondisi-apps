@@ -1046,6 +1046,7 @@ class SurveyForm extends Component
                 (int) auth()->id(),
                 auth()->user()->name,
                 $subCategoryId ? (int) $subCategoryId : null,
+                $this->activeCategory ? (int) $this->activeCategory : null,
             ));
         } catch (\Throwable $e) {
             // WebSocket down tidak boleh mengganggu pengisian form.
