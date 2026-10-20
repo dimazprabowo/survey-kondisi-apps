@@ -478,22 +478,22 @@
              atau konfirmasi saat status Selesai disimpan) -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
             <div class="px-4 py-5 sm:p-6">
-                <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
-                    <div class="min-w-0">
+                <div class="border-b border-gray-200 dark:border-gray-700 pb-3 mb-4">
+                    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Data Kapal</h3>
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Snapshot data kapal saat survey diisi — tersimpan bersama survey &amp; dipakai laporan.
-                        </p>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Edit Data Kapal</span>
                             <x-toggle-switch wire:click="toggleEditShipData" :active="$editShipData" target="toggleEditShipData" activeColor="blue" title="Kunci/buka pengeditan data kapal" />
                         </div>
-                        <x-loading-button type="button" wire:click="confirmReloadShipFromMaster" target="confirmReloadShipFromMaster" variant="secondary" size="sm" loadingText="Memuat..." icon="import" title="Isi ulang data kapal dari Master Data (menimpa isian snapshot saat ini)">
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Snapshot data kapal saat survey diisi — tersimpan bersama survey &amp; dipakai laporan.
+                    </p>
+                    <div class="mt-3 flex items-center gap-2 sm:justify-end">
+                        <x-loading-button type="button" wire:click="confirmReloadShipFromMaster" target="confirmReloadShipFromMaster" variant="secondary" size="sm" loadingText="Memuat..." icon="import" title="Isi ulang data kapal dari Master Data (menimpa isian snapshot saat ini)" class="flex-1 sm:flex-none">
                             Tarik Master
                         </x-loading-button>
-                        <x-loading-button type="button" wire:click="updateMasterShip" target="updateMasterShip" variant="warning" size="sm" loadingText="Memproses..." icon="export" title="Timpa/buat record kapal di Master Data dari data snapshot ini">
+                        <x-loading-button type="button" wire:click="updateMasterShip" target="updateMasterShip" variant="warning" size="sm" loadingText="Memproses..." icon="export" title="Timpa/buat record kapal di Master Data dari data snapshot ini" class="flex-1 sm:flex-none">
                             Update Master Kapal
                         </x-loading-button>
                     </div>
@@ -1170,16 +1170,20 @@
                     </div>
                 </div>
                 <x-cancel-button x-on:click="requestCancel()" target="cancel" class="w-full sm:w-auto sm:min-w-[160px]" />
-                @if($activeStep > 1)
-                    <x-loading-button type="button" wire:click="prevStep" target="prevStep" variant="secondary" size="lg" icon="arrow-left" class="w-full sm:w-auto sm:min-w-[160px]">
-                        Kembali
-                    </x-loading-button>
-                @endif
-                @if($activeStep < 3)
-                    <x-loading-button type="button" wire:click="nextStep" target="nextStep" variant="secondary" size="lg" icon="arrow-right" iconPosition="right" loadingText="Memeriksa..." class="w-full sm:w-auto sm:min-w-[160px]">
-                        Lanjut
-                    </x-loading-button>
-                @endif
+                {{-- Kembali + Lanjut sejajar di mobile (wrapper hilang via sm:contents
+                     sehingga tombol kembali jadi anak flex parent di desktop) --}}
+                <div class="flex items-center gap-3 w-full sm:contents">
+                    @if($activeStep > 1)
+                        <x-loading-button type="button" wire:click="prevStep" target="prevStep" variant="secondary" size="lg" icon="arrow-left" class="flex-1 sm:flex-none sm:w-auto sm:min-w-[160px]">
+                            Kembali
+                        </x-loading-button>
+                    @endif
+                    @if($activeStep < 3)
+                        <x-loading-button type="button" wire:click="nextStep" target="nextStep" variant="secondary" size="lg" icon="arrow-right" iconPosition="right" loadingText="Memeriksa..." class="flex-1 sm:flex-none sm:w-auto sm:min-w-[160px]">
+                            Lanjut
+                        </x-loading-button>
+                    @endif
+                </div>
                 <x-loading-button type="submit" target="save" variant="primary" size="lg" loadingText="Menyimpan..." class="w-full sm:w-auto sm:min-w-[160px]">
                     {{ $editMode ? 'Update Survey' : 'Simpan Survey' }}
                 </x-loading-button>
