@@ -139,6 +139,12 @@
         markDirty() {
             this.dirty = true;
         },
+        // Timestamp "Draft tersimpan" — dipakai untuk autosave lokal dan
+        // sinkron dari kolaborator (iso dari saved_at event broadcast).
+        markSavedAt(iso = null) {
+            const d = iso ? new Date(iso) : new Date();
+            this.lastSaved = (isNaN(d) ? new Date() : d).toLocaleTimeString('id-ID');
+        },
         onFieldChange(model = null) {
             this.dirty = true;
             if (model && this.$wire.autoSave) this.flashByModel(model);
@@ -165,7 +171,7 @@
             this.autoSaveTimer = setTimeout(async () => {
                 this.pendingSince = null;
                 await this.$wire.saveDraft();
-                if (this.$wire.autoSave) this.lastSaved = new Date().toLocaleTimeString('id-ID');
+                if (this.$wire.autoSave) this.markSavedAt();
             }, wait);
         },
         handleKeydown(e) {
@@ -258,9 +264,10 @@
 
             return best;
         },
-        onRemoteDraftApplied(name) {
+        onRemoteDraftApplied(name, savedAt = null) {
             this.dirty = true;
             this.showLiveSync(name, 'disinkronkan');
+            this.markSavedAt(savedAt);
         },
         showLiveSync(name, action) {
             if (! name) return;
@@ -293,6 +300,10 @@
             if (! Object.keys(this.pendingRemote).length) return;
             this.dirty = true;
             this.showLiveSync(e.user_name, 'disinkronkan');
+            // Indikator draft ikut bergerak saat isian kolaborator masuk —
+            // draft gabungan juga ditulis server (applyRemoteChanges) bila
+            // Auto Save aktif, jadi label ini mencerminkan penulisan nyata.
+            if (this.$wire.autoSave) this.markSavedAt(e.saved_at);
             clearTimeout(this.pendingRemoteTimer);
             this.pendingRemoteTimer = setTimeout(() => {
                 const batch = this.pendingRemote;
@@ -322,7 +333,7 @@
     x-on:ship-data-changed.window="onFieldChange()"
     x-on:structure-node-removed.window="onFieldChange()"
     x-on:structure-node-saved.window="onFieldChange()"
-    x-on:remote-draft-applied.window="onRemoteDraftApplied($event.detail.name)"
+    x-on:remote-draft-applied.window="onRemoteDraftApplied($event.detail.name, $event.detail.savedAt)"
 >
     <!-- Breadcrumb -->
     <nav class="mb-6 flex items-center justify-between gap-4" aria-label="Breadcrumb">

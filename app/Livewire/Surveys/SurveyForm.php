@@ -2327,6 +2327,13 @@ class SurveyForm extends Component
         }
 
         $this->putWorkState($this->collabKey(), $baseline);
+
+        // Draft gabungan ikut ditulis ke sesi penerima (bila Auto Save
+        // aktif) — isian kolaborator tidak hilang saat halaman di-reload
+        // dan indikator "Draft tersimpan" mencerminkan penulisan nyata.
+        if ($this->autoSave) {
+            $this->putWorkState($this->draftKey(), $this->draftPayload());
+        }
     }
 
     protected function draftPayload(): array
@@ -2529,7 +2536,7 @@ class SurveyForm extends Component
 
         // Nama kolaborator ikut payload agar indikator live-sync hanya
         // tampil setelah draft benar-benar diterapkan (bukan no-op).
-        $this->dispatch('remote-draft-applied', name: $draft['user_name'] ?? null);
+        $this->dispatch('remote-draft-applied', name: $draft['user_name'] ?? null, savedAt: $draft['saved_at'] ?? null);
     }
 
     /**
