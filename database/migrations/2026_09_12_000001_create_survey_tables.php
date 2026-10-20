@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -21,7 +20,11 @@ return new class extends Migration
             $table->string('owner')->nullable();
             $table->string('operator')->nullable();
             // Ship particulars (dipakai BAB II laporan survey)
-            $table->string('call_sign', 20)->nullable();
+            // Unique case-insensitive: call sign maritim resminya alfabet
+            // kapital (ITU) — Ship::callSign mutator menjamin nilai tersimpan
+            // uppercase di semua jalur tulis, sehingga index unik biasa
+            // bersifat case-insensitive. NULL tidak ikut diunikkan.
+            $table->string('call_sign', 20)->nullable()->unique();
             $table->string('net_tonnage', 20)->nullable();
             $table->string('loa', 20)->nullable();
             $table->string('lpp', 20)->nullable();
@@ -48,11 +51,6 @@ return new class extends Migration
             $table->index('status');
             $table->index('name');
         });
-
-        // Unique case-insensitive: call sign maritim resminya alfabet kapital (ITU),
-        // 'yb1ab' & 'YB1AB' adalah kapal yang sama. Expression index valid di
-        // PostgreSQL & SQLite; NULL tidak ikut diunikkan (boleh banyak NULL).
-        DB::statement('CREATE UNIQUE INDEX ships_call_sign_upper_unique ON ships (UPPER(call_sign))');
 
         // 1b. Ship certificates — repeater Status Class pada laporan (BAB II)
         Schema::create('ship_certificates', function (Blueprint $table) {

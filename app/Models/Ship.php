@@ -6,6 +6,7 @@ use App\Enums\ShipClassStatus;
 use App\Enums\ShipStatus;
 use App\Traits\Blameable;
 use App\Traits\HasEncryptedRouteKey;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -64,6 +65,19 @@ class Ship extends Model
     public function certificates(): HasMany
     {
         return $this->hasMany(ShipCertificate::class)->orderBy('order_num');
+    }
+
+    /**
+     * Call sign disimpan uppercase (standar ITU) di semua jalur tulis —
+     * termasuk create/update langsung yang bypass Service — agar index
+     * unik biasa bersifat case-insensitive secara lintas-driver
+     * (expression index UPPER() tidak didukung MariaDB/MySQL).
+     */
+    protected function callSign(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $value) => ($v = trim((string) $value)) === '' ? null : strtoupper($v),
+        );
     }
 
     public function scopeActive($query)
