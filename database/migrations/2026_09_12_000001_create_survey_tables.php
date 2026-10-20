@@ -12,7 +12,6 @@ return new class extends Migration
         Schema::create('ships', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('code', 50)->unique()->nullable();
             $table->integer('year_built')->nullable();
             $table->string('imo_number', 20)->nullable();
             $table->string('ship_type')->nullable();
@@ -21,7 +20,7 @@ return new class extends Migration
             $table->string('owner')->nullable();
             $table->string('operator')->nullable();
             // Ship particulars (dipakai BAB II laporan survey)
-            $table->string('call_sign', 20)->nullable();
+            $table->string('call_sign', 20)->unique()->nullable();
             $table->string('net_tonnage', 20)->nullable();
             $table->string('loa', 20)->nullable();
             $table->string('lpp', 20)->nullable();
@@ -34,6 +33,7 @@ return new class extends Migration
             $table->string('hull_material', 100)->nullable();
             $table->string('class_name')->nullable();
             $table->string('class_notations')->nullable();
+            $table->enum('class_status', ['active', 'suspended', 'withdrawn'])->default('active');
             $table->string('main_engine')->nullable();
             $table->string('main_engine_power')->nullable();
             $table->string('aux_engine')->nullable();

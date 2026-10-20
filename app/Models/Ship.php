@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ShipClassStatus;
 use App\Enums\ShipStatus;
 use App\Traits\Blameable;
 use App\Traits\HasEncryptedRouteKey;
@@ -18,7 +19,6 @@ class Ship extends Model
 
     protected $fillable = [
         'name',
-        'code',
         'year_built',
         'imo_number',
         'ship_type',
@@ -39,6 +39,7 @@ class Ship extends Model
         'hull_material',
         'class_name',
         'class_notations',
+        'class_status',
         'main_engine',
         'main_engine_power',
         'aux_engine',
@@ -48,6 +49,7 @@ class Ship extends Model
 
     protected $casts = [
         'status' => ShipStatus::class,
+        'class_status' => ShipClassStatus::class,
         'year_built' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -105,7 +107,7 @@ class Ship extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'code', 'year_built', 'imo_number', 'ship_type', 'status'])
+            ->logOnly(['name', 'year_built', 'imo_number', 'ship_type', 'status', 'class_status'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->useLogName('ship');

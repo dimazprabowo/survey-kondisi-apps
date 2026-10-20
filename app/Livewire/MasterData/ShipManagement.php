@@ -2,6 +2,7 @@
 
 namespace App\Livewire\MasterData;
 
+use App\Enums\ShipClassStatus;
 use App\Enums\ShipStatus;
 use App\Exports\ShipsExport;
 use App\Livewire\Traits\HasNotification;
@@ -112,6 +113,26 @@ class ShipManagement extends Component
             $this->notifySuccess("Status kapal berhasil diubah menjadi {$status}!");
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengubah status kapal.');
+        } catch (\Exception $e) {
+            $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
+        }
+    }
+
+    public function updateClassStatus($id, $value, ShipService $service)
+    {
+        try {
+            $ship = Ship::findOrFail($id);
+            $this->authorize('update', $ship);
+
+            $classStatus = ShipClassStatus::tryFrom((string) $value);
+            if ($classStatus === null) {
+                return;
+            }
+
+            $service->updateClassStatus($ship, $classStatus);
+            $this->notifySuccess("Status kelas {$ship->name} berhasil diubah menjadi {$classStatus->label()}!");
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            $this->notifyError('Anda tidak memiliki izin untuk mengubah status kelas kapal.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
         }

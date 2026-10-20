@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ShipClassStatus;
 use App\Models\Ship;
 use App\Traits\HasDynamicLike;
 use App\Traits\SortsQuery;
@@ -23,7 +24,6 @@ class ShipService
             $operator = $this->getLikeOperator();
             $query->where(function ($q) use ($search, $operator) {
                 $q->where('name', $operator, "%{$search}%")
-                    ->orWhere('code', $operator, "%{$search}%")
                     ->orWhere('imo_number', $operator, "%{$search}%")
                     ->orWhere('owner', $operator, "%{$search}%")
                     ->orWhere('operator', $operator, "%{$search}%");
@@ -61,10 +61,6 @@ class ShipService
     public function create(array $data, array $certificates = []): Ship
     {
         return DB::transaction(function () use ($data, $certificates) {
-            if (isset($data['code'])) {
-                $data['code'] = strtoupper($data['code']);
-            }
-
             $ship = Ship::create($data);
             $this->syncCertificates($ship, $certificates);
 
@@ -75,9 +71,6 @@ class ShipService
     public function update(Ship $ship, array $data, array $certificates = []): Ship
     {
         return DB::transaction(function () use ($ship, $data, $certificates) {
-            if (isset($data['code'])) {
-                $data['code'] = strtoupper($data['code']);
-            }
             $ship->update($data);
             $this->syncCertificates($ship, $certificates);
 
@@ -119,6 +112,13 @@ class ShipService
     {
         $newStatus = $ship->status->value === 'active' ? 'inactive' : 'active';
         $ship->update(['status' => $newStatus]);
+
+        return $ship;
+    }
+
+    public function updateClassStatus(Ship $ship, ShipClassStatus $status): Ship
+    {
+        $ship->update(['class_status' => $status]);
 
         return $ship;
     }

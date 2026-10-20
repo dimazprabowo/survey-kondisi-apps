@@ -18,17 +18,19 @@
         <!-- Section: Data Utama -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
             <div class="px-4 py-5 sm:p-6">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">Data Utama</h3>
+                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Data Utama</h3>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Status</span>
+                        <x-toggle-switch wire:click="toggleStatus" :active="$status === 'active'" target="toggleStatus" wire:key="toggle-status-form" title="Aktifkan/Nonaktifkan" />
+                        <x-input-error :messages="$errors->get('status')" />
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <x-input-label for="name" value="Nama Kapal" :required="true" />
                         <x-text-input wire:model="name" id="name" type="text" class="mt-1 block w-full" placeholder="Nama kapal" />
                         <x-input-error :messages="$errors->get('name')" class="mt-2" />
-                    </div>
-                    <div>
-                        <x-input-label for="code" value="Kode Kapal" />
-                        <x-text-input wire:model="code" id="code" type="text" class="mt-1 block w-full" placeholder="Kode kapal" />
-                        <x-input-error :messages="$errors->get('code')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="year_built" value="Tahun Pembuatan" />
@@ -76,9 +78,9 @@
                         <x-input-error :messages="$errors->get('operator')" class="mt-2" />
                     </div>
                     <div>
-                        <x-input-label for="status" value="Status" :required="true" />
-                        <x-searchable-select wire:model="status" :options="$this->statusOptions" placeholder="Pilih status" searchPlaceholder="Cari status..." />
-                        <x-input-error :messages="$errors->get('status')" class="mt-2" />
+                        <x-input-label for="class_status" value="Status Kelas" :required="true" />
+                        <x-searchable-select wire:model="class_status" :options="$this->classStatusOptions" placeholder="Pilih status kelas" searchPlaceholder="Cari status kelas..." />
+                        <x-input-error :messages="$errors->get('class_status')" class="mt-2" />
                     </div>
                 </div>
             </div>

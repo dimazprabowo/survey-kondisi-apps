@@ -102,6 +102,7 @@ class SurveyReportDocxBuilder
         $tp->setValue('sp_dwt', $ship?->dwt ?? '-');
         $tp->setValue('sp_class', $ship?->class_name ?? '-');
         $tp->setValue('sp_class_notations', $ship?->class_notations ?? '-');
+        $tp->setValue('sp_class_status', strtoupper($ship?->class_status?->value ?? '-'));
         $tp->setValue('sp_main_engine', $ship?->main_engine ?? '-');
         $tp->setValue('sp_me_power', $ship?->main_engine_power ?? '-');
         $tp->setValue('sp_aux_engine', $ship?->aux_engine ?? '-');

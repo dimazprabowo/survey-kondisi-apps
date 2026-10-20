@@ -117,17 +117,7 @@ class ShipSeeder extends Seeder
             $gt = $fake->numberBetween(1000, 6000);
             $loa = $fake->randomFloat(2, 45, 85);
 
-            $acronym = implode('', array_map(
-                fn ($word) => $word[0],
-                preg_split('/\s+/', trim((string) preg_replace('/[^A-Za-z0-9 ]/', '', str_replace('KMP.', '', (string) $ship->name)))) ?: ['X']
-            ));
-            $code = strtoupper(substr($acronym, 0, 6)).'-'.($ship->year_built ?? 'XX');
-            if (Ship::where('code', $code)->whereKeyNot($ship->id)->exists()) {
-                $code .= '-'.$ship->id;
-            }
-
             $attrs = [
-                'code' => $code,
                 'imo_number' => '9'.$fake->numerify('######'),
                 'ship_type' => 'Ferry Ro-Ro',
                 'flag' => 'Indonesia',
@@ -144,7 +134,7 @@ class ShipSeeder extends Seeder
                 'hull_material' => 'Steel',
                 'class_name' => 'BKI',
                 'class_notations' => 'A100 — RORO Passenger Ship',
-                'call_sign' => 'YB'.$fake->lexify('??'),
+                'call_sign' => 'YB'.($ship->id + 2000).$fake->lexify('??'),
                 'main_engine' => $fake->randomElement($mainEngines),
                 'main_engine_power' => '2 x '.$fake->numberBetween(5, 12).'00 kW',
                 'aux_engine' => $fake->randomElement($auxEngines),
@@ -169,6 +159,13 @@ class ShipSeeder extends Seeder
                     $dirty = true;
                 }
             }
+
+            // class_status punya default 'active' di kolom (tidak pernah null) —
+            // variasikan deterministik untuk demo: sebagian suspended/withdrawn
+            $ship->class_status = $ship->id % 7 === 0
+                ? \App\Enums\ShipClassStatus::Suspended
+                : ($ship->id % 11 === 0 ? \App\Enums\ShipClassStatus::Withdrawn : \App\Enums\ShipClassStatus::Active);
+            $dirty = $dirty || $ship->isDirty('class_status');
 
             if ($dirty) {
                 $ship->save();

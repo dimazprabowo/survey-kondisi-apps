@@ -29,7 +29,7 @@
             <tr>
                 <th style="width: 4%;">No</th>
                 <th style="width: 20%;">Nama Kapal</th>
-                <th style="width: 9%;">Kode</th>
+                <th style="width: 9%;">Status Kelas</th>
                 <th style="width: 8%;">Tahun</th>
                 <th style="width: 12%;">Nomor IMO</th>
                 <th style="width: 14%;">Jenis</th>
@@ -43,7 +43,7 @@
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td><strong>{{ $ship->name }}</strong></td>
-                    <td>{{ $ship->code ?? '-' }}</td>
+                    <td>{{ $ship->class_status?->label() ?? '-' }}</td>
                     <td>{{ $ship->year_built ?? '-' }}</td>
                     <td>{{ $ship->imo_number ?? '-' }}</td>
                     <td>{{ $ship->ship_type ?? '-' }}</td>

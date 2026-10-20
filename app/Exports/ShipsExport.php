@@ -34,7 +34,6 @@ class ShipsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMappin
             $operator = $this->getLikeOperator();
             $query->where(function ($q) use ($operator) {
                 $q->where('name', $operator, "%{$this->search}%")
-                    ->orWhere('code', $operator, "%{$this->search}%")
                     ->orWhere('imo_number', $operator, "%{$this->search}%")
                     ->orWhere('owner', $operator, "%{$this->search}%")
                     ->orWhere('operator', $operator, "%{$this->search}%");
@@ -52,7 +51,6 @@ class ShipsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMappin
     {
         return [
             'Nama Kapal',
-            'Kode',
             'Tahun Pembuatan',
             'Nomor IMO',
             'Jenis Kapal',
@@ -62,6 +60,7 @@ class ShipsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMappin
             'Operator',
             'Jumlah Survey',
             'Status',
+            'Status Kelas',
         ];
     }
 
@@ -69,7 +68,6 @@ class ShipsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMappin
     {
         return [
             $ship->name,
-            $ship->code ?? '-',
             $ship->year_built ?? '-',
             $ship->imo_number ?? '-',
             $ship->ship_type ?? '-',
@@ -79,6 +77,7 @@ class ShipsExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMappin
             $ship->operator ?? '-',
             $ship->surveys_count,
             $ship->status->label(),
+            $ship->class_status?->label() ?? '-',
         ];
     }
 

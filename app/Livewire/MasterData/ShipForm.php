@@ -2,12 +2,14 @@
 
 namespace App\Livewire\MasterData;
 
+use App\Enums\ShipClassStatus;
 use App\Enums\ShipStatus;
 use App\Livewire\Traits\HasNotification;
 use App\Models\Ship;
 use App\Services\ShipService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class ShipForm extends Component
@@ -20,8 +22,6 @@ class ShipForm extends Component
 
     // Data utama
     public $name;
-
-    public $code;
 
     public $year_built;
 
@@ -40,6 +40,8 @@ class ShipForm extends Component
     public $operator;
 
     public $status = 'active';
+
+    public $class_status = 'active';
 
     // Ship particulars (dipakai BAB II laporan)
     public $call_sign;
@@ -85,7 +87,7 @@ class ShipForm extends Component
             $this->editMode = true;
 
             $this->fill($ship->only([
-                'name', 'code', 'year_built', 'imo_number', 'ship_type', 'flag',
+                'name', 'year_built', 'imo_number', 'ship_type', 'flag',
                 'gross_tonnage', 'net_tonnage', 'owner', 'operator',
                 'call_sign', 'loa', 'lpp', 'breadth', 'depth', 'draft', 'dwt',
                 'builder', 'port_of_registry', 'hull_material',
@@ -93,6 +95,7 @@ class ShipForm extends Component
                 'main_engine', 'main_engine_power', 'aux_engine', 'aux_engine_power',
             ]));
             $this->status = $ship->status->value;
+            $this->class_status = $ship->class_status->value;
 
             $this->certificates = $ship->certificates->map(fn ($cert) => [
                 'row_key' => 'cert-'.$cert->id,
@@ -105,6 +108,7 @@ class ShipForm extends Component
         } else {
             $this->authorize('create', Ship::class);
             $this->status = ShipStatus::Active->value;
+            $this->class_status = ShipClassStatus::Active->value;
             $this->certificates = [$this->emptyCertificate()];
         }
     }
@@ -134,11 +138,8 @@ class ShipForm extends Component
 
     public function rules()
     {
-        $uniqueCode = $this->editMode ? 'unique:ships,code,'.$this->ship->id : 'unique:ships,code';
-
         return [
             'name' => ['required', 'string', 'max:255'],
-            'code' => ['nullable', 'string', 'max:50', $uniqueCode],
             'year_built' => ['nullable', 'integer', 'min:1900', 'max:'.(int) now()->format('Y')],
             'imo_number' => ['nullable', 'string', 'max:20'],
             'ship_type' => ['nullable', 'string', 'max:100'],
@@ -147,7 +148,7 @@ class ShipForm extends Component
             'net_tonnage' => ['nullable', 'string', 'max:20'],
             'owner' => ['nullable', 'string', 'max:255'],
             'operator' => ['nullable', 'string', 'max:255'],
-            'call_sign' => ['nullable', 'string', 'max:20'],
+            'call_sign' => ['nullable', 'string', 'max:20', Rule::unique('ships', 'call_sign')->ignore($this->ship?->id)],
             'loa' => ['nullable', 'string', 'max:20'],
             'lpp' => ['nullable', 'string', 'max:20'],
             'breadth' => ['nullable', 'string', 'max:20'],
@@ -164,6 +165,7 @@ class ShipForm extends Component
             'aux_engine' => ['nullable', 'string', 'max:255'],
             'aux_engine_power' => ['nullable', 'string', 'max:255'],
             'status' => ['required', 'string', 'in:'.implode(',', ShipStatus::values())],
+            'class_status' => ['required', 'string', 'in:'.implode(',', ShipClassStatus::values())],
             'certificates' => ['array'],
             'certificates.*.certificate_type' => ['nullable', 'string', 'max:255'],
             'certificates.*.last_date' => ['nullable', 'date'],
@@ -177,7 +179,6 @@ class ShipForm extends Component
     {
         return [
             'name' => 'nama kapal',
-            'code' => 'kode kapal',
             'year_built' => 'tahun pembuatan',
             'imo_number' => 'nomor IMO',
             'ship_type' => 'jenis kapal',
@@ -203,6 +204,7 @@ class ShipForm extends Component
             'aux_engine' => 'auxiliary engine',
             'aux_engine_power' => 'daya auxiliary engine',
             'status' => 'status',
+            'class_status' => 'status kelas',
             'certificates.*.certificate_type' => 'jenis sertifikat',
             'certificates.*.last_date' => 'tanggal terakhir',
             'certificates.*.next_1_date' => 'tanggal next 1',
@@ -211,12 +213,19 @@ class ShipForm extends Component
         ];
     }
 
-    public function getStatusOptionsProperty(): array
+    public function getClassStatusOptionsProperty(): array
     {
-        return collect(ShipStatus::cases())->map(fn ($case) => [
+        return collect(ShipClassStatus::cases())->map(fn ($case) => [
             'value' => $case->value,
             'label' => $case->label(),
         ])->toArray();
+    }
+
+    public function toggleStatus(): void
+    {
+        $this->status = $this->status === ShipStatus::Active->value
+            ? ShipStatus::Inactive->value
+            : ShipStatus::Active->value;
     }
 
     public function save(ShipService $service)
@@ -231,7 +240,6 @@ class ShipForm extends Component
         try {
             $data = [
                 'name' => $this->name,
-                'code' => $this->code,
                 'year_built' => $this->year_built,
                 'imo_number' => $this->imo_number,
                 'ship_type' => $this->ship_type,
@@ -257,6 +265,7 @@ class ShipForm extends Component
                 'aux_engine' => $this->aux_engine,
                 'aux_engine_power' => $this->aux_engine_power,
                 'status' => $this->status,
+                'class_status' => $this->class_status,
             ];
 
             $certificates = collect($this->certificates)

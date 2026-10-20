@@ -51,6 +51,7 @@
                         <x-sortable-header field="owner" :sort-field="$sortField" :sort-dir="$sortDir">Pemilik/Operator</x-sortable-header>
                         <x-sortable-header field="surveys_count" :sort-field="$sortField" :sort-dir="$sortDir">Survey</x-sortable-header>
                         <x-sortable-header field="status" :sort-field="$sortField" :sort-dir="$sortDir">Status</x-sortable-header>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status Kelas</th>
                         <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Aksi</th>
                     </tr>
                 </thead>
@@ -66,9 +67,6 @@
                                     </div>
                                     <div class="ml-4">
                                         <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $ship->name }}</div>
-                                        @if($ship->code)
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ $ship->code }}</div>
-                                        @endif
                                     </div>
                                 </div>
                             </td>
@@ -111,6 +109,22 @@
                                     </span>
                                 @endcan
                             </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                @can('ships_update')
+                                    <select wire:change="updateClassStatus({{ $ship->id }}, $event.target.value)"
+                                        wire:loading.attr="disabled" wire:target="updateClassStatus({{ $ship->id }})"
+                                        wire:key="select-class-status-{{ $ship->id }}"
+                                        class="text-xs border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-blue-500 dark:focus:border-blue-600 focus:ring-blue-500 dark:focus:ring-blue-600 py-1.5 pl-2.5 pr-8 disabled:opacity-60">
+                                        @foreach(\App\Enums\ShipClassStatus::cases() as $classStatus)
+                                            <option value="{{ $classStatus->value }}" @selected($ship->class_status === $classStatus)>{{ $classStatus->label() }}</option>
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <span class="px-2 py-1 text-xs font-medium rounded-full {{ $ship->class_status?->badgeClass() ?? '' }}">
+                                        {{ $ship->class_status?->label() ?? '-' }}
+                                    </span>
+                                @endcan
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div class="flex items-center justify-end gap-2">
                                     @can('ships_update')
@@ -134,7 +148,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-6 py-12 text-center">
+                            <td colspan="9" class="px-6 py-12 text-center">
                                 <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7l1.5-1.5h15L21 7M3 7v12a1 1 0 001 1h16a1 1 0 001-1V7M3 7l4 4m4-4l4 4m4-4l4 4"/>
                                 </svg>
