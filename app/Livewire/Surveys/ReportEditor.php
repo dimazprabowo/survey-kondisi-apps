@@ -422,11 +422,15 @@ class ReportEditor extends Component
         return app(SurveyService::class)->overallAvg($categories, $this->responses);
     }
 
+    /**
+     * Data kapal laporan adalah snapshot milik survey — edit diarahkan ke
+     * langkah Data Kapal (step 2) form survey, bukan master data.
+     */
     public function editShip()
     {
-        $this->authorize('update', $this->survey->ship);
+        $this->authorize('update', $this->survey);
 
-        return $this->redirect(route('master-data.ships.edit', $this->survey->ship), navigate: true);
+        return $this->redirect(route('surveys.edit', ['survey' => $this->survey, 'step' => 2]), navigate: true);
     }
 
     public function back()

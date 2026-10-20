@@ -754,10 +754,10 @@
             </div>
 
             @if($ship)
-                @can('update', $ship)
+                @can('update', $survey)
                     <div class="mt-4 flex justify-end">
                         <x-loading-button type="button" wire:click="editShip" target="editShip" variant="secondary" size="lg"
-                            loadingText="Memuat..." icon="edit" class="w-full sm:w-auto">
+                            loadingText="Memuat..." icon="edit" title="Edit snapshot data kapal di form survey (langkah 2)" class="w-full sm:w-auto">
                             Edit Data Kapal
                         </x-loading-button>
                     </div>

@@ -557,6 +557,17 @@ class SurveyShipSyncTest extends TestCase
             ->assertDispatched('confirm-remove-cert');
     }
 
+    public function test_edit_ship_from_report_redirects_to_survey_form_step_2(): void
+    {
+        $survey = $this->createSurvey();
+
+        $component = Livewire::test(\App\Livewire\Surveys\ReportEditor::class, ['survey' => $survey])
+            ->call('editShip');
+
+        // Route key terenkripsi acak per call — assert suffix saja.
+        $this->assertStringEndsWith('/edit?step=2', $component->effects['redirect']);
+    }
+
     public function test_active_category_tab_persists_across_reload(): void
     {
         $category2 = SurveyCategory::create([
