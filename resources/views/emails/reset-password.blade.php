@@ -263,10 +263,10 @@
         <!-- Header -->
         <div class="header">
             <div class="logo">
-                <img src="{{ email_logo_url() }}" alt="BKI Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 12px;">
+                <img src="{{ $message->embed(public_path('images/bki-logo.png')) }}" alt="BKI Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 12px;">
             </div>
             <h1>Reset Password</h1>
-            <p>{{ config('app.name', 'Boilerplate') }}</p>
+            <p>{{ app_name() }}</p>
         </div>
         
         <!-- Content -->
@@ -276,7 +276,7 @@
             </div>
             
             <div class="message">
-                Kami menerima permintaan untuk mereset password akun Anda di <strong>{{ config('app.name', 'Boilerplate') }}</strong>. 
+                Kami menerima permintaan untuk mereset password akun Anda di <strong>{{ app_name() }}</strong>.
                 Jika Anda yang melakukan permintaan ini, silakan klik tombol di bawah untuk membuat password baru.
             </div>
             
@@ -304,7 +304,7 @@
         
         <!-- Footer -->
         <div class="footer">
-            <p><strong>{{ config('app.name', 'Boilerplate') }}</strong></p>
+            <p><strong>{{ app_name() }}</strong></p>
             <p style="margin-top: 15px; font-size: 12px;">
                 Email ini dikirim secara otomatis, mohon tidak membalas email ini.
             </p>
@@ -314,7 +314,7 @@
                 <a href="#">Hubungi Kami</a>
             </div>
             <p style="margin-top: 20px; font-size: 12px; color: #9ca3af;">
-                © {{ date('Y') }} {{ config('app.name', 'Boilerplate') }}. All rights reserved.
+                © {{ date('Y') }} {{ app_name() }}. All rights reserved.
             </p>
         </div>
     </div>

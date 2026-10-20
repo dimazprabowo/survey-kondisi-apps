@@ -20,7 +20,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>{{ config('app.name', 'Boilerplate') }}</h1>
+        <h1>{{ app_name() }}</h1>
         <p>Laporan Konfigurasi System &mdash; {{ now()->format('d F Y, H:i') }}</p>
     </div>
 

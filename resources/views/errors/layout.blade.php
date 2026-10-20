@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>@yield('title') - {{ config('app.name', 'Dashboard') }}</title>
+    <title>@yield('title') - {{ app_name() }}</title>
     <link rel="icon" type="image/webp" href="{{ asset('images/bki-main.webp') }}">
     <link rel="apple-touch-icon" href="{{ asset('images/bki-main.webp') }}">
     <link rel="preconnect" href="https://fonts.bunny.net">

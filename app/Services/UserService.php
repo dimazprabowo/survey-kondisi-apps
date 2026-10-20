@@ -99,7 +99,16 @@ class UserService
 
     public function delete(User $user): void
     {
-        $user->delete();
+        DB::transaction(function () use ($user) {
+            // Bersihkan artefak tanpa FK cascade agar tak ada baris orphan:
+            // pivot role/permission (spatie), sessions & password_reset_tokens.
+            $user->syncRoles([]);
+            $user->syncPermissions([]);
+            DB::table('sessions')->where('user_id', $user->id)->delete();
+            DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+
+            $user->delete();
+        });
     }
 
     public function toggleActive(User $user): User

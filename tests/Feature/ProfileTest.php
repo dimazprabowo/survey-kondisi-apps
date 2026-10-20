@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Profile\DeleteUserForm;
+use App\Livewire\Profile\UpdatePasswordForm;
+use App\Livewire\Profile\UpdateProfileInformationForm;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class ProfileTest extends TestCase
@@ -15,13 +18,11 @@ class ProfileTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->get('/profile');
-
-        $response
+        $this->actingAs($user)->get('/profile')
             ->assertOk()
-            ->assertSeeVolt('profile.update-profile-information-form')
-            ->assertSeeVolt('profile.update-password-form')
-            ->assertSeeVolt('profile.delete-user-form');
+            ->assertSeeLivewire(UpdateProfileInformationForm::class)
+            ->assertSeeLivewire(UpdatePasswordForm::class)
+            ->assertSeeLivewire(DeleteUserForm::class);
     }
 
     public function test_profile_information_can_be_updated(): void
@@ -30,20 +31,18 @@ class ProfileTest extends TestCase
 
         $this->actingAs($user);
 
-        $component = Volt::test('profile.update-profile-information-form')
+        Livewire::test(UpdateProfileInformationForm::class)
             ->set('name', 'Test User')
             ->set('email', 'test@example.com')
-            ->call('updateProfileInformation');
-
-        $component
+            ->call('updateProfileInformation')
             ->assertHasNoErrors()
             ->assertNoRedirect();
 
         $user->refresh();
 
+        // Perubahan email mengalir via pending_email (perlu verifikasi dulu).
         $this->assertSame('Test User', $user->name);
-        $this->assertSame('test@example.com', $user->email);
-        $this->assertNull($user->email_verified_at);
+        $this->assertSame('test@example.com', $user->pending_email);
     }
 
     public function test_email_verification_status_is_unchanged_when_the_email_address_is_unchanged(): void
@@ -52,16 +51,17 @@ class ProfileTest extends TestCase
 
         $this->actingAs($user);
 
-        $component = Volt::test('profile.update-profile-information-form')
+        Livewire::test(UpdateProfileInformationForm::class)
             ->set('name', 'Test User')
             ->set('email', $user->email)
-            ->call('updateProfileInformation');
-
-        $component
+            ->call('updateProfileInformation')
             ->assertHasNoErrors()
             ->assertNoRedirect();
 
-        $this->assertNotNull($user->refresh()->email_verified_at);
+        $user->refresh();
+
+        $this->assertNotNull($user->email_verified_at);
+        $this->assertNull($user->pending_email);
     }
 
     public function test_user_can_delete_their_account(): void
@@ -70,11 +70,9 @@ class ProfileTest extends TestCase
 
         $this->actingAs($user);
 
-        $component = Volt::test('profile.delete-user-form')
+        Livewire::test(DeleteUserForm::class)
             ->set('password', 'password')
-            ->call('deleteUser');
-
-        $component
+            ->call('deleteUser')
             ->assertHasNoErrors()
             ->assertRedirect('/');
 
@@ -88,11 +86,9 @@ class ProfileTest extends TestCase
 
         $this->actingAs($user);
 
-        $component = Volt::test('profile.delete-user-form')
+        Livewire::test(DeleteUserForm::class)
             ->set('password', 'wrong-password')
-            ->call('deleteUser');
-
-        $component
+            ->call('deleteUser')
             ->assertHasErrors('password')
             ->assertNoRedirect();
 

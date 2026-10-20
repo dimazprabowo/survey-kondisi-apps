@@ -94,6 +94,12 @@ class AppServiceProvider extends ServiceProvider
                 }
             }
 
+            // Nama pengirim email mengikuti nama aplikasi (konvensi template
+            // MAIL_FROM_NAME="${APP_NAME}") — nilai env lama tidak boleh bocor.
+            if (config('mail.from.name') === env('APP_NAME')) {
+                config(['mail.from.name' => config('app.name')]);
+            }
+
             // Apply timezone if set
             $timezone = config('app.timezone');
             if ($timezone) {

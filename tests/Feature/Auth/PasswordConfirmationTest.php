@@ -2,9 +2,10 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Livewire\Pages\Auth\ConfirmPassword;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class PasswordConfirmationTest extends TestCase
@@ -15,11 +16,9 @@ class PasswordConfirmationTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->get('/confirm-password');
-
-        $response
-            ->assertSeeVolt('pages.auth.confirm-password')
-            ->assertStatus(200);
+        $this->actingAs($user)->get('/confirm-password')
+            ->assertOk()
+            ->assertSeeLivewire(ConfirmPassword::class);
     }
 
     public function test_password_can_be_confirmed(): void
@@ -28,14 +27,11 @@ class PasswordConfirmationTest extends TestCase
 
         $this->actingAs($user);
 
-        $component = Volt::test('pages.auth.confirm-password')
-            ->set('password', 'password');
-
-        $component->call('confirmPassword');
-
-        $component
-            ->assertRedirect('/dashboard')
-            ->assertHasNoErrors();
+        Livewire::test(ConfirmPassword::class)
+            ->set('password', 'password')
+            ->call('confirmPassword')
+            ->assertHasNoErrors()
+            ->assertRedirect(route('dashboard', absolute: false));
     }
 
     public function test_password_is_not_confirmed_with_invalid_password(): void
@@ -44,13 +40,10 @@ class PasswordConfirmationTest extends TestCase
 
         $this->actingAs($user);
 
-        $component = Volt::test('pages.auth.confirm-password')
-            ->set('password', 'wrong-password');
-
-        $component->call('confirmPassword');
-
-        $component
-            ->assertNoRedirect()
-            ->assertHasErrors('password');
+        Livewire::test(ConfirmPassword::class)
+            ->set('password', 'wrong-password')
+            ->call('confirmPassword')
+            ->assertHasErrors('password')
+            ->assertNoRedirect();
     }
 }

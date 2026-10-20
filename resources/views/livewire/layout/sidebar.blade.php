@@ -31,8 +31,8 @@
                     </div>
                     {{-- App name: always visible on mobile, hidden on desktop when collapsed --}}
                     <div class="leading-tight min-w-0" :class="Alpine.store('sidebar').collapsed && 'lg:hidden'"
-                         title="{{ config('app.name', 'Boilerplate') }} — Marine Assessment & Technical Reporting Automation">
-                        <div class="text-sm font-bold text-gray-900 dark:text-white">{{ config('app.name', 'Boilerplate') }}</div>
+                         title="{{ app_name() }} — Marine Assessment & Technical Reporting Automation">
+                        <div class="text-sm font-bold text-gray-900 dark:text-white">{{ app_name() }}</div>
                         <div class="text-xs text-gray-500 dark:text-gray-400">PT. Biro Klasifikasi Indonesia</div>
                     </div>
                 </a>

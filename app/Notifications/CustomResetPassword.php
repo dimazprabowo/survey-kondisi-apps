@@ -47,7 +47,8 @@ class CustomResetPassword extends ResetPasswordNotification
         ], false));
 
         return (new MailMessage)
-            ->subject('Reset Password - '.config('app.name', 'Boilerplate'))
+            ->from(config('mail.from.address'), app_name())
+            ->subject('Reset Password - '.app_name())
             ->view('emails.reset-password', [
                 'resetUrl' => $resetUrl,
                 'userName' => $user->name,

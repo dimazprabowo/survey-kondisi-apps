@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Livewire\Layout\Navigation;
+use App\Livewire\Pages\Auth\Login;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -13,24 +16,19 @@ class AuthenticationTest extends TestCase
 
     public function test_login_screen_can_be_rendered(): void
     {
-        $response = $this->get('/login');
-
-        $response
+        $this->get('/login')
             ->assertOk()
-            ->assertSeeVolt('pages.auth.login');
+            ->assertSeeLivewire(Login::class);
     }
 
     public function test_users_can_authenticate_using_the_login_screen(): void
     {
         $user = User::factory()->create();
 
-        $component = Volt::test('pages.auth.login')
+        Livewire::test(Login::class)
             ->set('form.email', $user->email)
-            ->set('form.password', 'password');
-
-        $component->call('login');
-
-        $component
+            ->set('form.password', 'password')
+            ->call('login')
             ->assertHasNoErrors()
             ->assertRedirect(route('dashboard', absolute: false));
 
@@ -41,13 +39,10 @@ class AuthenticationTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $component = Volt::test('pages.auth.login')
+        Livewire::test(Login::class)
             ->set('form.email', $user->email)
-            ->set('form.password', 'wrong-password');
-
-        $component->call('login');
-
-        $component
+            ->set('form.password', 'wrong-password')
+            ->call('login')
             ->assertHasErrors()
             ->assertNoRedirect();
 
@@ -56,15 +51,14 @@ class AuthenticationTest extends TestCase
 
     public function test_navigation_menu_can_be_rendered(): void
     {
+        // Dashboard butuh permission — pakai super admin (Gate::before bypass).
+        $role = Role::firstOrCreate(['name' => 'super admin', 'guard_name' => 'web']);
         $user = User::factory()->create();
+        $user->assignRole($role);
 
-        $this->actingAs($user);
-
-        $response = $this->get('/dashboard');
-
-        $response
+        $this->actingAs($user)->get('/dashboard')
             ->assertOk()
-            ->assertSeeVolt('layout.navigation');
+            ->assertSeeLivewire(Navigation::class);
     }
 
     public function test_users_can_logout(): void
@@ -73,11 +67,8 @@ class AuthenticationTest extends TestCase
 
         $this->actingAs($user);
 
-        $component = Volt::test('layout.navigation');
-
-        $component->call('logout');
-
-        $component
+        Livewire::test(Navigation::class)
+            ->call('logout')
             ->assertHasNoErrors()
             ->assertRedirect('/');
 

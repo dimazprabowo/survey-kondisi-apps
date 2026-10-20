@@ -21,7 +21,7 @@ class SsoSyncController extends Controller
     {
         return response()->json([
             'status' => 'ok',
-            'app' => config('app.name'),
+            'app' => app_name(),
             'timestamp' => now()->toISOString(),
         ]);
     }

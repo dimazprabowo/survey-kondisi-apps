@@ -1,16 +1,5 @@
 <?php
 
-if (! function_exists('email_logo_url')) {
-    /**
-     * Get the public URL for the email logo
-     * Logo is hosted on DigitalOcean Spaces (S3) for email client compatibility
-     */
-    function email_logo_url(): string
-    {
-        return 'https://statutoria-monitoring-bucket.sgp1.digitaloceanspaces.com/assets/bki-logo.png';
-    }
-}
-
 if (! function_exists('get_max_upload_size')) {
     /**
      * Get maximum upload size in KB for a specific field

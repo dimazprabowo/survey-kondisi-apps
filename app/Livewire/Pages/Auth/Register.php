@@ -6,7 +6,9 @@ use App\Helpers\ConfigHelper;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
 use Livewire\Component;
 
@@ -39,19 +41,43 @@ class Register extends Component
                 'password' => ['required', 'string', 'confirmed', Rules\Password::defaults()],
             ]);
 
-            $validated['password'] = Hash::make($validated['password']);
+            // Buat akun + role dalam SATU transaksi, lalu login. Email
+            // verifikasi dikirim SETELAH commit — bila SMTP gagal, akun
+            // tetap utuh (bukan "orphan" yang memblokir daftar ulang via
+            // error 'email sudah terdaftar').
+            $user = DB::transaction(function () use ($validated) {
+                $user = User::create([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'password' => Hash::make($validated['password']),
+                ]);
 
-            event(new Registered($user = User::create($validated)));
+                // Assign default role 'user' to newly registered user
+                $user->assignRole('user');
 
-            // Assign default role 'user' to newly registered user
-            $user->assignRole('user');
+                return $user;
+            });
 
             Auth::login($user);
 
-            $this->dispatch('notify',
-                type: 'success',
-                message: 'Pendaftaran berhasil! Email verifikasi telah dikirim.'
-            );
+            try {
+                event(new Registered($user));
+
+                $this->dispatch('notify',
+                    type: 'success',
+                    message: 'Pendaftaran berhasil! Email verifikasi telah dikirim.'
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mengirim email verifikasi setelah registrasi', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $this->dispatch('notify',
+                    type: 'warning',
+                    message: 'Akun berhasil dibuat, namun email verifikasi gagal dikirim. Gunakan tombol kirim ulang pada halaman verifikasi email.'
+                );
+            }
 
             $this->redirect(route('dashboard', absolute: false), navigate: true);
         } catch (\Illuminate\Validation\ValidationException $e) {

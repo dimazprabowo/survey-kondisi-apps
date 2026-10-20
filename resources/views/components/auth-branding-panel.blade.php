@@ -32,7 +32,7 @@
         <div>
             <div class="flex items-center space-x-3 mb-10">
                 <div class="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-lg p-1.5 overflow-hidden flex-shrink-0">
-                    <img src="{{ email_logo_url() }}" alt="Logo" class="w-full h-full object-contain rounded-lg">
+                    <img src="{{ asset('images/bki-logo.png') }}" alt="Logo" class="w-full h-full object-contain rounded-lg">
                 </div>
                 <div>
                     <h1 class="text-2xl lg:text-3xl font-bold leading-tight">{{ app_name() }}</h1>

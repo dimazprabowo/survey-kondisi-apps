@@ -242,7 +242,7 @@
         <!-- Header -->
         <div class="header">
             <div class="logo">
-                <img src="{{ email_logo_url() }}" alt="BKI Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                <img src="{{ $message->embed(public_path('images/bki-logo.png')) }}" alt="BKI Logo" style="width: 100%; height: 100%; object-fit: contain;">
             </div>
             <h1>Verifikasi Email Anda</h1>
             <p>{{ app_name() }}</p>

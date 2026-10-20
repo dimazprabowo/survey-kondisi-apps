@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Livewire\Pages\Auth\ForgotPassword;
+use App\Livewire\Pages\Auth\ResetPassword as ResetPasswordComponent;
 use App\Models\User;
-use Illuminate\Auth\Notifications\ResetPassword;
+use App\Notifications\CustomResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
@@ -15,11 +17,9 @@ class PasswordResetTest extends TestCase
 
     public function test_reset_password_link_screen_can_be_rendered(): void
     {
-        $response = $this->get('/forgot-password');
-
-        $response
-            ->assertSeeVolt('pages.auth.forgot-password')
-            ->assertStatus(200);
+        $this->get('/forgot-password')
+            ->assertOk()
+            ->assertSeeLivewire(ForgotPassword::class);
     }
 
     public function test_reset_password_link_can_be_requested(): void
@@ -28,11 +28,28 @@ class PasswordResetTest extends TestCase
 
         $user = User::factory()->create();
 
-        Volt::test('pages.auth.forgot-password')
+        Livewire::test(ForgotPassword::class)
             ->set('email', $user->email)
-            ->call('sendPasswordResetLink');
+            ->call('sendResetLink')
+            ->assertHasNoErrors();
 
-        Notification::assertSentTo($user, ResetPassword::class);
+        // Notifikasi dikirim on-demand ke email user (bukan ke model).
+        Notification::assertSentOnDemand(
+            CustomResetPassword::class,
+            fn ($notification, $channels, $notifiable) => ($notifiable->routes['mail'] ?? null) === $user->email
+        );
+    }
+
+    public function test_reset_password_link_unknown_email_fails_validation(): void
+    {
+        Notification::fake();
+
+        Livewire::test(ForgotPassword::class)
+            ->set('email', 'tidak-ada@example.com')
+            ->call('sendResetLink')
+            ->assertHasErrors('email');
+
+        Notification::assertNothingSent();
     }
 
     public function test_reset_password_screen_can_be_rendered(): void
@@ -40,45 +57,28 @@ class PasswordResetTest extends TestCase
         Notification::fake();
 
         $user = User::factory()->create();
+        $token = app('auth.password.broker')->createToken($user);
 
-        Volt::test('pages.auth.forgot-password')
-            ->set('email', $user->email)
-            ->call('sendPasswordResetLink');
-
-        Notification::assertSentTo($user, ResetPassword::class, function ($notification) {
-            $response = $this->get('/reset-password/'.$notification->token);
-
-            $response
-                ->assertSeeVolt('pages.auth.reset-password')
-                ->assertStatus(200);
-
-            return true;
-        });
+        $this->get('/reset-password/'.$token.'?email='.$user->email)
+            ->assertOk()
+            ->assertSeeLivewire(ResetPasswordComponent::class);
     }
 
     public function test_password_can_be_reset_with_valid_token(): void
     {
-        Notification::fake();
-
         $user = User::factory()->create();
+        $token = app('auth.password.broker')->createToken($user);
 
-        Volt::test('pages.auth.forgot-password')
-            ->set('email', $user->email)
-            ->call('sendPasswordResetLink');
+        Livewire::withQueryParams(['email' => $user->email])
+            ->test(ResetPasswordComponent::class, ['token' => $token])
+            ->set('password', 'new-password-123')
+            ->set('password_confirmation', 'new-password-123')
+            ->call('resetPassword')
+            ->assertHasNoErrors()
+            ->assertRedirect(route('login'));
 
-        Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
-            $component = Volt::test('pages.auth.reset-password', ['token' => $notification->token])
-                ->set('email', $user->email)
-                ->set('password', 'password')
-                ->set('password_confirmation', 'password');
-
-            $component->call('resetPassword');
-
-            $component
-                ->assertRedirect('/login')
-                ->assertHasNoErrors();
-
-            return true;
-        });
+        $this->assertTrue(
+            \Illuminate\Support\Facades\Hash::check('new-password-123', $user->fresh()->password)
+        );
     }
 }
