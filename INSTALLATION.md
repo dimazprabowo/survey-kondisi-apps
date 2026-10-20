@@ -87,7 +87,7 @@ DB_USERNAME=root
 DB_PASSWORD=your_password_here
 
 # Pastikan juga:
-APP_NAME="Statutoria Monitoring BKI"
+APP_NAME="MANTRA"
 APP_ENV=local
 APP_DEBUG=true
 APP_URL=http://localhost:8000

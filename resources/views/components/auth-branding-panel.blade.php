@@ -36,7 +36,8 @@
                 </div>
                 <div>
                     <h1 class="text-2xl lg:text-3xl font-bold leading-tight">{{ app_name() }}</h1>
-                    <p class="text-sm text-blue-200">PT. Biro Klasifikasi Indonesia</p>
+                    <p class="text-sm text-blue-200">Marine Assessment &amp; Technical Reporting Automation</p>
+                    <p class="text-xs text-blue-300 mt-0.5">PT. Biro Klasifikasi Indonesia</p>
                 </div>
             </div>
 

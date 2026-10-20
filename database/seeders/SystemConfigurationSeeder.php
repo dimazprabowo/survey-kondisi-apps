@@ -14,7 +14,7 @@ class SystemConfigurationSeeder extends Seeder
             [
                 'key' => 'app.name',
                 'category' => 'general',
-                'value' => 'Compasserra',
+                'value' => 'MANTRA',
                 'data_type' => 'string',
                 'description' => 'Nama aplikasi',
                 'is_editable' => true,

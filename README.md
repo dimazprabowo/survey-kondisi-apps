@@ -182,7 +182,7 @@ php artisan reverb:start
 
 ```env
 # Application
-APP_NAME="Boilerplate"
+APP_NAME="MANTRA"
 APP_ENV=local
 APP_DEBUG=true
 APP_URL=http://localhost:8999
