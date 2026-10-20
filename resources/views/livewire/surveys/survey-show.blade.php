@@ -130,17 +130,19 @@
                                             <div class="text-xs text-gray-500 dark:text-gray-400">Diajukan {{ $req->created_at->diffForHumans() }}</div>
                                         </div>
                                         <div class="flex items-center gap-2">
-                                            <x-loading-button wire:click="approveAccess({{ $req->id }})"
-                                                target="approveAccess({{ $req->id }})"
-                                                variant="success" size="sm" loadingText="..." icon="check"
-                                                wire:key="btn-approve-access-{{ $req->id }}" title="Setujui">
-                                                Setujui
-                                            </x-loading-button>
                                             <x-loading-button wire:click="rejectAccess({{ $req->id }})"
                                                 target="rejectAccess({{ $req->id }})"
-                                                variant="danger" size="sm" loadingText="..." icon="close"
-                                                wire:key="btn-reject-access-{{ $req->id }}" title="Tolak">
+                                                variant="icon-red" loadingText="..." icon="close"
+                                                class="px-2.5 py-1.5 gap-1.5 text-sm font-medium rounded-lg border border-red-200 dark:border-red-800/60 hover:border-red-300 dark:hover:border-red-700"
+                                                wire:key="btn-reject-access-{{ $req->id }}" title="Tolak permintaan {{ $req->requester->name }}">
                                                 Tolak
+                                            </x-loading-button>
+                                            <x-loading-button wire:click="approveAccess({{ $req->id }})"
+                                                target="approveAccess({{ $req->id }})"
+                                                variant="icon-green" loadingText="..." icon="check"
+                                                class="px-2.5 py-1.5 gap-1.5 text-sm font-medium rounded-lg border border-green-400 dark:border-green-600 text-green-700 dark:text-green-300 hover:border-green-500 dark:hover:border-green-500"
+                                                wire:key="btn-approve-access-{{ $req->id }}" title="Setujui akses edit {{ $req->requester->name }}">
+                                                Setujui
                                             </x-loading-button>
                                         </div>
                                     </li>
@@ -159,8 +161,8 @@
                                             <span class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ $req->requester->name }}</span>
                                             <span class="px-2 py-0.5 text-xs font-medium rounded-full {{ $req->status->badgeClass() }}">{{ $req->status->label() }}</span>
                                         </div>
-                                        <x-loading-button wire:click="revokeAccess({{ $req->id }})"
-                                            target="revokeAccess({{ $req->id }})"
+                                        <x-loading-button wire:click="confirmRevokeAccess({{ $req->id }})"
+                                            target="confirmRevokeAccess({{ $req->id }})"
                                             variant="icon-red" loadingText="..."
                                             class="px-2.5 py-1.5 gap-1.5 text-sm font-medium rounded-lg border border-red-200 dark:border-red-800/60 hover:border-red-300 dark:hover:border-red-700"
                                             wire:key="btn-revoke-access-{{ $req->id }}" title="Cabut akses edit {{ $req->requester->name }}">
@@ -414,8 +416,14 @@
                 @if(auth()->user()->can('surveys_update'))
                     @php $myRequest = $this->myAccessRequest; @endphp
                     @if($myRequest?->status === \App\Enums\SurveyAccessStatus::Pending)
-                        <span class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 w-full sm:w-auto justify-center" title="Permintaan akses menunggu persetujuan pemilik">
+                        <span class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 w-full sm:w-auto justify-center" title="Permintaan akses menunggu persetujuan pemilik">
                             Menunggu Persetujuan Pemilik
+                            <x-loading-button wire:click="confirmCancelAccessRequest" target="confirmCancelAccessRequest"
+                                variant="icon-amber" loadingText="..." icon="close" iconClass="w-3.5 h-3.5"
+                                class="px-2 py-1 gap-1 text-xs font-medium rounded border border-amber-300 dark:border-amber-700 hover:bg-amber-200/60 dark:hover:bg-amber-800/50"
+                                wire:key="btn-cancel-access-request" title="Batalkan permintaan akses edit">
+                                Batalkan
+                            </x-loading-button>
                         </span>
                     @else
                         <x-loading-button wire:click="requestAccess" target="requestAccess" variant="warning" size="md" loadingText="Mengirim..." icon="send" class="w-full sm:w-auto">
@@ -426,4 +434,7 @@
             @endcan
         </div>
     </div>
+
+    <x-confirm-modal eventName="confirm-revoke-access" />
+    <x-confirm-modal eventName="confirm-cancel-access-request" />
 </div>

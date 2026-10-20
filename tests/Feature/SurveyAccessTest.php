@@ -113,6 +113,29 @@ class SurveyAccessTest extends TestCase
         ]);
     }
 
+    public function test_multiple_collaborators_have_independent_access(): void
+    {
+        $owner = $this->userWith();
+        $survey = $this->survey($owner);
+        $service = app(SurveyService::class);
+        [$a, $b, $c] = [$this->userWith('surveys_update'), $this->userWith('surveys_update'), $this->userWith('surveys_update')];
+
+        foreach ([$a, $b, $c] as $user) {
+            $service->decideAccessRequest($service->requestEditAccess($survey, $user), true, $owner);
+        }
+
+        foreach ([$a, $b, $c] as $user) {
+            $this->assertTrue($user->can('update', $survey->fresh()));
+        }
+
+        // Cabut satu kolaborator — yang lain tetap punya akses
+        $service->revokeAccess($survey->accessRequests()->where('user_id', $b->id)->first());
+
+        $this->assertTrue($a->can('update', $survey->fresh()));
+        $this->assertFalse($b->can('update', $survey->fresh()));
+        $this->assertTrue($c->can('update', $survey->fresh()));
+    }
+
     public function test_rejected_request_denies_edit_access(): void
     {
         $owner = $this->userWith();
@@ -197,5 +220,78 @@ class SurveyAccessTest extends TestCase
             ->call('approveAccess', $request->id);
 
         $this->assertSame('approved', $request->fresh()->status->value);
+    }
+
+    public function test_requester_can_cancel_own_pending_request(): void
+    {
+        $owner = $this->userWith('surveys_view');
+        $requester = $this->userWith('surveys_view', 'surveys_update');
+        $survey = $this->survey($owner);
+        $this->actingAs($requester);
+
+        app(SurveyService::class)->requestEditAccess($survey, $requester);
+
+        Livewire::test(SurveyShow::class, ['survey' => $survey])
+            ->call('confirmCancelAccessRequest')
+            ->assertDispatched('confirm-cancel-access-request')
+            ->call('cancelAccessRequest')
+            ->assertDispatched('confirm-cancel-access-request-close');
+
+        $this->assertDatabaseMissing('survey_access_requests', [
+            'survey_id' => $survey->id,
+            'user_id' => $requester->id,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $owner->id,
+            'type' => 'info',
+        ]);
+    }
+
+    public function test_requester_cannot_cancel_others_or_approved_request(): void
+    {
+        $owner = $this->userWith('surveys_view');
+        $requester = $this->userWith('surveys_view', 'surveys_update');
+        $outsider = $this->userWith('surveys_view', 'surveys_update');
+        $survey = $this->survey($owner);
+        $service = app(SurveyService::class);
+
+        $request = $service->requestEditAccess($survey, $requester);
+
+        // Orang lain tidak bisa membatalkan permintaan pemohon
+        $this->actingAs($outsider);
+        Livewire::test(SurveyShow::class, ['survey' => $survey])
+            ->call('cancelAccessRequest')
+            ->assertNotFound();
+
+        // Setelah disetujui, pembatalan diri tidak berlaku — lewat revoke pemilik
+        $service->decideAccessRequest($request->fresh(), true, $owner);
+        $this->actingAs($requester);
+        Livewire::test(SurveyShow::class, ['survey' => $survey->fresh()])
+            ->call('cancelAccessRequest')
+            ->assertForbidden();
+    }
+
+    public function test_revoke_requires_confirmation_modal(): void
+    {
+        $owner = $this->userWith('surveys_view');
+        $requester = $this->userWith('surveys_update');
+        $survey = $this->survey($owner);
+        $service = app(SurveyService::class);
+
+        $request = $service->requestEditAccess($survey, $requester);
+        $service->decideAccessRequest($request->fresh(), true, $owner);
+
+        $this->actingAs($owner);
+        Livewire::test(SurveyShow::class, ['survey' => $survey->fresh()])
+            ->call('confirmRevokeAccess', $request->id)
+            ->assertDispatched('confirm-revoke-access')
+            ->call('revokeAccess', $request->id)
+            ->assertDispatched('confirm-revoke-access-close');
+
+        $this->assertDatabaseMissing('survey_access_requests', ['id' => $request->id]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $requester->id,
+            'type' => 'warning',
+        ]);
     }
 }

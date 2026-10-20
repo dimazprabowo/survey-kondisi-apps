@@ -354,6 +354,27 @@ class SurveyService
     }
 
     /**
+     * Pembatalan permintaan akses oleh pemohon sendiri saat masih pending.
+     * Pemilik mendapat notifikasi realtime (sama seperti saat pengajuan).
+     */
+    public function cancelEditAccess(SurveyAccessRequest $request, User $requester): void
+    {
+        DB::transaction(fn () => $request->delete());
+
+        $survey = $request->survey;
+        if ($survey->created_by) {
+            NotificationService::send(
+                $survey->created_by,
+                'Permintaan Akses Edit Dibatalkan',
+                "{$requester->name} membatalkan permintaan akses edit untuk survey {$survey->survey_number}.",
+                'info',
+                null,
+                route('surveys.show', $survey)
+            );
+        }
+    }
+
+    /**
      * Cabut akses kolaborator yang sudah disetujui. Dipanggil setelah
      * authorize 'manageAccess'.
      */

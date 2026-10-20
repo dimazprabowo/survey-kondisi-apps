@@ -4,6 +4,8 @@ namespace App\Livewire\Surveys;
 
 use App\Enums\ShipClassStatus;
 use App\Enums\SurveyStatus;
+use App\Events\SurveyContentUpdated;
+use App\Events\SurveySectionFocus;
 use App\Livewire\Traits\HasNotification;
 use App\Models\Ship;
 use App\Models\Survey;
@@ -12,7 +14,10 @@ use App\Services\ShipService;
 use App\Services\SurveyService;
 use App\Services\SurveyTemplateService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -92,6 +97,14 @@ class SurveyForm extends Component
     // True jika ada draft yang ter-restore saat mount (form punya perubahan tersimpan)
     public bool $hasDraft = false;
 
+    // Versi konten saat form dimuat (updated_at survey) — dipakai untuk
+    // mendeteksi kolaborator lain yang sudah menyimpan selama kita mengedit.
+    public ?string $loadedVersion = null;
+
+    // True setelah user mengonfirmasi modal "Timpa perubahan" — persist
+    // berikutnya melewati cek konflik remote satu kali.
+    public bool $allowOverwrite = false;
+
     // Working copy struktur survey (snapshot) — sumber tunggal render & hapus node
     public array $structureTree = ['categories' => []];
 
@@ -123,15 +136,19 @@ class SurveyForm extends Component
     // Per-request cache index hierarki struktur (tidak diserialisasi Livewire)
     protected ?array $structureIndexCache = null;
 
+    /** Umur draft/tab/baseline sinkron di cache sejak terakhir ditulis. */
+    protected const WORK_STATE_TTL_HOURS = 24;
+
     public function mount(?Survey $survey = null)
     {
-        $this->autoSave = session()->get('survey_autosave', true);
+        $this->autoSave = Cache::get($this->autoSaveKey(), true);
 
         if ($survey && $survey->exists) {
             $this->authorize('update', $survey);
             $this->survey = $survey;
             $this->editMode = true;
             $this->surveyId = $survey->id;
+            $this->loadedVersion = $survey->updated_at?->toIso8601String();
             // Survey "Kapal Baru" (ship_id null) tampil sebagai opsi sentinel.
             if ($survey->ship_id === null) {
                 $this->isNewShip = true;
@@ -189,6 +206,8 @@ class SurveyForm extends Component
                     // Param tidak valid — pakai tab default/draft
                 }
             }
+
+            $this->resetCollabBaseline();
         } else {
             $this->authorize('create', Survey::class);
             $this->survey_date = now()->format('Y-m-d');
@@ -903,12 +922,25 @@ class SurveyForm extends Component
             if ($this->editMode) {
                 $survey = Survey::findOrFail($this->surveyId);
                 $this->authorize('update', $survey);
+
+                // Kolaborator lain sudah menyimpan selama kita mengedit →
+                // jangan timpa diam-diam; minta konfirmasi via modal dulu.
+                if ($this->hasRemoteConflict($survey)) {
+                    return;
+                }
+
                 $survey = $syncShip
                     ? $service->saveWithShipSync($survey, $data, $this->responses, $this->groupNotes)
                     : tap($survey, function () use ($service, $survey, $data) {
                         $service->update($survey, $data);
                         $service->saveResponses($survey->id, $this->responses, $this->groupNotes);
                     });
+                // Touch memastikan updated_at & updated_by ikut berubah meski
+                // hanya responses/notes yang beda — jadi penanda versi konten.
+                $survey->touch();
+                $this->loadedVersion = $survey->fresh()->updated_at?->toIso8601String();
+                $this->allowOverwrite = false;
+                $this->broadcastContentUpdated();
                 $this->clearDraft();
                 $this->notifySuccess($syncShip
                     ? 'Survey diupdate & master data kapal berhasil disinkronkan!'
@@ -946,6 +978,137 @@ class SurveyForm extends Component
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
+        }
+    }
+
+    /**
+     * True bila survey sudah disimpan pihak lain sejak form dimuat —
+     * persist di-intercept dan user diminta konfirmasi lewat modal
+     * "Timpa Perubahan" (dilanjutkan confirmOverwriteSave).
+     */
+    protected function hasRemoteConflict(Survey $survey): bool
+    {
+        if ($this->allowOverwrite || ! $this->loadedVersion) {
+            return false;
+        }
+
+        $remoteNewer = $survey->updated_at
+            && $survey->updated_at->gt(\Illuminate\Support\Carbon::parse($this->loadedVersion));
+
+        if (! $remoteNewer || ! $survey->updated_by || $survey->updated_by === auth()->id()) {
+            return false;
+        }
+
+        $editorName = $survey->updater?->name ?? 'pengguna lain';
+        $this->dispatch('confirm-overwrite-survey',
+            action: 'confirmOverwriteSave',
+            title: 'Timpa Perubahan Kolaborator?',
+            message: "{$editorName} baru saja menyimpan perubahan pada survey ini. Jika Anda lanjut menyimpan, perubahannya akan tertimpa oleh isian Anda.",
+            confirmText: 'Ya, Timpa & Simpan',
+            cancelText: 'Batal',
+            type: 'warning',
+        );
+
+        return true;
+    }
+
+    /**
+     * Dipanggil dari modal konfirmasi timpa — persist dilanjutkan satu kali
+     * tanpa cek konflik ulang.
+     */
+    public function confirmOverwriteSave(SurveyService $service)
+    {
+        $this->allowOverwrite = true;
+        $this->dispatch('confirm-overwrite-survey-close');
+
+        return $this->persistSurvey($service, false);
+    }
+
+    /**
+     * Broadcast posisi tab sub-kategori ke editor lain — dipicu Alpine saat
+     * activeSubCategory berubah dan sekali saat presence join.
+     */
+    public function broadcastFocus($subCategoryId): void
+    {
+        if (! $this->editMode) {
+            return;
+        }
+
+        $this->authorizeFormMutation();
+
+        // Sengaja tanpa toOthers(): Livewire mengirim header X-Socket-ID
+        // "undefined" saat Echo belum/ulang tersambung → Pusher melempar
+        // "Invalid socket ID" dan event hilang. Echo sendiri difilter di
+        // client via user_id (berlaku untuk semua broadcast kolaborasi).
+        try {
+            broadcast(new SurveySectionFocus(
+                (int) $this->surveyId,
+                (int) auth()->id(),
+                auth()->user()->name,
+                $subCategoryId ? (int) $subCategoryId : null,
+            ));
+        } catch (\Throwable $e) {
+            // WebSocket down tidak boleh mengganggu pengisian form.
+            Log::debug('SurveySectionFocus broadcast gagal: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Muat ulang isi form dari DB setelah kolaborator lain menyimpan —
+     * dipanggil Alpine hanya bila form lokal bersih (tanpa perubahan
+     * pending) agar isian user tidak tertimpa.
+     */
+    public function refreshCollaborativeState(string $editorName): void
+    {
+        if (! $this->editMode) {
+            return;
+        }
+
+        $survey = Survey::findOrFail($this->surveyId);
+        $this->authorize('update', $survey);
+        $this->survey = $survey;
+
+        $this->isNewShip = $survey->ship_id === null;
+        $this->ship_id = $this->isNewShip ? self::NEW_SHIP_VALUE : $survey->ship_id;
+        // "Kapal Baru" wajib mode edit aktif — samakan perilaku mount().
+        $this->editShipData = $this->editShipData || $this->isNewShip;
+        $this->survey_template_id = $survey->survey_template_id;
+        $this->survey_date = $survey->survey_date?->format('Y-m-d');
+        $this->surveyor = $survey->surveyor;
+        $this->location = $survey->location;
+        $this->status = $survey->status->value;
+        $this->notes = $survey->notes;
+
+        $this->loadShipData($survey);
+
+        $this->structureTree = $survey->structure
+            ?? app(SurveyService::class)->buildStructureSnapshot($survey->survey_template_id)
+            ?? ['categories' => []];
+        $this->structureIndexCache = null;
+
+        $this->loadResponses();
+        $this->fixActiveTabs();
+        $this->loadedVersion = $survey->updated_at?->toIso8601String();
+        $this->resetCollabBaseline();
+
+        $this->notifyInfo("Survey diperbarui oleh {$editorName} — data terbaru dimuat otomatis.");
+    }
+
+    /**
+     * Beri tahu editor lain di presence channel bahwa survey baru disimpan.
+     */
+    protected function broadcastContentUpdated(): void
+    {
+        try {
+            broadcast(new SurveyContentUpdated(
+                (int) $this->surveyId,
+                (int) auth()->id(),
+                auth()->user()->name,
+                version: $this->loadedVersion,
+            ));
+        } catch (\Throwable $e) {
+            // Kegagalan broadcast tidak boleh membatalkan simpan.
+            Log::debug('SurveyContentUpdated broadcast gagal: '.$e->getMessage());
         }
     }
 
@@ -1270,12 +1433,17 @@ class SurveyForm extends Component
     }
 
     /**
-     * Toggle auto-save draft on/off (preferensi disimpan di session).
+     * Toggle auto-save draft on/off (preferensi per user, permanen).
      */
     public function toggleAutoSave()
     {
         $this->autoSave = ! $this->autoSave;
-        session()->put('survey_autosave', $this->autoSave);
+        Cache::forever($this->autoSaveKey(), $this->autoSave);
+    }
+
+    protected function autoSaveKey(): string
+    {
+        return 'survey_autosave:'.auth()->id();
     }
 
     /**
@@ -2014,47 +2182,59 @@ class SurveyForm extends Component
     }
 
     /**
-     * Session key untuk draft — terpisah per mode agar draft create
-     * tidak tabrakan dengan draft edit survey lain.
+     * Key state kerja form (draft / tab / baseline sinkron) per user —
+     * terpisah per mode agar draft create tidak tabrakan dengan draft
+     * edit survey lain.
+     *
+     * Disimpan di Cache per-key, BUKAN session: session database ditulis
+     * utuh di akhir setiap request, sehingga request paralel (wire:poll
+     * notifikasi/chat di layout) menimpa balik nilai yang baru ditulis
+     * form → tab kembali ke kategori lama saat refresh, baseline sinkron
+     * hilang, dsb. Cache menulis tiap key secara independen.
      */
     protected function draftKey(): string
     {
-        return $this->editMode
-            ? 'survey_draft_edit_'.$this->surveyId
-            : 'survey_draft_create_'.$this->survey_template_id;
+        return 'survey_form:'.auth()->id().':'.($this->editMode
+            ? 'edit_'.$this->surveyId
+            : 'create_'.$this->survey_template_id);
     }
 
     /**
-     * Session key untuk posisi tab kategori aktif — dipisah dari draft
-     * agar tersimpan langsung saat ganti tab (tidak menunggu interval
-     * auto-save) dan bertahan saat refresh meski auto-save nonaktif.
+     * Key posisi tab kategori aktif — dipisah dari draft agar tersimpan
+     * langsung saat ganti tab (tidak menunggu interval auto-save) dan
+     * bertahan saat refresh meski auto-save nonaktif.
      */
     protected function tabKey(): string
     {
-        return $this->draftKey().'_tab';
+        return $this->draftKey().':tab';
+    }
+
+    protected function putWorkState(string $key, mixed $value): void
+    {
+        Cache::put($key, $value, now()->addHours(self::WORK_STATE_TTL_HOURS));
     }
 
     /**
-     * Persist posisi tab (UI state murni) ke session — dipanggil setiap
-     * kali tab aktif berubah: setCategory, setSubCategory, append node,
-     * dan fixActiveTabs.
+     * Persist posisi tab (UI state murni) — dipanggil setiap kali tab
+     * aktif berubah: setCategory, setSubCategory, append node, dan
+     * fixActiveTabs.
      */
     protected function persistActiveTab(): void
     {
-        session()->put($this->tabKey(), [
+        $this->putWorkState($this->tabKey(), [
             'category' => $this->activeCategory,
             'sub' => $this->activeSubCategory,
         ]);
     }
 
     /**
-     * Restore posisi tab dari session — dipanggil di mount setelah
-     * loadDraft agar nilai terbaru (yang ditulis tiap ganti tab) menang
-     * atas copy di draft, dan tetap bisa di-override deep-link ?category=.
+     * Restore posisi tab — dipanggil di mount setelah loadDraft agar
+     * nilai terbaru (yang ditulis tiap ganti tab) menang atas copy di
+     * draft, dan tetap bisa di-override deep-link ?category=.
      */
     protected function restoreActiveTab(): void
     {
-        $tab = session()->get($this->tabKey());
+        $tab = Cache::get($this->tabKey());
         $activeCat = $this->categories->firstWhere('id', $tab['category'] ?? null);
 
         if (! $activeCat) {
@@ -2069,17 +2249,89 @@ class SurveyForm extends Component
     }
 
     /**
-     * Save draft to Livewire session (called from Alpine auto-save).
+     * Dipanggil Alpine (debounce) setiap form berubah: simpan draft
+     * bila Auto Save aktif, dan — di mode edit — selalu sinkronkan field
+     * yang berubah ke kolaborator (independen dari toggle Auto Save).
      */
     public function saveDraft()
     {
         $this->authorizeFormMutation();
 
-        if (! $this->autoSave) {
+        if ($this->autoSave) {
+            $this->putWorkState($this->draftKey(), $this->draftPayload());
+        }
+
+        if ($this->editMode) {
+            $this->syncCollaborators();
+        }
+    }
+
+    /**
+     * Terapkan perubahan per-field dari kolaborator (payload event draft).
+     * Lewat request Livewire — bukan `$set` lokal di client — agar ikut
+     * antrean commit: nilai tidak tertimpa respons request lain yang
+     * sedang berjalan saat perubahan datang beruntun.
+     *
+     * Hanya path yang ada di snapshot kolaboratif yang diterima (whitelist),
+     * dan baseline path tsb ikut diperbarui agar tidak dipantulkan balik.
+     *
+     * @param  array<string, mixed>  $changes
+     */
+    public function applyRemoteChanges(array $changes): void
+    {
+        if (! $this->editMode) {
             return;
         }
 
-        session()->put($this->draftKey(), [
+        $this->authorize('update', Survey::findOrFail($this->surveyId));
+
+        $allowed = $this->collabSnapshot();
+        $baseline = Cache::get($this->collabKey()) ?? $allowed;
+        $appliedPaths = [];
+
+        foreach ($changes as $path => $value) {
+            if (! $this->isCollabPath($path, $allowed)) {
+                continue;
+            }
+
+            [$prop, $key] = array_pad(explode('.', $path, 2), 2, null);
+            if ($key === null) {
+                $this->{$prop} = match ($prop) {
+                    'isNewShip', 'editShipData' => (bool) $value,
+                    'shipCertificates' => $this->certificatesWithKeys(is_array($value) ? $value : []),
+                    default => $value,
+                };
+            } else {
+                // Path bertingkat (responses.12.scores.C) — set hanya leaf
+                // tsb, field lain di baris yang sama tidak tersentuh.
+                $data = $this->{$prop};
+                Arr::set($data, $key, $prop === 'groupNotes' && ! str_contains($key, '.') ? array_values((array) $value) : $value);
+                $this->{$prop} = $data;
+            }
+
+            $appliedPaths[] = $path;
+        }
+
+        if ($appliedPaths === []) {
+            return;
+        }
+
+        // Selaraskan baseline untuk path yang diterapkan (nilai pasca-
+        // normalisasi, termasuk baris catatan yang hilang) agar diff
+        // berikutnya tidak memantulkannya balik sebagai perubahan lokal.
+        $snapshot = $this->collabSnapshot();
+        foreach ($appliedPaths as $path) {
+            $inScope = fn ($k) => $k === $path || str_starts_with($k, $path.'.');
+            $baseline = array_filter($baseline, fn ($k) => ! $inScope($k), ARRAY_FILTER_USE_KEY)
+                + array_filter($snapshot, $inScope, ARRAY_FILTER_USE_KEY);
+        }
+
+        $this->putWorkState($this->collabKey(), $baseline);
+    }
+
+    protected function draftPayload(): array
+    {
+        return [
             'ship_id' => $this->ship_id,
             'is_new_ship' => $this->isNewShip,
             'edit_ship_data' => $this->editShipData,
@@ -2095,8 +2347,189 @@ class SurveyForm extends Component
             'structure' => $this->structureTree,
             'activeCategory' => $this->activeCategory,
             'activeSubCategory' => $this->activeSubCategory,
+            'user_name' => auth()->user()->name,
             'saved_at' => now()->toIso8601String(),
-        ]);
+        ];
+    }
+
+    /**
+     * Snapshot datar field kolaboratif — key = path properti Livewire
+     * sampai level FIELD (mis. `responses.12.scores.C`, `.date_issued`,
+     * `groupNotes.5.0`), karena satu baris item bisa berisi beberapa
+     * field yang diisi editor berbeda bersamaan. Struktur hanya di-hash:
+     * perubahannya dikirim sebagai flag lalu remote memuat payload penuh.
+     */
+    protected function collabSnapshot(): array
+    {
+        $snapshot = [
+            'ship_id' => $this->ship_id,
+            'isNewShip' => $this->isNewShip,
+            'editShipData' => $this->editShipData,
+            'survey_date' => $this->survey_date,
+            'surveyor' => $this->surveyor,
+            'location' => $this->location,
+            'status' => $this->status,
+            'notes' => $this->notes,
+            'shipCertificates' => $this->shipCertificates,
+            'structureTree' => md5(json_encode($this->structureTree)),
+        ];
+
+        foreach ($this->shipData as $key => $value) {
+            $snapshot["shipData.{$key}"] = $value;
+        }
+        $snapshot += Arr::dot($this->responses, 'responses.');
+
+        // Catatan grup per baris catatan; grup kosong tetap punya key agar
+        // penambahan catatan pertama terdeteksi sebagai perubahan daftar.
+        foreach ($this->groupNotes as $groupId => $notes) {
+            $notes = (array) $notes;
+            if ($notes === []) {
+                $snapshot["groupNotes.{$groupId}"] = [];
+            } else {
+                $snapshot += Arr::dot($notes, "groupNotes.{$groupId}.");
+            }
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * Path yang boleh diterapkan dari kolaborator: field yang ada di
+     * snapshot, atau daftar/baris catatan pada grup yang sudah ada
+     * (catatan bisa ditambah/dihapus sehingga index baru belum ada).
+     */
+    protected function isCollabPath(string $path, array $snapshot): bool
+    {
+        if ($path === 'structureTree') {
+            return false;
+        }
+
+        if (array_key_exists($path, $snapshot)) {
+            return true;
+        }
+
+        return preg_match('/^groupNotes\.(\d+)(?:\.\d+)?$/', $path, $m) === 1
+            && array_key_exists((int) $m[1], $this->groupNotes);
+    }
+
+    /**
+     * Baseline sinkron per editor (sesi) — diff berikutnya dihitung dari
+     * sini, jadi hanya field yang benar-benar diubah editor ini yang terkirim.
+     */
+    protected function resetCollabBaseline(): void
+    {
+        $this->putWorkState($this->collabKey(), $this->collabSnapshot());
+    }
+
+    protected function collabKey(): string
+    {
+        return $this->draftKey().':collab';
+    }
+
+    /**
+     * Broadcast field yang berubah sejak sinkron terakhir. Nilai ikut di
+     * payload event (bukan sekadar ping) → remote langsung menerapkannya
+     * per-field tanpa menimpa field lain yang sedang ia isi.
+     */
+    protected function syncCollaborators(): void
+    {
+        $baseline = Cache::get($this->collabKey());
+        $current = $this->collabSnapshot();
+        $this->putWorkState($this->collabKey(), $current);
+
+        if (! is_array($baseline)) {
+            return;
+        }
+
+        $structureChanged = ($baseline['structureTree'] ?? null) !== $current['structureTree'];
+        unset($current['structureTree']);
+
+        $changes = [];
+        foreach ($current as $key => $value) {
+            if (! array_key_exists($key, $baseline) || $baseline[$key] != $value) {
+                $changes[$key] = $value;
+            }
+        }
+
+        // Daftar catatan grup berubah panjang (tambah/hapus baris) → kirim
+        // daftar utuh grup tsb agar baris yang hilang ikut terhapus di remote.
+        $countsBefore = [];
+        foreach (array_keys($baseline) as $key) {
+            if (preg_match('/^groupNotes\.(\d+)\.\d+$/', $key, $m) === 1) {
+                $countsBefore[(int) $m[1]] = ($countsBefore[(int) $m[1]] ?? 0) + 1;
+            }
+        }
+        foreach ($this->groupNotes as $groupId => $notes) {
+            if (($countsBefore[$groupId] ?? 0) === count((array) $notes)) {
+                continue;
+            }
+            $group = "groupNotes.{$groupId}";
+            $changes = array_filter($changes, fn ($k) => $k !== $group && ! str_starts_with($k, $group.'.'), ARRAY_FILTER_USE_KEY);
+            $changes[$group] = array_values((array) $notes);
+        }
+
+        // Payload besar (mis. banyak field sekaligus) → kirim flag saja,
+        // remote memuat payload penuh dari cache (batas pesan WebSocket).
+        if ($structureChanged || strlen(json_encode($changes)) > 8000) {
+            Cache::put($this->sharedDraftKey((int) auth()->id()), $this->draftPayload(), now()->addHours(2));
+            $structureChanged = true;
+            $changes = [];
+        }
+
+        if ($changes === [] && ! $structureChanged) {
+            return;
+        }
+
+        try {
+            broadcast(new SurveyContentUpdated(
+                (int) $this->surveyId,
+                (int) auth()->id(),
+                auth()->user()->name,
+                'draft',
+                $changes,
+                $structureChanged,
+            ));
+        } catch (\Throwable $e) {
+            // WebSocket down tidak boleh mengganggu pengisian form.
+            Log::debug('SurveyContentUpdated (draft) broadcast gagal: '.$e->getMessage());
+        }
+    }
+
+    protected function sharedDraftKey(int $userId): string
+    {
+        return "survey_shared_draft:{$this->surveyId}:{$userId}";
+    }
+
+    /**
+     * Muat payload penuh kolaborator dari cache — dipakai saat struktur
+     * berubah atau perubahan terlalu besar untuk dikirim per-field.
+     */
+    public function applyRemoteDraft(int $userId): void
+    {
+        if (! $this->editMode) {
+            return;
+        }
+
+        $survey = Survey::findOrFail($this->surveyId);
+        $this->authorize('update', $survey);
+
+        $draft = Cache::get($this->sharedDraftKey($userId));
+        if (! is_array($draft) || $draft === []) {
+            return;
+        }
+
+        $this->applyDraftPayload($draft);
+        $this->fixActiveTabs();
+
+        // Jadikan draft lokal juga — refresh halaman tetap memuat
+        // isian yang sama, bukan versi DB yang lebih tua.
+        $this->putWorkState($this->draftKey(), $draft);
+        $this->hasDraft = true;
+        $this->resetCollabBaseline();
+
+        // Nama kolaborator ikut payload agar indikator live-sync hanya
+        // tampil setelah draft benar-benar diterapkan (bukan no-op).
+        $this->dispatch('remote-draft-applied', name: $draft['user_name'] ?? null);
     }
 
     /**
@@ -2104,16 +2537,30 @@ class SurveyForm extends Component
      */
     protected function loadDraft(): bool
     {
-        $draft = session()->get($this->draftKey());
+        $draft = Cache::get($this->draftKey());
 
         if (! $draft || empty($draft['responses'])) {
             return false;
         }
 
-        $this->ship_id = $draft['ship_id'];
-        $this->isNewShip = (bool) ($draft['is_new_ship'] ?? ($draft['ship_id'] === self::NEW_SHIP_VALUE));
+        $this->applyDraftPayload($draft);
+        $this->restoreDraftTabs($draft);
+
+        return true;
+    }
+
+    /**
+     * Terapkan payload draft (sesi sendiri maupun draft bersama dari
+     * kolaborator) ke state form. Tidak menyentuh tab aktif — navigasi
+     * tab milik masing-masing editor (dipulihkan terpisah via
+     * restoreDraftTabs untuk draft sesi).
+     */
+    protected function applyDraftPayload(array $draft): void
+    {
+        $this->ship_id = $draft['ship_id'] ?? $this->ship_id;
+        $this->isNewShip = (bool) ($draft['is_new_ship'] ?? (($draft['ship_id'] ?? null) === self::NEW_SHIP_VALUE));
         $this->editShipData = (bool) ($draft['edit_ship_data'] ?? $this->isNewShip);
-        $this->survey_date = $draft['survey_date'];
+        $this->survey_date = $draft['survey_date'] ?? $this->survey_date;
 
         // Snapshot kapal ikut draft — override isian dari ship/master.
         if (is_array($draft['shipData'] ?? null)) {
@@ -2122,10 +2569,10 @@ class SurveyForm extends Component
         if (is_array($draft['shipCertificates'] ?? null)) {
             $this->shipCertificates = $this->certificatesWithKeys($draft['shipCertificates']);
         }
-        $this->surveyor = $draft['surveyor'];
-        $this->location = $draft['location'];
-        $this->status = $draft['status'];
-        $this->notes = $draft['notes'];
+        $this->surveyor = $draft['surveyor'] ?? $this->surveyor;
+        $this->location = $draft['location'] ?? $this->location;
+        $this->status = $draft['status'] ?? $this->status;
+        $this->notes = $draft['notes'] ?? $this->notes;
 
         // Restore working copy struktur bila draft menyimpan hasil pemangkasan,
         // lalu re-init responses/notes agar selaras dengan struktur itu.
@@ -2148,7 +2595,14 @@ class SurveyForm extends Component
                 $this->groupNotes[$groupId] = $draft['groupNotes'][$groupId];
             }
         }
+    }
 
+    /**
+     * Restore posisi tab dari payload draft sesi — hanya untuk draft
+     * milik sendiri di mount, bukan untuk draft kolaborator.
+     */
+    protected function restoreDraftTabs(array $draft): void
+    {
         $this->activeCategory = $draft['activeCategory'] ?? $this->activeCategory;
 
         // Restore sub-category tab, fall back ke sub pertama dari kategori aktif
@@ -2157,8 +2611,6 @@ class SurveyForm extends Component
         $this->activeSubCategory = $activeCat?->subCategories->contains('id', $draftSubId)
             ? $draftSubId
             : $activeCat?->subCategories->first()?->id;
-
-        return true;
     }
 
     /**
@@ -2166,8 +2618,13 @@ class SurveyForm extends Component
      */
     protected function clearDraft(): void
     {
-        session()->forget($this->draftKey());
-        session()->forget($this->tabKey());
+        Cache::forget($this->draftKey());
+        Cache::forget($this->tabKey());
+        Cache::forget($this->collabKey());
+
+        if ($this->editMode) {
+            Cache::forget($this->sharedDraftKey((int) auth()->id()));
+        }
     }
 
     public function render()

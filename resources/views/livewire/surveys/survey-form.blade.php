@@ -3,12 +3,28 @@
         autoSaveTimer: null,
         lastSaved: null,
         dirty: false,
+        // Kolaborasi realtime (Reverb presence channel survey.{id})
+        myId: {{ (int) auth()->id() }},
+        collaborators: [],
+        focusMap: {},
+        // Sinkron per-field: pendingRemote = batch perubahan kolaborator
+        // yang menunggu diterapkan; pendingSince = awal ketikan lokal yang
+        // belum tersinkron (batas tunggu maksimum saat mengetik terus);
+        // liveSyncBy/Text = indikator transien di action bar.
+        pendingRemote: {},
+        pendingRemoteTimer: null,
+        pendingSince: null,
+        liveSyncBy: null,
+        liveSyncText: '',
+        liveSyncTimer: null,
         // State collapse per item-group bertahan di root — tidak ikut
         // re-init saat Livewire morph (mis. pindah tab lalu kembali)
         collapsedGroups: {},
         init() {
             // Draft yang ter-restore = form sudah punya perubahan
             this.dirty = !! this.$wire.hasDraft;
+            this.initCollab();
+            this.consumeDeepLink();
             // Watch top-level scalars (covers programmatic changes like searchable-select)
             this.$wire.$watch('ship_id', () => this.onFieldChange('ship_id'));
             this.$wire.$watch('survey_date', () => this.onFieldChange());
@@ -24,6 +40,80 @@
             this.$wire.$watch('activeCategory', () => requestAnimationFrame(() => this.scrollActiveTabs()));
             this.$wire.$watch('activeSubCategory', () => requestAnimationFrame(() => this.scrollActiveTabs()));
             requestAnimationFrame(() => this.scrollActiveTabs());
+        },
+        // Deep-link ?category=&sub= (dari halaman detail) hanya untuk
+        // pembukaan pertama — hapus dari URL agar refresh memakai posisi
+        // tab terakhir, bukan kembali ke tab saat tombol Edit diklik.
+        consumeDeepLink() {
+            const url = new URL(window.location.href);
+            if (! url.searchParams.has('category') && ! url.searchParams.has('sub')) return;
+            url.searchParams.delete('category');
+            url.searchParams.delete('sub');
+            history.replaceState(history.state, '', url);
+        },
+        initCollab() {
+            if (! this.$wire.editMode || ! window.Echo) return;
+            const channel = 'survey.' + this.$wire.surveyId;
+            // Re-init setelah wire:navigate — lepas dulu agar tidak double-join
+            window.Echo.leave(channel);
+            window.Echo.join(channel)
+                .here((members) => {
+                    this.collaborators = members.filter((m) => m.id !== this.myId);
+                })
+                .joining((member) => {
+                    if (member.id !== this.myId && ! this.collaborators.some((c) => c.id === member.id)) {
+                        this.collaborators.push(member);
+                    }
+                    // Anggota baru (mis. habis refresh) belum tahu posisi
+                    // tab kita — kirim ulang agar chip langsung tampil.
+                    if (this.$wire.activeSubCategory) this.$wire.broadcastFocus(this.$wire.activeSubCategory);
+                })
+                .leaving((member) => {
+                    this.collaborators = this.collaborators.filter((c) => c.id !== member.id);
+                    delete this.focusMap[member.id];
+                })
+                .error((e) => console.warn('[collab] gagal join presence channel', e))
+                .listen('SurveySectionFocus', (e) => {
+                    if (e.user_id === this.myId) return;
+                    this.focusMap[e.user_id] = e.sub_category_id;
+                })
+                .listen('SurveyContentUpdated', (e) => {
+                    if (e.user_id === this.myId) return;
+                    if (e.kind === 'draft') {
+                        this.queueRemoteChanges(e);
+                        return;
+                    }
+                    if (this.dirty) {
+                        // Isian lokal sudah tersinkron ke penyimpan → adopsi
+                        // versinya agar Simpan tidak memicu konfirmasi timpa.
+                        this.$wire.$set('loadedVersion', e.version, false);
+                        this.showLiveSync(e.user_name, 'disimpan');
+                    } else {
+                        this.$wire.refreshCollaborativeState(e.user_name);
+                    }
+                });
+            // Broadcast posisi tab saat join + setiap pindah sub kategori
+            this.$wire.$watch('activeSubCategory', (v) => { if (v) this.$wire.broadcastFocus(v); });
+            if (this.$wire.activeSubCategory) this.$wire.broadcastFocus(this.$wire.activeSubCategory);
+        },
+        collaboratorById(id) {
+            return this.collaborators.find((c) => c.id === Number(id));
+        },
+        focusedOnSub(subId) {
+            return Object.keys(this.focusMap)
+                .filter((uid) => this.focusMap[uid] === subId)
+                .map((uid) => this.collaboratorById(uid))
+                .filter(Boolean);
+        },
+        namesOf(list) {
+            return list.map((c) => c.name).join(', ');
+        },
+        initialsOf(name) {
+            return (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+        },
+        colorFor(id) {
+            const palette = ['bg-blue-500', 'bg-green-500', 'bg-amber-500', 'bg-purple-500', 'bg-pink-500', 'bg-teal-500', 'bg-orange-500', 'bg-indigo-500'];
+            return palette[Number(id) % palette.length];
         },
         scrollActiveTabs() {
             this.$root.querySelectorAll('[data-tab-active]').forEach((el) => {
@@ -56,21 +146,27 @@
         },
         handleInput(e) {
             this.dirty = true;
-            if (! this.$wire.autoSave) return;
             const el = e.target;
             // Flash hijau langsung saat field diubah (sekali saja)
-            if (el.classList.contains('autosave-field')) {
+            if (this.$wire.autoSave && el.classList.contains('autosave-field')) {
                 this.flashField(el);
             }
             this.scheduleSave();
         },
+        // Mode edit selalu sinkron ke kolaborator meski Auto Save nonaktif;
+        // draft sesi tetap hanya ditulis bila Auto Save aktif (di server).
+        // Debounce 600ms dengan batas tunggu maksimum 1.5s — saat mengetik
+        // terus-menerus perubahan tetap terkirim berkala, tidak menunggu jeda.
         scheduleSave() {
-            if (! this.$wire.autoSave) return;
+            if (! this.$wire.autoSave && ! this.$wire.editMode) return;
             clearTimeout(this.autoSaveTimer);
+            this.pendingSince = this.pendingSince || Date.now();
+            const wait = Date.now() - this.pendingSince >= 1500 ? 0 : 600;
             this.autoSaveTimer = setTimeout(async () => {
+                this.pendingSince = null;
                 await this.$wire.saveDraft();
-                this.lastSaved = new Date().toLocaleTimeString('id-ID');
-            }, 1200);
+                if (this.$wire.autoSave) this.lastSaved = new Date().toLocaleTimeString('id-ID');
+            }, wait);
         },
         handleKeydown(e) {
             const key = e.key;
@@ -162,6 +258,48 @@
 
             return best;
         },
+        onRemoteDraftApplied(name) {
+            this.dirty = true;
+            this.showLiveSync(name, 'disinkronkan');
+        },
+        showLiveSync(name, action) {
+            if (! name) return;
+            this.liveSyncBy = name;
+            this.liveSyncText = 'Isian ' + name + ' ' + action;
+            clearTimeout(this.liveSyncTimer);
+            this.liveSyncTimer = setTimeout(() => this.liveSyncBy = null, 4000);
+        },
+        // Path wire:model input yang sedang difokus user — field ini tidak
+        // ditimpa perubahan remote agar ketikan lokal tidak hilang.
+        focusedModel() {
+            const el = document.activeElement;
+            if (! el || ! this.$root.contains(el)) return null;
+            const attr = Array.from(el.attributes).find((a) => a.name.startsWith('wire:model'));
+            return attr ? attr.value : null;
+        },
+        // Perubahan beruntun digabung (80ms) lalu diterapkan lewat satu
+        // request Livewire. Request masuk antrean commit, jadi nilai tidak
+        // tertimpa respons request lain yang sedang berjalan.
+        queueRemoteChanges(e) {
+            if (e.structure) {
+                this.$wire.applyRemoteDraft(e.user_id);
+                return;
+            }
+            const focused = this.focusedModel();
+            Object.keys(e.changes || {}).forEach((key) => {
+                const typing = focused && (focused === key || focused.startsWith(key + '.') || key.startsWith(focused + '.'));
+                if (! typing) this.pendingRemote[key] = e.changes[key];
+            });
+            if (! Object.keys(this.pendingRemote).length) return;
+            this.dirty = true;
+            this.showLiveSync(e.user_name, 'disinkronkan');
+            clearTimeout(this.pendingRemoteTimer);
+            this.pendingRemoteTimer = setTimeout(() => {
+                const batch = this.pendingRemote;
+                this.pendingRemote = {};
+                this.$wire.applyRemoteChanges(batch);
+            }, 80);
+        },
         requestCancel() {
             if (! this.dirty) {
                 this.$wire.cancel();
@@ -184,16 +322,33 @@
     x-on:ship-data-changed.window="onFieldChange()"
     x-on:structure-node-removed.window="onFieldChange()"
     x-on:structure-node-saved.window="onFieldChange()"
+    x-on:remote-draft-applied.window="onRemoteDraftApplied($event.detail.name)"
 >
     <!-- Breadcrumb -->
-    <nav class="mb-6 flex" aria-label="Breadcrumb">
-        <ol class="flex items-center space-x-2 text-sm">
+    <nav class="mb-6 flex items-center justify-between gap-4" aria-label="Breadcrumb">
+        <ol class="flex items-center space-x-2 text-sm min-w-0">
             <li>
                 <a href="{{ route('surveys.index') }}" wire:navigate class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">Survey Kondisi</a>
             </li>
             <li class="text-gray-400 dark:text-gray-600">/</li>
             <li class="text-gray-900 dark:text-white font-medium">{{ $editMode ? 'Edit' : 'Buat' }}</li>
         </ol>
+        @if($editMode)
+            <!-- Kolaborator yang sedang membuka form ini (presence Reverb) -->
+            <div class="flex items-center gap-2 shrink-0" x-show="collaborators.length" x-cloak>
+                <div class="flex -space-x-2">
+                    <template x-for="c in collaborators.slice(0, 4)" :key="'collab-' + c.id">
+                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-900 cursor-default"
+                            :class="colorFor(c.id)" :title="c.name + ' sedang mengedit'" x-text="initialsOf(c.name)"></span>
+                    </template>
+                    <!-- Sisa kolaborator (>4) diringkas agar header tidak memanjang -->
+                    <span x-show="collaborators.length > 4"
+                        class="inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-bold bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200 ring-2 ring-white dark:ring-gray-900 cursor-default"
+                        :title="namesOf(collaborators.slice(4))" x-text="'+' + (collaborators.length - 4)"></span>
+                </div>
+                <span class="hidden sm:inline text-xs font-medium text-gray-500 dark:text-gray-400" x-text="collaborators.length + ' kolaborator aktif'"></span>
+            </div>
+        @endif
     </nav>
 
     <!-- Wizard: 1 Informasi Survey → 2 Data Kapal → 3 Penilaian & CAP.
@@ -687,6 +842,16 @@
                                                     </span>
                                                 @endif
                                             </button>
+                                            <!-- Penanda kolaborator yang sedang membuka sub kategori ini -->
+                                            <span class="inline-flex -space-x-1.5 mx-0.5" x-data="{ get here() { return focusedOnSub({{ $subCat->id }}) } }" x-show="here.length" x-cloak>
+                                                <template x-for="c in here.slice(0, 2)" :key="'focus-' + c.id">
+                                                    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-bold text-white ring-1 ring-white dark:ring-gray-800 cursor-default"
+                                                        :class="colorFor(c.id)" :title="c.name + ' sedang di sini'" x-text="initialsOf(c.name)"></span>
+                                                </template>
+                                                <span x-show="here.length > 2"
+                                                    class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-bold bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200 ring-1 ring-white dark:ring-gray-800 cursor-default"
+                                                    :title="namesOf(here.slice(2)) + ' sedang di sini'" x-text="'+' + (here.length - 2)"></span>
+                                            </span>
                                             @if($editStructure)
                                                 <x-loading-button wire:click="moveStructureNode('sub_category', {{ $subCat->id }}, 'up')"
                                                     target="moveStructureNode('sub_category', {{ $subCat->id }}, 'up')"
@@ -996,6 +1161,13 @@
                         </svg>
                         <span>Draft tersimpan <span x-text="lastSaved"></span></span>
                     </div>
+                    <!-- Indikator isian kolaborator baru saja disinkronkan (transien) -->
+                    <div class="flex items-center gap-1.5 text-xs text-blue-500 dark:text-blue-400" x-show="liveSyncBy" x-cloak>
+                        <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                        </svg>
+                        <span x-text="liveSyncText"></span>
+                    </div>
                 </div>
                 <x-cancel-button x-on:click="requestCancel()" target="cancel" class="w-full sm:w-auto sm:min-w-[160px]" />
                 @if($activeStep > 1)
@@ -1181,6 +1353,7 @@
 
     <!-- Modal konfirmasi buang perubahan saat Batal -->
     <x-confirm-modal eventName="confirm-cancel-survey" />
+    <x-confirm-modal eventName="confirm-overwrite-survey" />
     <x-confirm-modal eventName="confirm-remove-note" />
     <x-confirm-modal eventName="confirm-remove-node" />
     <x-confirm-modal eventName="confirm-pull-master" />

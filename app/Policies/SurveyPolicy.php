@@ -42,6 +42,15 @@ class SurveyPolicy
             && (int) $survey->created_by === (int) $user->id;
     }
 
+    /**
+     * Pembatalan permintaan akses oleh pemohon sendiri — record pending
+     * milik user diverifikasi lagi di level component.
+     */
+    public function cancelAccessRequest(User $user, Survey $survey): bool
+    {
+        return $user->can('surveys_update') && ! $survey->isEditableBy($user);
+    }
+
     public function exportExcel(User $user): bool
     {
         return $user->can('surveys_export_excel');

@@ -24,6 +24,15 @@ class SurveyShow extends Component
     // Per-request cache responses (tidak diserialisasi Livewire)
     protected $responsesCache = null;
 
+    public function getListeners(): array
+    {
+        // Refresh saat notifikasi masuk ke user aktif — permintaan akses
+        // baru/dibatalkan/disetujui langsung memperbarui card akses.
+        return [
+            'echo-private:user.'.auth()->id().',NewNotification' => '$refresh',
+        ];
+    }
+
     public function mount(Survey $survey)
     {
         $this->authorize('view', $survey);
@@ -238,6 +247,28 @@ class SurveyShow extends Component
         $this->notifySuccess("Permintaan akses {$request->requester->name} ditolak.");
     }
 
+    /**
+     * Buka modal konfirmasi pencabutan akses — pemilik sadar bahwa
+     * kolaborator akan langsung kehilangan akses edit + dinotifikasi.
+     */
+    public function confirmRevokeAccess($id): void
+    {
+        $this->authorize('manageAccess', $this->survey);
+
+        $request = $this->survey->accessRequests()->approved()
+            ->with('requester:id,name')->findOrFail($id);
+
+        $this->dispatch('confirm-revoke-access',
+            action: 'revokeAccess',
+            actionParams: [$request->id],
+            title: 'Cabut Akses Edit?',
+            message: "Akses edit {$request->requester->name} untuk survey ini akan dicabut dan mereka dinotifikasi. Anda bisa meminta mereka mengajukan ulang bila diperlukan.",
+            confirmText: 'Ya, Cabut Akses',
+            cancelText: 'Batal',
+            type: 'danger',
+        );
+    }
+
     public function revokeAccess($id, SurveyService $service): void
     {
         $this->authorize('manageAccess', $this->survey);
@@ -245,7 +276,44 @@ class SurveyShow extends Component
         $request = $this->survey->accessRequests()->approved()->findOrFail($id);
         $name = $request->requester->name;
         $service->revokeAccess($request);
+        $this->dispatch('confirm-revoke-access-close');
         $this->notifySuccess("Akses edit {$name} dicabut.");
+    }
+
+    /**
+     * Buka modal konfirmasi pembatalan permintaan milik sendiri.
+     */
+    public function confirmCancelAccessRequest(): void
+    {
+        $this->authorize('cancelAccessRequest', $this->survey);
+
+        $this->survey->accessRequests()->pending()
+            ->where('user_id', auth()->id())->firstOrFail();
+
+        $this->dispatch('confirm-cancel-access-request',
+            action: 'cancelAccessRequest',
+            title: 'Batalkan Permintaan Akses?',
+            message: 'Permintaan akses edit Anda akan dibatalkan dan pemilik survey dinotifikasi. Anda dapat mengajukan ulang kapan saja.',
+            confirmText: 'Ya, Batalkan',
+            cancelText: 'Kembali',
+            type: 'warning',
+        );
+    }
+
+    /**
+     * Pemohon membatalkan permintaan akses yang masih pending — notifikasi
+     * realtime ke pemilik dikirim oleh service (pola sama saat pengajuan).
+     */
+    public function cancelAccessRequest(SurveyService $service): void
+    {
+        $this->authorize('cancelAccessRequest', $this->survey);
+
+        $request = $this->survey->accessRequests()->pending()
+            ->where('user_id', auth()->id())->firstOrFail();
+
+        $service->cancelEditAccess($request, auth()->user());
+        $this->dispatch('confirm-cancel-access-request-close');
+        $this->notifySuccess('Permintaan akses edit berhasil dibatalkan.');
     }
 
     public function render()
