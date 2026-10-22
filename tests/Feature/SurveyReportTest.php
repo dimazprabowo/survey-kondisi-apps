@@ -519,6 +519,66 @@ class SurveyReportTest extends TestCase
         }
     }
 
+    public function test_kategori_bab3_masuk_cached_daftar_isi_sebagai_entri_toc2(): void
+    {
+        $survey = $this->createSurvey();
+        $survey->update(['structure' => [
+            'categories' => [
+                ['id' => 1, 'label' => 'Hull & Construction', 'order_num' => 1, 'subCategories' => []],
+                ['id' => 2, 'label' => 'Engine Room', 'order_num' => 2, 'subCategories' => []],
+            ],
+        ]]);
+        $service = new SurveyReportService(new SurveyService);
+        $report = $service->getOrCreate($survey);
+        $path = app(SurveyReportDocxBuilder::class)->build($report);
+
+        try {
+            $zip = new \ZipArchive;
+            $this->assertTrue($zip->open($path, \ZipArchive::CHECKCONS) === true);
+            $document = $zip->getFromName('word/document.xml');
+            $zip->close();
+
+            // OnlyOffice menampilkan cached result TOC apa adanya — entri
+            // kategori harus tertulis eksplisit, bukan menunggu field update.
+            preg_match_all('/<w:p\b.*?<\/w:p>/s', $document, $paragraphs);
+            $toc2 = array_values(array_filter(
+                $paragraphs[0],
+                fn ($paragraph) => str_contains($paragraph, 'w:pStyle w:val="TOC2"')
+            ));
+
+            $this->assertCount(2, $toc2);
+            foreach (['HULL &amp; CONSTRUCTION', 'ENGINE ROOM'] as $index => $label) {
+                $this->assertStringContainsString('_TocBkiCat'.$index, $toc2[$index]);
+                $this->assertStringContainsString('PAGEREF _TocBkiCat'.$index.' \h', $toc2[$index]);
+                $this->assertStringContainsString($label, $toc2[$index]);
+            }
+
+            // Entri TOC2 berada di antara entri BAB III dan BAB IV.
+            $bab3 = strpos($document, 'BAB III. PEMERIKSAAN');
+            $bab4 = strpos($document, 'BAB IV');
+            $firstToc2 = strpos($document, '_TocBkiCat0');
+            $this->assertNotFalse($bab3);
+            $this->assertNotFalse($bab4);
+            $this->assertGreaterThan($bab3, $firstToc2);
+            $this->assertLessThan($bab4, $firstToc2);
+
+            // Heading kategori membawa bookmark yang dituju hyperlink TOC,
+            // dan field TOC ditandai dirty agar nomor halaman di-refresh.
+            $this->assertMatchesRegularExpression(
+                '/<w:bookmarkStart w:id="\d+" w:name="_TocBkiCat0"\/>/',
+                $document
+            );
+            $this->assertMatchesRegularExpression(
+                '/<w:fldChar w:fldCharType="begin" w:dirty="true"\/>(?:(?!<w:fldChar).)*TOC \\\\o/s',
+                $document
+            );
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
     public function test_generate_sukses_menghapus_revisi_edit_lama(): void
     {
         Storage::fake('local');
