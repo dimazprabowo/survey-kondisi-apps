@@ -429,6 +429,25 @@ class SurveyReportTest extends TestCase
         }
     }
 
+    public function test_template_menyimpan_daftar_isi_master_dan_update_fields(): void
+    {
+        // Template wajib hasil build_report_template.php dari master. Bila
+        // template dibuka lalu disimpan ulang di Word/OnlyOffice, field TOC
+        // di-rebuild saat BAB III masih marker ${bab3} -> entri kategori
+        // hilang dari daftar isi dan updateFields terhapus.
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open(storage_path('app/private/templates/report-charter-condition.docx')) === true);
+        $document = $zip->getFromName('word/document.xml');
+        $settings = $zip->getFromName('word/settings.xml');
+        $zip->close();
+
+        $this->assertStringContainsString('<w:updateFields w:val="true"/>', $settings);
+        $this->assertSame(7, substr_count($document, '<w:pStyle w:val="TOC2"/>'));
+        foreach (['HULL AND CONSTRUCTION', 'ENGINE ROOM AND MACHINERY', 'SHIP SAFETY AND OPERATION'] as $category) {
+            $this->assertStringContainsString($category, $document);
+        }
+    }
+
     public function test_nilai_skalar_dengan_karakter_xml_di_escape_saat_generate(): void
     {
         $this->ship->update([
