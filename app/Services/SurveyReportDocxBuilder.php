@@ -150,8 +150,6 @@ class SurveyReportDocxBuilder
             $xml = $this->replaceMarkerParagraph($xml, $marker, $blockXml);
         }
 
-        $xml = $this->syncTocCategoryEntries($xml);
-
         $this->validateXml($xml, 'word/document.xml');
         $zip->addFromString('word/document.xml', $xml);
         $this->enableFieldUpdates($zip);
@@ -294,107 +292,6 @@ class SurveyReportDocxBuilder
         $result = preg_replace($pattern, $blockXml, $xml, 1);
 
         return $result ?? $xml;
-    }
-
-    /**
-     * Tulis entri kategori BAB III ke cached result Daftar Isi (TOC field).
-     *
-     * Daftar isi adalah field `TOC \o "1-3"`; viewer seperti OnlyOffice
-     * menampilkan cached result apa adanya tanpa me-rebuild field. Cache di
-     * template tidak memuat kategori karena saat template dibangun posisi BAB
-     * III masih berupa marker ${bab3}. Di sini tiap heading kategori (pStyle
-     * Heading2 — hanya dipakai judul kategori) diberi bookmark _TocBkiCat{N}
-     * dan entri TOC2 (hyperlink + PAGEREF, format sama seperti entri asli)
-     * disisipkan sebelum entri "BAB IV". Field TOC juga ditandai w:dirty agar
-     * Word/OnlyOffice menghitung ulang nomor halaman saat dokumen dibuka.
-     */
-    protected function syncTocCategoryEntries(string $xml): string
-    {
-        $tocFieldPos = strpos($xml, ' TOC \o');
-        if ($tocFieldPos === false) {
-            return $xml;
-        }
-
-        preg_match_all('/w:bookmarkStart w:id="(\d+)"/', $xml, $bookmarkIds);
-        $bookmarkId = ($bookmarkIds[1] ? max(array_map('intval', $bookmarkIds[1])) : 0) + 1;
-
-        $titles = [];
-        $xml = preg_replace_callback(
-            '/<w:p\b[^>]*>(?:(?!<\/w:p>).)*?<w:pStyle w:val="Heading2"\/>(?:(?!<\/w:p>).)*?<\/w:p>/s',
-            function (array $matches) use (&$titles, &$bookmarkId) {
-                $anchor = '_TocBkiCat'.count($titles);
-                preg_match_all('/<w:t[^>]*>([^<]*)<\/w:t>/', $matches[0], $texts);
-                $titles[] = implode('', $texts[1]);
-
-                $paragraph = preg_replace(
-                    '/<\/w:pPr>/',
-                    '</w:pPr><w:bookmarkStart w:id="'.$bookmarkId.'" w:name="'.$anchor.'"/>',
-                    $matches[0],
-                    1
-                );
-
-                return preg_replace(
-                    '/<\/w:p>$/',
-                    '<w:bookmarkEnd w:id="'.$bookmarkId.'"/></w:p>',
-                    $paragraph,
-                    1
-                ) ?? $matches[0];
-            },
-            $xml
-        );
-
-        if ($titles === [] || $xml === null) {
-            return $xml ?? '';
-        }
-
-        $entries = '';
-        foreach ($titles as $index => $title) {
-            $anchor = '_TocBkiCat'.$index;
-            $entries .= '<w:p><w:pPr><w:pStyle w:val="TOC2"/></w:pPr>'
-                .'<w:hyperlink w:anchor="'.$anchor.'" w:history="1">'
-                .'<w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr><w:t>'.($index + 1).'</w:t></w:r>'
-                .'<w:r><w:tab/></w:r>'
-                .'<w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr><w:t xml:space="preserve">'.$title.'</w:t></w:r>'
-                .'<w:r><w:rPr><w:webHidden/></w:rPr><w:tab/></w:r>'
-                .'<w:r><w:rPr><w:webHidden/></w:rPr><w:fldChar w:fldCharType="begin"/></w:r>'
-                .'<w:r><w:rPr><w:webHidden/></w:rPr><w:instrText xml:space="preserve"> PAGEREF '.$anchor.' \h </w:instrText></w:r>'
-                .'<w:r><w:rPr><w:webHidden/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r>'
-                .'<w:r><w:rPr><w:webHidden/></w:rPr><w:t>1</w:t></w:r>'
-                .'<w:r><w:rPr><w:webHidden/></w:rPr><w:fldChar w:fldCharType="end"/></w:r>'
-                .'</w:hyperlink></w:p>';
-        }
-
-        // Sisipkan tepat sebelum paragraf entri cached untuk heading pertama
-        // setelah kategori (BAB IV, fallback LAMPIRAN). Pencarian dibatasi di
-        // dalam region TOC (sebelum </w:sdt> penutup) agar tidak tertukar
-        // heading asli di body dokumen.
-        $tocRegionEnd = strpos($xml, '</w:sdt>', $tocFieldPos);
-        $insertPos = strpos($xml, 'BAB IV', $tocFieldPos)
-            ?: strpos($xml, 'LAMPIRAN', $tocFieldPos);
-        if ($insertPos !== false && $tocRegionEnd !== false && $insertPos < $tocRegionEnd) {
-            $parStart = strrpos(substr($xml, 0, $insertPos), '<w:p ');
-            if ($parStart === false) {
-                $parStart = strrpos(substr($xml, 0, $insertPos), '<w:p>');
-            }
-            if ($parStart !== false) {
-                $xml = substr_replace($xml, $entries, $parStart, 0);
-            }
-        }
-
-        // Tandai field TOC dirty supaya viewer me-refresh cached result
-        // (terutama nomor halaman) saat dokumen dibuka.
-        $begin = '<w:fldChar w:fldCharType="begin"/>';
-        $beginPos = strrpos(substr($xml, 0, $tocFieldPos), $begin);
-        if ($beginPos !== false) {
-            $xml = substr_replace(
-                $xml,
-                '<w:fldChar w:fldCharType="begin" w:dirty="true"/>',
-                $beginPos,
-                strlen($begin)
-            );
-        }
-
-        return $xml;
     }
 
     /**
