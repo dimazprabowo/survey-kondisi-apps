@@ -137,6 +137,7 @@ trait HasMenuItems
                 'route' => 'chat.index',
                 'icon' => 'chat',
                 'active' => $req->routeIs('chat.*'),
+                'badge' => Chat::totalUnreadCountForUser($user->id),
             ];
         }
 
@@ -176,5 +177,25 @@ trait HasMenuItems
         $cache[$cacheKey] = $result;
 
         return $result;
+    }
+
+    /**
+     * Listener realtime badge Chat — diwarisi Sidebar & Navigation.
+     * NewChatMessage: pesan masuk menaikkan badge.
+     * chat-unread-changed: di-dispatch ChatIndex saat pesan dibaca/chat ditutup.
+     */
+    public function getListeners(): array
+    {
+        $userId = Auth::id();
+
+        return [
+            "echo-private:user.{$userId},NewChatMessage" => 'refreshUnreadChatBadge',
+            'chat-unread-changed' => 'refreshUnreadChatBadge',
+        ];
+    }
+
+    public function refreshUnreadChatBadge(): void
+    {
+        // Re-render: getMenuItems() menghitung ulang badge unread chat
     }
 }

@@ -207,6 +207,11 @@
                                               {{ ($item['active'] ?? false) ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
                                         <x-icon name="{{ $item['icon'] }}" class="w-4 h-4 flex-shrink-0" />
                                         <span>{{ $item['name'] }}</span>
+                                        @if(isset($item['badge']) && $item['badge'] > 0)
+                                            <span class="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400">
+                                                {{ $item['badge'] > 99 ? '99+' : $item['badge'] }}
+                                            </span>
+                                        @endif
                                     </a>
                                 @endif
                             @endforeach

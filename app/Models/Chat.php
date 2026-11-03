@@ -83,6 +83,30 @@ class Chat extends Model
             ->count();
     }
 
+    /**
+     * Total pesan belum dibaca user di semua chat (untuk badge menu).
+     * Satu query join — konsisten dengan logic unread di ChatIndex:
+     * pesan dari orang lain, setelah last_read_at DAN setelah deleted_at pivot.
+     */
+    public static function totalUnreadCountForUser(int $userId): int
+    {
+        return (int) ChatMessage::query()
+            ->join('chat_participants', function ($join) use ($userId) {
+                $join->on('chat_messages.chat_id', '=', 'chat_participants.chat_id')
+                    ->where('chat_participants.user_id', $userId);
+            })
+            ->where('chat_messages.user_id', '!=', $userId)
+            ->where(function ($q) {
+                $q->whereNull('chat_participants.last_read_at')
+                    ->orWhereColumn('chat_messages.created_at', '>', 'chat_participants.last_read_at');
+            })
+            ->where(function ($q) {
+                $q->whereNull('chat_participants.deleted_at')
+                    ->orWhereColumn('chat_messages.created_at', '>', 'chat_participants.deleted_at');
+            })
+            ->count('chat_messages.id');
+    }
+
     public static function findDirectChat(int $userA, int $userB): ?self
     {
         return static::where('is_group', false)
