@@ -141,13 +141,19 @@
                                 <div class="relative flex-shrink-0">
                                     <x-icon name="{{ $item['icon'] }}" class="w-5 h-5" />
                                     @if(isset($item['badge']) && $item['badge'] > 0)
-                                        <span class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" :class="Alpine.store('sidebar').collapsed && 'lg:!block'"></span>
+                                        {{-- Collapsed dot: ping subtle + ring agar kontras di atas background --}}
+                                        <span class="hidden absolute -top-0.5 -right-0.5 h-2.5 w-2.5" :class="Alpine.store('sidebar').collapsed && 'lg:!block'">
+                                            <span class="absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-60 animate-ping"></span>
+                                            <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-gradient-to-br from-rose-500 to-red-600 ring-2 ring-white dark:ring-gray-800 shadow-sm"></span>
+                                        </span>
                                     @endif
                                 </div>
                                 <span :class="Alpine.store('sidebar').collapsed && 'lg:hidden'">{{ $item['name'] }}</span>
                             </div>
                             @if(isset($item['badge']) && $item['badge'] > 0)
-                                <span :class="Alpine.store('sidebar').collapsed && 'lg:hidden'" class="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400">
+                                <span :class="Alpine.store('sidebar').collapsed && 'lg:hidden'"
+                                      title="{{ $item['badge'] }} pesan belum dibaca"
+                                      class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold leading-none text-white bg-gradient-to-br from-rose-500 to-red-600 shadow-sm shadow-rose-500/40 ring-1 ring-white/20 dark:ring-white/10">
                                     {{ $item['badge'] > 99 ? '99+' : $item['badge'] }}
                                 </span>
                             @endif
