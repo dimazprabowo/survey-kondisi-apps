@@ -8,7 +8,8 @@
     $currentType = $types[$type] ?? $types['info'];
 @endphp
 
-<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6"
+     x-data="{ pTitle: @entangle('title'), pMessage: @entangle('notifMessage'), pUrl: @entangle('actionUrl') }">
 
     {{-- Left: Form --}}
     <div class="xl:col-span-2 space-y-5">
@@ -166,7 +167,7 @@
                     Judul <span class="text-red-500">*</span>
                 </label>
                 <input type="text"
-                       wire:model.blur="title"
+                       x-model="pTitle"
                        placeholder="Contoh: Pembaruan Sistem"
                        maxlength="255"
                        class="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors
@@ -177,7 +178,7 @@
                     @else
                         <span></span>
                     @enderror
-                    <span class="text-xs text-gray-400 ml-auto">{{ strlen($title) }}/255</span>
+                    <span class="text-xs text-gray-400 ml-auto" x-text="pTitle.length + '/255'">{{ strlen($title) }}/255</span>
                 </div>
             </div>
 
@@ -186,7 +187,7 @@
                 <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
                     Pesan <span class="text-red-500">*</span>
                 </label>
-                <textarea wire:model.blur="notifMessage"
+                <textarea x-model="pMessage"
                           placeholder="Tulis isi notifikasi di sini..."
                           rows="4"
                           maxlength="2000"
@@ -198,7 +199,7 @@
                     @else
                         <span></span>
                     @enderror
-                    <span class="text-xs text-gray-400 ml-auto">{{ strlen($notifMessage) }}/2000</span>
+                    <span class="text-xs text-gray-400 ml-auto" x-text="pMessage.length + '/2000'">{{ strlen($notifMessage) }}/2000</span>
                 </div>
             </div>
 
@@ -212,7 +213,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                     </svg>
                     <input type="url"
-                           wire:model.blur="actionUrl"
+                           x-model="pUrl"
                            placeholder="https://contoh.com/halaman"
                            class="w-full pl-9 pr-4 py-2 text-sm border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors
                                   {{ $errors->has('actionUrl') ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600' }}">
@@ -245,15 +246,13 @@
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-semibold text-gray-900 dark:text-white">
-                            {{ $title ?: 'Judul notifikasi...' }}
+                            <span x-text="pTitle || 'Judul notifikasi...'">{{ $title ?: 'Judul notifikasi...' }}</span>
                             <span class="inline-block w-2 h-2 bg-blue-500 rounded-full ml-1 align-middle"></span>
                         </p>
-                        <p class="text-xs text-gray-600 dark:text-gray-300 mt-0.5 leading-relaxed break-words">
+                        <p class="text-xs text-gray-600 dark:text-gray-300 mt-0.5 leading-relaxed break-words" x-text="pMessage || 'Isi pesan notifikasi akan tampil di sini...'">
                             {{ $notifMessage ?: 'Isi pesan notifikasi akan tampil di sini...' }}
                         </p>
-                        @if($actionUrl)
-                            <p class="text-xs text-blue-500 mt-1 truncate">{{ $actionUrl }}</p>
-                        @endif
+                        <p x-show="pUrl" x-cloak class="text-xs text-blue-500 mt-1 truncate" x-text="pUrl">{{ $actionUrl }}</p>
                         <p class="text-xs text-gray-400 mt-1.5">Baru saja</p>
                     </div>
                 </div>
@@ -292,13 +291,13 @@
                 </div>
                 <div class="flex items-center justify-between gap-2">
                     <dt class="text-gray-500 dark:text-gray-400 flex-shrink-0">Judul</dt>
-                    <dd class="font-medium text-gray-900 dark:text-white text-right truncate max-w-[140px]">
+                    <dd class="font-medium text-gray-900 dark:text-white text-right truncate max-w-[140px]" x-text="pTitle || '-'">
                         {{ $title ?: '-' }}
                     </dd>
                 </div>
                 <div class="flex items-center justify-between gap-2">
                     <dt class="text-gray-500 dark:text-gray-400 flex-shrink-0">URL Aksi</dt>
-                    <dd class="text-gray-600 dark:text-gray-400 text-right truncate max-w-[140px]">
+                    <dd class="text-gray-600 dark:text-gray-400 text-right truncate max-w-[140px]" x-text="pUrl || 'Tidak ada'">
                         {{ $actionUrl ?: 'Tidak ada' }}
                     </dd>
                 </div>
