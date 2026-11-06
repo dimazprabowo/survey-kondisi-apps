@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword as ResetPasswordNotification;
 use Illuminate\Notifications\Messages\MailMessage;
 
@@ -10,7 +11,7 @@ class CustomResetPassword extends ResetPasswordNotification
     /**
      * The user instance.
      *
-     * @var \App\Models\User|null
+     * @var User|null
      */
     protected $user;
 
@@ -18,7 +19,7 @@ class CustomResetPassword extends ResetPasswordNotification
      * Create a new notification instance.
      *
      * @param  string  $token
-     * @param  \App\Models\User|null  $user
+     * @param  User|null  $user
      * @return void
      */
     public function __construct($token, $user = null)

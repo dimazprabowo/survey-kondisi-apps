@@ -7,6 +7,7 @@ use App\Livewire\Pages\Auth\ResetPassword as ResetPasswordComponent;
 use App\Models\User;
 use App\Notifications\CustomResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -78,7 +79,7 @@ class PasswordResetTest extends TestCase
             ->assertRedirect(route('login'));
 
         $this->assertTrue(
-            \Illuminate\Support\Facades\Hash::check('new-password-123', $user->fresh()->password)
+            Hash::check('new-password-123', $user->fresh()->password)
         );
     }
 }

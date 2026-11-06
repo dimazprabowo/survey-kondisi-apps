@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\SurveyTemplate;
 use App\Services\SurveyTemplateService;
+use Maatwebsite\Excel\Concerns\Export;
 use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -27,7 +28,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  * sel merge terbaca kosong dan diisi ulang via carry-forward saat import).
  * $template null => file template kosong berisi sheet contoh.
  */
-class SurveyTemplateStructureExport implements WithMultipleSheets
+class SurveyTemplateStructureExport implements Export, WithMultipleSheets
 {
     use Exportable;
 
@@ -102,7 +103,7 @@ class SurveyTemplateStructureExport implements WithMultipleSheets
                 return 'Petunjuk';
             }
 
-            public function styles(Worksheet $sheet)
+            public function styles(Worksheet $sheet): array
             {
                 return [1 => ['font' => ['bold' => true, 'size' => 14]]];
             }

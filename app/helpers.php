@@ -1,5 +1,10 @@
 <?php
 
+use App\Enums\CapRating;
+use App\Helpers\ConfigHelper;
+use App\Services\FileStorageService;
+use Carbon\Carbon;
+
 if (! function_exists('get_max_upload_size')) {
     /**
      * Get maximum upload size in KB for a specific field
@@ -92,7 +97,7 @@ if (! function_exists('app_name')) {
      */
     function app_name(): string
     {
-        return \App\Helpers\ConfigHelper::getAppName();
+        return ConfigHelper::getAppName();
     }
 }
 
@@ -106,7 +111,7 @@ if (! function_exists('system_config')) {
      */
     function system_config(string $key, $default = null)
     {
-        return \App\Helpers\ConfigHelper::get($key, $default);
+        return ConfigHelper::get($key, $default);
     }
 }
 
@@ -116,7 +121,7 @@ if (! function_exists('is_registration_open')) {
      */
     function is_registration_open(): bool
     {
-        return \App\Helpers\ConfigHelper::isRegistrationOpen();
+        return ConfigHelper::isRegistrationOpen();
     }
 }
 
@@ -124,9 +129,9 @@ if (! function_exists('registration_deadline')) {
     /**
      * Get registration deadline as Carbon instance
      */
-    function registration_deadline(): ?\Carbon\Carbon
+    function registration_deadline(): ?Carbon
     {
-        return \App\Helpers\ConfigHelper::getRegistrationDeadline();
+        return ConfigHelper::getRegistrationDeadline();
     }
 }
 
@@ -136,7 +141,7 @@ if (! function_exists('registration_closed_message')) {
      */
     function registration_closed_message(): string
     {
-        return \App\Helpers\ConfigHelper::getRegistrationClosedMessage();
+        return ConfigHelper::getRegistrationClosedMessage();
     }
 }
 
@@ -184,7 +189,7 @@ if (! function_exists('upload_path')) {
      */
     function upload_path(string $feature, array $segments, string $originalName, ?string $baseName = null): string
     {
-        return app(\App\Services\FileStorageService::class)
+        return app(FileStorageService::class)
             ->buildPath($feature, $segments, $originalName, $baseName);
     }
 }
@@ -196,7 +201,7 @@ if (! function_exists('survey_score_color')) {
      */
     function survey_score_color(?float $score): ?string
     {
-        return \App\Enums\CapRating::fromScore($score)?->color();
+        return CapRating::fromScore($score)?->color();
     }
 }
 
@@ -258,6 +263,6 @@ if (! function_exists('survey_score_badge_class')) {
      */
     function survey_score_badge_class(?float $score): string
     {
-        return (\App\Enums\CapRating::fromScore($score) ?? \App\Enums\CapRating::Cap4)->badgeClass();
+        return (CapRating::fromScore($score) ?? CapRating::Cap4)->badgeClass();
     }
 }

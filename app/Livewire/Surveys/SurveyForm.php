@@ -3,24 +3,31 @@
 namespace App\Livewire\Surveys;
 
 use App\Enums\ShipClassStatus;
+use App\Enums\SurveyItemType;
 use App\Enums\SurveyStatus;
 use App\Events\SurveyContentUpdated;
 use App\Events\SurveySectionFocus;
 use App\Livewire\Traits\HasNotification;
 use App\Models\Ship;
 use App\Models\Survey;
+use App\Models\SurveyFolder;
+use App\Models\SurveyGroupNote;
+use App\Models\SurveyResponse;
 use App\Models\SurveyTemplate;
 use App\Services\ShipService;
 use App\Services\SurveyService;
 use App\Services\SurveyTemplateService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -239,7 +246,7 @@ class SurveyForm extends Component
             if ($folderParam) {
                 try {
                     $folderId = Crypt::decryptString($folderParam);
-                    if (\App\Models\SurveyFolder::find($folderId)) {
+                    if (SurveyFolder::find($folderId)) {
                         $this->survey_folder_id = (int) $folderId;
                     }
                 } catch (\Exception $e) {
@@ -268,7 +275,7 @@ class SurveyForm extends Component
     protected function loadResponses(): void
     {
         $this->responses = [];
-        $existing = \App\Models\SurveyResponse::where('survey_id', $this->surveyId)
+        $existing = SurveyResponse::where('survey_id', $this->surveyId)
             ->get()
             ->keyBy('survey_item_id');
 
@@ -276,7 +283,7 @@ class SurveyForm extends Component
         foreach ($items as $item) {
             $response = $existing->get($item->id);
 
-            if ($item->item_type === \App\Enums\SurveyItemType::Inventory) {
+            if ($item->item_type === SurveyItemType::Inventory) {
                 $this->responses[$item->id] = [
                     'qty' => $response?->qty ?? '',
                     'specification' => $response?->specification ?? '',
@@ -299,7 +306,7 @@ class SurveyForm extends Component
         }
 
         $this->groupNotes = $this->initGroupNotes(
-            \App\Models\SurveyGroupNote::where('survey_id', $this->surveyId)
+            SurveyGroupNote::where('survey_id', $this->surveyId)
                 ->orderBy('order_num')
                 ->get()
                 ->groupBy('survey_item_group_id')
@@ -313,7 +320,7 @@ class SurveyForm extends Component
         $this->responses = [];
         $items = $this->getTemplateItems();
         foreach ($items as $item) {
-            if ($item->item_type === \App\Enums\SurveyItemType::Inventory) {
+            if ($item->item_type === SurveyItemType::Inventory) {
                 $this->responses[$item->id] = [
                     'qty' => '',
                     'specification' => '',
@@ -807,7 +814,7 @@ class SurveyForm extends Component
 
         try {
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             // Lompat ke langkah wizard yang berisi error agar langsung terlihat.
             $this->activeStep = $this->stepForErrorKeys($e->validator->errors()->keys());
             $this->notifyValidationError($e);
@@ -871,7 +878,7 @@ class SurveyForm extends Component
 
         try {
             $this->validate($rules);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }
@@ -974,7 +981,7 @@ class SurveyForm extends Component
             }
 
             return $this->redirect($url, navigate: true);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -993,7 +1000,7 @@ class SurveyForm extends Component
         }
 
         $remoteNewer = $survey->updated_at
-            && $survey->updated_at->gt(\Illuminate\Support\Carbon::parse($this->loadedVersion));
+            && $survey->updated_at->gt(Carbon::parse($this->loadedVersion));
 
         if (! $remoteNewer || ! $survey->updated_by || $survey->updated_by === auth()->id()) {
             return false;
@@ -1207,7 +1214,7 @@ class SurveyForm extends Component
                 'shipData.imo_number' => 'nomor IMO',
                 'shipData.call_sign' => 'call sign',
             ])->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }
@@ -1337,7 +1344,7 @@ class SurveyForm extends Component
                 $rules,
                 attributes: $this->validationAttributes()
             )->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }
@@ -1378,7 +1385,7 @@ class SurveyForm extends Component
                 return;
             }
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Sinkron master kapal gagal: '.$e->getMessage());
+            Log::error('Sinkron master kapal gagal: '.$e->getMessage());
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
             $this->dispatch('close-modal', 'survey-ship-sync-modal');
 
@@ -1405,7 +1412,7 @@ class SurveyForm extends Component
 
         try {
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->dispatch('close-modal', 'survey-ship-sync-modal');
             $this->notifyValidationError($e);
             throw $e;
@@ -1540,8 +1547,8 @@ class SurveyForm extends Component
 
         $rules = ['nodeName' => 'required|string|max:255'];
         if ($this->nodeLevel === 'item' && ! $this->nodeTypeLocked) {
-            $rules['nodeItemType'] = 'required|in:'.implode(',', \App\Enums\SurveyItemType::values());
-            if ($this->nodeItemType === \App\Enums\SurveyItemType::Score->value) {
+            $rules['nodeItemType'] = 'required|in:'.implode(',', SurveyItemType::values());
+            if ($this->nodeItemType === SurveyItemType::Score->value) {
                 $rules['nodeScoreLabels'] = 'required|string|max:120';
             }
         }
@@ -1552,7 +1559,7 @@ class SurveyForm extends Component
                 'nodeItemType' => 'tipe item',
                 'nodeScoreLabels' => 'label skor',
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
 
             throw $e;
@@ -1632,7 +1639,7 @@ class SurveyForm extends Component
         $fields = ['name' => $name];
 
         if (! $this->nodeTypeLocked) {
-            $isScore = $this->nodeItemType === \App\Enums\SurveyItemType::Score->value;
+            $isScore = $this->nodeItemType === SurveyItemType::Score->value;
             $labels = $isScore ? $this->parseScoreLabels($this->nodeScoreLabels) : [];
 
             $fields['item_type'] = $this->nodeItemType;
@@ -1658,7 +1665,7 @@ class SurveyForm extends Component
      */
     protected function buildItemNode(int $id, string $name): array
     {
-        $isScore = $this->nodeItemType === \App\Enums\SurveyItemType::Score->value;
+        $isScore = $this->nodeItemType === SurveyItemType::Score->value;
 
         $node = [
             'id' => $id,
@@ -1679,7 +1686,7 @@ class SurveyForm extends Component
      */
     protected function emptyItemResponse(string $type, array $labels = []): array
     {
-        if ($type === \App\Enums\SurveyItemType::Inventory->value) {
+        if ($type === SurveyItemType::Inventory->value) {
             return ['qty' => '', 'specification' => ''];
         }
 
@@ -1696,7 +1703,7 @@ class SurveyForm extends Component
      */
     protected function realignItemResponse(array $response, string $type, array $labels): array
     {
-        if ($type === \App\Enums\SurveyItemType::Inventory->value) {
+        if ($type === SurveyItemType::Inventory->value) {
             return [
                 'qty' => $response['qty'] ?? '',
                 'specification' => $response['specification'] ?? '',

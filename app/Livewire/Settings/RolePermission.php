@@ -6,7 +6,9 @@ use App\Exports\RolesExport;
 use App\Livewire\Traits\HasNotification;
 use App\Services\RolePermissionService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Spatie\Permission\Models\Role;
 
@@ -85,7 +87,7 @@ class RolePermission extends Component
 
             $this->loadData($service);
             $this->notifySuccess($message);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengubah permission.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -121,7 +123,7 @@ class RolePermission extends Component
                 'roleName' => ['required', 'string', 'max:255', $this->editMode ? 'unique:roles,name,'.$this->roleId : 'unique:roles,name'],
                 'selectedPermissions' => 'nullable|array',
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }
@@ -144,7 +146,7 @@ class RolePermission extends Component
             $this->notifySuccess($message);
             $this->closeModal();
             $this->resetForm();
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -175,7 +177,7 @@ class RolePermission extends Component
             $this->loadData($service);
             $this->notifySuccess('Role berhasil dihapus!');
             $this->showDeleteModal = false;
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Role ini tidak dapat dihapus karena masih digunakan oleh user!');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');

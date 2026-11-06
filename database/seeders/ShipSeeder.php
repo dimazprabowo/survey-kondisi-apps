@@ -2,8 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Enums\ShipClassStatus;
 use App\Models\Ship;
 use App\Models\ShipCertificate;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
 class ShipSeeder extends Seeder
@@ -68,7 +70,7 @@ class ShipSeeder extends Seeder
             $types = $fake->randomElements($certTypes, $fake->numberBetween(8, 11));
 
             foreach ($types as $order => $type) {
-                $last = \Carbon\Carbon::parse($fake->dateTimeBetween('-4 years', '-3 months'));
+                $last = Carbon::parse($fake->dateTimeBetween('-4 years', '-3 months'));
                 $next1 = $last->copy()->addYear();
 
                 ShipCertificate::create([
@@ -163,8 +165,8 @@ class ShipSeeder extends Seeder
             // class_status punya default 'active' di kolom (tidak pernah null) —
             // variasikan deterministik untuk demo: sebagian suspended/withdrawn
             $ship->class_status = $ship->id % 7 === 0
-                ? \App\Enums\ShipClassStatus::Suspended
-                : ($ship->id % 11 === 0 ? \App\Enums\ShipClassStatus::Withdrawn : \App\Enums\ShipClassStatus::Active);
+                ? ShipClassStatus::Suspended
+                : ($ship->id % 11 === 0 ? ShipClassStatus::Withdrawn : ShipClassStatus::Active);
             $dirty = $dirty || $ship->isDirty('class_status');
 
             if ($dirty) {

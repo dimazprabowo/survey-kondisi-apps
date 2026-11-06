@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Enums\SurveyStatus;
 use App\Livewire\Surveys\SurveyManagement;
 use App\Models\Ship;
 use App\Models\Survey;
 use App\Models\SurveyFolder;
+use App\Models\SurveyTemplate;
 use App\Models\User;
 use App\Services\SurveyFolderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -202,7 +205,7 @@ class SurveyFolderTest extends TestCase
         $this->assertNotSame($source->survey_number, $dup->survey_number);
         $this->assertSame($folder->id, $dup->survey_folder_id);
         $this->assertSame($source->ship_id, $dup->ship_id);
-        $this->assertSame(\App\Enums\SurveyStatus::Draft, $dup->status);
+        $this->assertSame(SurveyStatus::Draft, $dup->status);
         $this->assertNull($dup->overall_cap_score);
         // Semua respon duplikat kosong
         $this->assertTrue($dup->responses()->whereNotNull('avg_score')->doesntExist());
@@ -299,7 +302,7 @@ class SurveyFolderTest extends TestCase
     public function test_create_survey_inside_folder_carries_folder_param(): void
     {
         $folder = SurveyFolder::create(['name' => 'Grup A']);
-        $template = \App\Models\SurveyTemplate::create([
+        $template = SurveyTemplate::create([
             'name' => 'Template A', 'code' => 'TPL-A', 'is_active' => true,
         ]);
 
@@ -314,7 +317,7 @@ class SurveyFolderTest extends TestCase
         parse_str((string) parse_url($redirect, PHP_URL_QUERY), $query);
         $this->assertSame(
             (string) $folder->id,
-            \Illuminate\Support\Facades\Crypt::decryptString($query['folder'])
+            Crypt::decryptString($query['folder'])
         );
     }
 }

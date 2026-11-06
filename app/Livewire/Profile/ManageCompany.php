@@ -5,6 +5,7 @@ namespace App\Livewire\Profile;
 use App\Livewire\Traits\HasNotification;
 use App\Services\CompanyService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class ManageCompany extends Component
@@ -128,7 +129,7 @@ class ManageCompany extends Component
 
         try {
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }

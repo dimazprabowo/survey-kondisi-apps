@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Survey;
 use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
@@ -21,7 +22,7 @@ Broadcast::channel('chat.{chatId}', function ($user, $chatId) {
 // dan event juga broadcast ke nama channel numerik yang sama — model binding
 // akan gagal karena HasEncryptedRouteKey mengharap ciphertext.
 Broadcast::channel('survey.{surveyId}', function ($user, $surveyId) {
-    $survey = \App\Models\Survey::find((int) $surveyId);
+    $survey = Survey::find((int) $surveyId);
 
     return $survey && $user->can('update', $survey)
         ? ['id' => $user->id, 'name' => $user->name]

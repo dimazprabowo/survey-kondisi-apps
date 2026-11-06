@@ -11,8 +11,11 @@ use App\Models\SystemConfiguration as SystemConfigModel;
 use App\Services\SystemConfigurationService;
 use App\Traits\HasDynamicLike;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -109,7 +112,7 @@ class SystemConfiguration extends Component
 
         if ($dataType === 'datetime' && ! empty($config->value)) {
             try {
-                $this->value = \Carbon\Carbon::parse($config->value)->format('Y-m-d\TH:i');
+                $this->value = Carbon::parse($config->value)->format('Y-m-d\TH:i');
             } catch (\Exception $e) {
                 $this->value = $config->value;
             }
@@ -130,7 +133,7 @@ class SystemConfiguration extends Component
     {
         try {
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }
@@ -140,7 +143,7 @@ class SystemConfiguration extends Component
 
             if ($this->data_type === 'datetime' && ! empty($value)) {
                 try {
-                    $value = \Carbon\Carbon::parse($value)->format('Y-m-d H:i:s');
+                    $value = Carbon::parse($value)->format('Y-m-d H:i:s');
                 } catch (\Exception $e) {
                     // Keep original value if parsing fails
                 }
@@ -165,7 +168,7 @@ class SystemConfiguration extends Component
             $this->notifySuccess($message);
             $this->closeModal();
             $this->resetForm();
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -182,7 +185,7 @@ class SystemConfiguration extends Component
 
             $status = $config->is_active ? 'diaktifkan' : 'dinonaktifkan';
             $this->notifySuccess("Konfigurasi berhasil {$status}!");
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengubah status konfigurasi.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class Register extends Component
@@ -80,7 +81,7 @@ class Register extends Component
             }
 
             $this->redirect(route('dashboard', absolute: false), navigate: true);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
             $this->dispatch('notify',

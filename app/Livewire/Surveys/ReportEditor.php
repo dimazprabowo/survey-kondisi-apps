@@ -9,11 +9,14 @@ use App\Models\SurveyGroupNote;
 use App\Models\SurveyReport;
 use App\Models\SurveyReportDocumentation;
 use App\Models\SurveyResponse;
+use App\Services\ShipService;
 use App\Services\SurveyReportService;
 use App\Services\SurveyService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -143,10 +146,10 @@ class ReportEditor extends Component
         try {
             $this->authorize('update', $this->report);
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengubah laporan.');
 
             return;
@@ -174,7 +177,7 @@ class ReportEditor extends Component
     {
         try {
             $this->authorize('generate', $this->report);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk generate laporan.');
 
             return;
@@ -199,11 +202,11 @@ class ReportEditor extends Component
         try {
             $this->authorize('generate', $this->report);
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->dispatch('confirm-report-regenerate-close');
             $this->notifyValidationError($e);
             throw $e;
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->dispatch('confirm-report-regenerate-close');
             $this->notifyError('Anda tidak memiliki izin untuk generate laporan.');
 
@@ -239,7 +242,7 @@ class ReportEditor extends Component
             }
 
             return $service->download($this->report);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengunduh laporan.');
 
             return null;
@@ -254,7 +257,7 @@ class ReportEditor extends Component
     {
         try {
             $this->authorize('editWord', $this->report);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengedit dokumen Word.');
 
             return;
@@ -307,12 +310,12 @@ class ReportEditor extends Component
         try {
             $this->authorize('update', $this->report);
             $this->validateOnly('documentationPhoto');
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->documentationPhoto = null;
             $this->notifyError('Anda tidak memiliki izin untuk mengubah dokumentasi.');
 
             return;
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->dispatch('documentation-photo-invalid');
             throw $e;
         }
@@ -351,10 +354,10 @@ class ReportEditor extends Component
             $this->cropData = [];
             $this->report->unsetRelation('documentations');
             $this->notifySuccess('Foto dokumentasi sedang diproses.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengubah dokumentasi.');
         } catch (\Exception $e) {
             report($e);
@@ -382,7 +385,7 @@ class ReportEditor extends Component
             $this->showDeleteDocumentationModal = false;
             $this->report->unsetRelation('documentations');
             $this->notifySuccess('Foto dokumentasi berhasil dihapus.');
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk menghapus dokumentasi.');
         } catch (\Exception $e) {
             report($e);
@@ -443,7 +446,7 @@ class ReportEditor extends Component
         return view('livewire.surveys.report-editor', [
             // Particulars laporan dari snapshot survey (immutable); survey
             // lama tanpa snapshot jatuh kembali ke relasi ship.
-            'ship' => app(\App\Services\ShipService::class)->hydrateFromSnapshot(
+            'ship' => app(ShipService::class)->hydrateFromSnapshot(
                 $this->survey->ship_snapshot ?? [],
                 $this->survey->ship
             ),

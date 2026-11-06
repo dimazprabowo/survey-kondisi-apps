@@ -9,7 +9,9 @@ use App\Livewire\Traits\HasTableSorting;
 use App\Models\Company;
 use App\Services\CompanyService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -175,7 +177,7 @@ class CompanyManagement extends Component
 
         try {
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }
@@ -209,7 +211,7 @@ class CompanyManagement extends Component
 
             $this->notifySuccess($message);
             $this->closeModal();
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -240,7 +242,7 @@ class CompanyManagement extends Component
             $service->delete($company);
             $this->notifySuccess('Perusahaan berhasil dihapus!');
             $this->showDeleteModal = false;
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat menghapus perusahaan ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -257,7 +259,7 @@ class CompanyManagement extends Component
 
             $status = $company->fresh()->status->label();
             $this->notifySuccess("Status perusahaan berhasil diubah menjadi {$status}!");
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengubah status perusahaan.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');

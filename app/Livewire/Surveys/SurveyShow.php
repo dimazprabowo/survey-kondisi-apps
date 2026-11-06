@@ -6,6 +6,10 @@ use App\Livewire\Traits\HasNotification;
 use App\Models\Survey;
 use App\Models\SurveyAccessRequest;
 use App\Models\SurveyCategory;
+use App\Models\SurveyGroupNote;
+use App\Models\SurveyReport;
+use App\Models\SurveyResponse;
+use App\Services\ShipService;
 use App\Services\SurveyService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Crypt;
@@ -82,14 +86,14 @@ class SurveyShow extends Component
     public function getResponsesProperty()
     {
         // Memoize per-request — dipakai berulang oleh avg calculators di Blade.
-        return $this->responsesCache ??= \App\Models\SurveyResponse::where('survey_id', $this->survey->id)
+        return $this->responsesCache ??= SurveyResponse::where('survey_id', $this->survey->id)
             ->get()
             ->keyBy('survey_item_id');
     }
 
     public function getGroupNotesProperty()
     {
-        return \App\Models\SurveyGroupNote::where('survey_id', $this->survey->id)
+        return SurveyGroupNote::where('survey_id', $this->survey->id)
             ->orderBy('order_num')
             ->get()
             ->groupBy('survey_item_group_id');
@@ -101,7 +105,7 @@ class SurveyShow extends Component
      */
     public function getShipSummaryProperty(): array
     {
-        $labels = \App\Services\ShipService::fieldLabels();
+        $labels = ShipService::fieldLabels();
         $fields = [
             'imo_number', 'call_sign', 'ship_type', 'flag',
             'year_built', 'gross_tonnage', 'class_name', 'owner',
@@ -180,7 +184,7 @@ class SurveyShow extends Component
 
     public function openReport()
     {
-        $this->authorize('viewAny', \App\Models\SurveyReport::class);
+        $this->authorize('viewAny', SurveyReport::class);
 
         return $this->redirect(route('surveys.report', $this->survey), navigate: true);
     }

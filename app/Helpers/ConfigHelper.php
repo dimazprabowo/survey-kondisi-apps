@@ -3,6 +3,7 @@
 namespace App\Helpers;
 
 use App\Models\SystemConfiguration;
+use Carbon\Carbon;
 
 class ConfigHelper
 {
@@ -36,9 +37,9 @@ class ConfigHelper
         }
 
         try {
-            $deadlineDate = \Carbon\Carbon::parse($config->value);
+            $deadlineDate = Carbon::parse($config->value);
 
-            return \Carbon\Carbon::now()->lt($deadlineDate);
+            return Carbon::now()->lt($deadlineDate);
         } catch (\Exception $e) {
             return false;
         }
@@ -47,7 +48,7 @@ class ConfigHelper
     /**
      * Get registration deadline as Carbon instance
      */
-    public static function getRegistrationDeadline(): ?\Carbon\Carbon
+    public static function getRegistrationDeadline(): ?Carbon
     {
         $config = SystemConfiguration::where('key', 'registration.deadline')
             ->where('is_active', true)
@@ -58,7 +59,7 @@ class ConfigHelper
         }
 
         try {
-            return \Carbon\Carbon::parse($config->value);
+            return Carbon::parse($config->value);
         } catch (\Exception $e) {
             return null;
         }
@@ -84,7 +85,7 @@ class ConfigHelper
             return null;
         }
 
-        $days = \Carbon\Carbon::now()->diffInDays($deadline, false);
+        $days = Carbon::now()->diffInDays($deadline, false);
 
         return max(0, (int) $days);
     }

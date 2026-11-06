@@ -1,6 +1,9 @@
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Providers\LivewireConfigServiceProvider;
+
 return [
-    App\Providers\AppServiceProvider::class,
-    App\Providers\LivewireConfigServiceProvider::class,
+    AppServiceProvider::class,
+    LivewireConfigServiceProvider::class,
 ];

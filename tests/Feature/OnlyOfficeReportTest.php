@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Enums\FileStatus;
+use App\Livewire\Surveys\ReportEditor;
 use App\Livewire\Surveys\ReportWordEditor;
 use App\Models\Ship;
 use App\Models\Survey;
 use App\Models\SurveyReport;
 use App\Models\User;
 use App\Services\OnlyOfficeService;
+use App\Services\SurveyReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
@@ -61,7 +63,7 @@ class OnlyOfficeReportTest extends TestCase
             'file_size' => 12,
             'file_status' => FileStatus::Completed,
             'file_processed_at' => now(),
-            'generator_version' => \App\Services\SurveyReportService::GENERATOR_VERSION,
+            'generator_version' => SurveyReportService::GENERATOR_VERSION,
         ]);
     }
 
@@ -180,7 +182,7 @@ class OnlyOfficeReportTest extends TestCase
 
         // Sesi edit berikutnya melanjutkan dari versi edit → key berubah.
         $this->assertSame($report->edited_file_path, $this->service->editableSourcePath($report));
-        $reportService = app(\App\Services\SurveyReportService::class);
+        $reportService = app(SurveyReportService::class);
         $this->assertSame($report->edited_file_path, $reportService->activeFilePath($report));
         $this->assertSame($report->edited_file_name, $reportService->activeFileName($report));
     }
@@ -275,7 +277,7 @@ class OnlyOfficeReportTest extends TestCase
         $report = $this->makeReport();
         $report->update(['file_status' => FileStatus::Processing]);
 
-        Livewire::test(\App\Livewire\Surveys\ReportEditor::class, ['survey' => $report->survey])
+        Livewire::test(ReportEditor::class, ['survey' => $report->survey])
             ->call('editWord')
             ->assertNoRedirect();
     }

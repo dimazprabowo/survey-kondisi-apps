@@ -6,11 +6,14 @@ use App\Enums\FileStatus;
 use App\Enums\SurveyItemType;
 use App\Jobs\ProcessSurveyReport;
 use App\Jobs\ProcessSurveyReportDocumentation;
+use App\Models\Notification;
 use App\Models\Ship;
 use App\Models\Survey;
+use App\Models\SurveyAccessRequest;
 use App\Models\SurveyReport;
 use App\Models\SurveyTemplate;
 use App\Models\User;
+use App\Services\FileStorageService;
 use App\Services\SurveyReportDocxBuilder;
 use App\Services\SurveyReportService;
 use App\Services\SurveyService;
@@ -323,7 +326,7 @@ class SurveyReportTest extends TestCase
             $documentation->id,
             $tempPath,
             ['x' => 0, 'y' => 0, 'width' => 1200, 'height' => 800]
-        ))->handle(app(\App\Services\FileStorageService::class));
+        ))->handle(app(FileStorageService::class));
 
         $documentation->refresh();
         $this->assertSame(FileStatus::Completed, $documentation->file_status);
@@ -354,7 +357,7 @@ class SurveyReportTest extends TestCase
         $tempPath = Storage::disk('local')->allFiles('temp/survey-report-documentations')[0];
 
         (new ProcessSurveyReportDocumentation($documentation->id, $tempPath, $cropData))
-            ->handle(app(\App\Services\FileStorageService::class));
+            ->handle(app(FileStorageService::class));
 
         $documentation->refresh();
         $this->assertSame(FileStatus::Completed, $documentation->file_status);
@@ -556,7 +559,7 @@ class SurveyReportTest extends TestCase
 
         (new ProcessSurveyReport($report->id))->handle(
             app(SurveyReportDocxBuilder::class),
-            app(\App\Services\FileStorageService::class),
+            app(FileStorageService::class),
         );
 
         $report->refresh();
@@ -589,7 +592,7 @@ class SurveyReportTest extends TestCase
         $collaborator = User::factory()->create();
         $survey = $this->createSurvey();
         $survey->update(['created_by' => $owner->id]);
-        \App\Models\SurveyAccessRequest::create([
+        SurveyAccessRequest::create([
             'survey_id' => $survey->id,
             'user_id' => $collaborator->id,
             'status' => 'approved',
@@ -600,7 +603,7 @@ class SurveyReportTest extends TestCase
 
         (new ProcessSurveyReport($report->id, $generator->id))->handle(
             app(SurveyReportDocxBuilder::class),
-            app(\App\Services\FileStorageService::class),
+            app(FileStorageService::class),
         );
 
         $this->assertDatabaseHas('notifications', [
@@ -625,10 +628,10 @@ class SurveyReportTest extends TestCase
 
         (new ProcessSurveyReport($report->id, $this->user->id))->handle(
             app(SurveyReportDocxBuilder::class),
-            app(\App\Services\FileStorageService::class),
+            app(FileStorageService::class),
         );
 
-        $this->assertSame(1, \App\Models\Notification::where('user_id', $this->user->id)
+        $this->assertSame(1, Notification::where('user_id', $this->user->id)
             ->where('title', 'Laporan Survey Selesai')->count());
     }
 }

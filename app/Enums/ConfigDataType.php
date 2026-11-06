@@ -2,6 +2,8 @@
 
 namespace App\Enums;
 
+use Carbon\Carbon;
+
 enum ConfigDataType: string
 {
     case String = 'string';
@@ -42,7 +44,7 @@ enum ConfigDataType: string
             self::Boolean => filter_var($value, FILTER_VALIDATE_BOOLEAN),
             self::Json => json_decode($value, true),
             self::Array => explode(',', $value),
-            self::Datetime => $value ? \Carbon\Carbon::parse($value) : null,
+            self::Datetime => $value ? Carbon::parse($value) : null,
             default => $value,
         };
     }

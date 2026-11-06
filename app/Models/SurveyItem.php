@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SurveyItemType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,7 +20,7 @@ class SurveyItem extends Model
 
     protected $casts = [
         'survey_item_group_id' => 'integer',
-        'item_type' => \App\Enums\SurveyItemType::class,
+        'item_type' => SurveyItemType::class,
         'score_labels' => 'array',
         'has_date_fields' => 'boolean',
         'order_num' => 'integer',

@@ -1,6 +1,6 @@
 ---
 name: survey-kondisi-apps
-description: Panduan membangun fitur/aplikasi baru di atas template survey-kondisi-apps (Laravel 12 + Livewire 4) secara konsisten, clean, permission-first, dan UI elegan.
+description: Panduan membangun fitur/aplikasi baru di atas template survey-kondisi-apps (Laravel 13 + Livewire 4) secara konsisten, clean, permission-first, dan UI elegan.
 triggers:
   - user
   - model
@@ -18,14 +18,23 @@ triggers:
 - WAJIB analisis menyeluruh SEBELUM memberi solusi. Tidak ada duplicate logic, tidak ada field mati, tidak menghapus yang masih dipakai, dan hapus yang sudah tidak dipakai agar codebase CLEAN.
 
 # Stack & Versi (JANGAN diganti)
-- PHP ^8.2, Laravel ^12, Livewire ^4.1
+- PHP ^8.5, Laravel ^13, Livewire ^4.1
 - spatie/laravel-permission (role & permission)
 - spatie/laravel-activitylog (audit log)
-- maatwebsite/excel (export Excel)
+- maatwebsite/excel ^4 (export Excel — di atas phpspreadsheet ^5; method concern WAJIB punya return type sesuai interface, mis. `query(): \Illuminate\Database\Eloquent\Builder`, `styles(Worksheet $s): ?array`/`array`, `collection(): \Illuminate\Support\Collection`; tanpa return type = fatal error saat kelas dimuat. Kelas export WAJIB `implements` salah satu concern yang extends `Export` (mis. `FromQuery`) ATAU `Export` langsung — `WithMultipleSheets` sendirian tidak cukup (`Excel::raw()` menolak). `Excel::toArray()` WAJIB terima instance `Import` (marker interface), bukan `null` — pakai `new class implements \Maatwebsite\Excel\Concerns\Import {}`)
+- phpoffice/phpword (generate/edit DOCX report)
 - barryvdh/laravel-dompdf (export PDF)
 - laravel/reverb (websocket/broadcast)
 - intervention/image, league/flysystem-aws-s3-v3 (storage lokal/S3)
 - Frontend: Blade + TailwindCSS + Alpine (bawaan Livewire)
+- Dev tools: laravel/pint (code style), phpunit ^12 (test — metadata pakai attribute PHP `#[Test]`/`#[DataProvider]`, BUKAN doc-comment `@test`)
+- Bebas deprecation PHP 8.5 / Laravel 13 (WAJIB dijaga):
+  - Konstanta PDO driver pakai kelas driver (`Pdo\Mysql::ATTR_SSL_CA`), bukan `PDO::MYSQL_ATTR_*`.
+  - Jangan panggil `Reflection*::setAccessible()`, `curl_close()`, `finfo_close()`, `imagedestroy()`; jangan cast `(integer)/(boolean)/(double)/(binary)`; jangan pakai `null` sebagai array key; nullable WAJIB eksplisit `?Type $x = null`.
+  - `Request::get()` deprecated -> pakai `$request->input()`/`query()`/`string()`.
+  - Middleware CSRF bernama `PreventRequestForgery` (alias `VerifyCsrfToken`/`ValidateCsrfToken` deprecated).
+  - `cache.serializable_classes=false` & `session.serialization=json` (hardening Laravel 13): simpan HANYA skalar/array di Cache & Session, JANGAN objek (Carbon, model, enum). Contoh benar: `SystemConfiguration::get()` meng-cache nilai mentah `value`+`data_type`, lalu cast (mis. ke Carbon) SETELAH dibaca.
+  - Cek runtime: `LOG_DEPRECATIONS_CHANNEL=single php artisan test` lalu pastikan tidak ada baris `*.WARNING` baru di `storage/logs/laravel.log` (tinker memakai handler psysh sendiri — jangan dipakai untuk validasi).
 
 # Arsitektur Wajib (ikuti pola template, JANGAN bikin pola baru)
 1. LIVEWIRE-FIRST. Semua fitur = Livewire Component. Controller HANYA untuk auth/callback SSO.
@@ -191,22 +200,26 @@ Jika butuh variant baru (mis. warna/size berbeda), EXTEND komponen yang ada via 
    - SOLUSI (sudah di komponen): opsi juga di-render ke `<div x-ref="optionsData" class="hidden">{!! json_encode($options) !!}</div>` — child TETAP ikut morph tiap render (`.self` hanya mengabaikan root). Saat dropdown dibuka, `refreshOptions()` membaca ulang elemen itu → selalu fresh.
    - `componentId` deterministik: `md5($wireModel.'|'.$placeholder)` — JANGAN `uniqid()` (berubah tiap render).
    - JANGAN andalkan `wire:key` signature di root `wire:ignore.self` untuk refresh opsi — key berubah = node beda, risiko node ganda saat morph.
+10. **Root literal WAJIB di Livewire view — jangan mulai dengan `@if`/`@include`**:
+    - View Livewire yang root-nya `@if` + `@include` menempatkan morph marker SEBELUM root partial; Livewire menempelkan `wire:id` ke elemen dalam pertama (mis. banner), menyebabkan konten terduplikasi & kontrol kosong setelah update (kasus nyata: `pages.dashboard` — chart ganda + year selector blank).
+    - SOLUSI: selalu bungkus seluruh konten dalam SATU root HTML literal (`<div>...</div>`); kondisional/include ditaruh DI DALAM root tersebut. Diuji `DashboardTest` (stable Livewire root pada initial render & perubahan tahun berulang).
+11. **Signed URL + `HasEncryptedRouteKey` — WAJIB pass `$model->getRouteKey()`, BUKAN model**:
+    - `URL::temporarySignedRoute` memanggil `route()` DUA kali internal (signature + URL final). Melempar model yang `getRouteKey()`-nya mengembalikan ciphertext baru tiap panggil (`Crypt::encryptString` IV acak) menghasilkan signature atas ciphertext A tapi URL berisi ciphertext B → selalu `InvalidSignatureException`.
+    - SOLUSI: `URL::temporarySignedRoute('route.name', $expiry, ['param' => $model->getRouteKey()])` — dievaluasi sekali.
 
 # File Storage (pola WAJIB)
 Alur async via worker (JANGAN simpan file langsung di request):
-1. Di Livewire Component: simpan sementara -> `$file->store('temp/{fitur}', 'local')`, kirim temp_file_path + nama asli ke Service.
-2. Di Service: set kolom `file_status = 'processing'`, simpan record, lalu `dispatch(ProcessXxx::class, ...)`.
+1. Di Livewire Component: `use WithFileUploads`, simpan sementara via `FileStorageService::storeTemp($file, '{fitur}')` -> return `['path' => ..., 'original_name' => ...]`. Pass payload ke Service.
+2. Di Service: bungkus `DB::transaction()`, set kolom `file_status = 'processing'`, simpan record, lalu `dispatch(ProcessXxx::class, $record->id, $tempPath, $originalName)` DI DALAM transaction.
 3. Di Job (implements ShouldQueue, $tries=3, $timeout=120, ada method failed()):
-   - Bangun path final dengan KONVENSI:
-     `{app_env}/{nama-menu-fitur}/{nama-item-slug}/{slug-nama}_{YmdHis}.{ext}`
-     contoh: `config('app.env').'/personel-certificates/'.$personelSlug.'/'.$slug.'_'.now()->format('YmdHis').'.'.$ext`
-   - Simpan via `Storage::disk(file_disk())->put(...)`, verifikasi, hapus temp, update status 'completed' + file_path/file_name/file_size/file_processed_at.
-   - Bila gagal: status 'failed' + file_error.
-4. Download/preview & delete: SELALU lewat `Storage::disk(file_disk())`.
+   - Verifikasi temp file exists di disk 'local'.
+   - Panggil `FileStorageService::moveFromTemp($tempPath, $originalName, '{fitur}', [$slug])` -> return `['path', 'name', 'size']`.
+     Path final mengikuti konvensi `{app_env}/{fitur}/{segments}/{slug}_{YmdHis}.{ext}` via `buildPath()` — JANGAN copy-paste path builder di tiap Job (helper `upload_path()` juga tersedia).
+   - Update record: `file_status = 'completed'` + `file_path/file_name/file_size/file_processed_at`, `file_error = null`.
+   - Bila gagal: `file_status = 'failed'` + `file_error`, throw exception (untuk retry).
+4. Download/preview/inline & delete: SELALU lewat `FileStorageService::download()` / `::inline()` / `::delete()` / `::exists()` / `::storeContent()` (untuk file hasil generate seperti DOCX report). JANGAN pakai `Storage::disk()` langsung di route/component.
 5. Disk pakai helper `file_disk()`; validasi upload pakai `config/file_upload.php` + helper `file_upload_validation_rule()`.
-
-PENTING (perbaikan dari template): JANGAN copy-paste logic path builder di tiap Job.
-EKSTRAK ke shared `App\Services\FileStorageService` atau helper `upload_path($fitur, array $segments, $fileName)` agar konvensi terpusat & DRY. Sediakan juga cleanup temp orphan (scheduled command).
+6. Cleanup temp orphan: scheduled command `uploads:cleanup-temp` (daily, hapus temp > 24 jam).
 
 # Protokol Kerja AI (WAJIB DIIKUTI URUT)
 FASE 1 - ANALISIS (tampilkan dulu, sebelum menulis kode):
@@ -257,6 +270,13 @@ Jika ada ambiguitas yang berdampak besar -> TANYA dulu, jangan berasumsi.
       enabledTransports: ['ws', 'wss'],
   });
   ```
+
+## Menu Badge Realtime (pola Chat — sudah diterapkan)
+- Item menu boleh punya key `'badge'` (angka unread) di `HasMenuItems::getMenuItems()`: sidebar menampilkan pill gradient (cap `99+`) saat expanded & dot `animate-ping` saat collapsed; navbar menampilkan pill yang sama. Render badge sudah ada di `sidebar.blade.php`/`navigation.blade.php` — cukup ISI key-nya.
+- Hitung via 1 query, BUKAN loop: contoh `Chat::totalUnreadCountForUser($userId)` (join `chat_participants` + `chat_messages`, hormati `last_read_at` & `deleted_at` pivot per-user).
+- Listener realtime ada di `HasMenuItems::getListeners()` (diwarisi Sidebar & Navigation): `echo-private:user.{id},NewChatMessage` + event lokal `chat-unread-changed` → handler no-op yang memicu re-render (`getMenuItems()` rehitung badge; cache-nya per-request).
+- Setiap titik "dibaca" WAJIB dispatch `chat-unread-changed` agar badge turun tanpa reload (di `ChatIndex::markChatAsRead()` & `deleteChat()`). Diuji `ChatUnreadBadgeTest`.
+- Menu lain yang butuh badge realtime: isi `'badge'` di item menu + listen event broadcast/event Livewire yang relevan via `getListeners()` trait yang sama — JANGAN bikin mekanisme badge baru.
 
 # UX Detail (wajib, bukan opsional)
 - Setiap tabel: empty state (ikon + pesan), loading state, dan pagination.
@@ -369,7 +389,12 @@ Setiap tabel index WAJIB punya sorting kolom server-side dengan 3 lapis reusable
 - Header card `justify-between` (judul + kontrol kanan seperti toggle/badge): WAJIB `flex-wrap` + `gap-y-*`, atau `flex-col sm:flex-row`. Jangan biarkan kontrol menekan judul di layar sempit.
 - `flex-1` di dalam `flex items-center` yang berisi input/teks: WAJIB `min-w-0` — tanpa itu `min-width:auto` membuat anak tidak bisa menyusut di bawah intrinsic width → overflow di mobile.
 - Teks panjang di breadcrumb/chip/badge bar (mis. nama folder): parent `min-w-0`, ikon `shrink-0`, teks `truncate` + `title` attr untuk full text.
-- Scrollbar: SEMUA container yang scrollable (`overflow-x-auto`/`overflow-y-auto`/`overflow-auto`) WAJIB pakai class `custom-scrollbar` — di sidebar, dropdown select, area modal, dan wrapper tabel. Kecuali tab/nav bar horizontal yang memang pakai `navbar-scroll` (scrollbar disembunyikan). Scrollbar root halaman (vertikal) sudah distyle global via `html` di `app.css` — tidak perlu class tambahan.
+
+## Custom Scrollbar (WAJIB — sudah tersedia di `resources/css/app.css`)
+- `.custom-scrollbar` WAJIB dipasang di SEMUA container scrollable (`overflow-x-auto`/`overflow-y-auto`/`overflow-auto`): wrapper tabel, sidebar nav, panel chat, dropdown select, list di modal, dll. Sudah dark-mode aware via `.dark` variant — jangan tulis variant sendiri.
+- Scrollbar halaman (elemen `html`) sudah distyle global di app.css — JANGAN override.
+- `.navbar-scroll` = scrollbar disembunyikan total; HANYA untuk nav/tab horizontal yang scroll-nya tidak perlu terlihat.
+- DILARANG menulis CSS scrollbar baru (`::-webkit-scrollbar`, `scrollbar-width`, dll) di file lain atau inline style — extend/pakai `.custom-scrollbar` agar konsisten.
 
 ## Aksesibilitas Dasar
 - Setiap input WAJIB punya `<x-input-label>` dengan `for` attribute.
@@ -387,8 +412,10 @@ Bungkus aksi Service call dengan try/catch:
 JANGAN bocorkan pesan exception mentah ke user.
 
 # Testing & Quality Gate
-- Sertakan minimal Feature test (Pest/PHPUnit) untuk: authorize gagal/berhasil, CRUD, dan permission gate.
-- Jalankan `./vendor/bin/pint` (code style) sebelum selesai.
+- Sertakan minimal Feature test (PHPUnit ^12) untuk: authorize gagal/berhasil, CRUD, dan permission gate.
+- Test yang menguji izin WAJIB memakai user dengan permission eksplisit (`givePermissionTo(...)`), BUKAN super admin — `Gate::before` super admin melewati semua Policy sehingga test tidak membuktikan apa-apa.
+- Perilaku cache yang men-serialize: uji dengan `config(['cache.stores.array.serialize' => true, 'cache.serializable_classes' => false])` + `Cache::forgetDriver('array')` — store `array` default di test TIDAK men-serialize sehingga bug objek di cache tidak tertangkap.
+- Verifikasi: `php artisan test`, `php artisan migrate:fresh --seed`, `php artisan view:cache`, `./vendor/bin/pint <file yang diubah>`.
 - Factory & Seeder idempotent; daftarkan seeder baru di DatabaseSeeder dengan urutan benar (Permission -> Role -> data master -> dst).
 
 # Security-Aware (WAJIB, bukan opsional)
@@ -422,6 +449,8 @@ JANGAN bocorkan pesan exception mentah ke user.
 - [ ] Export Excel & PDF (jika relevan) + permission-nya
 - [ ] Tidak ada N+1, list paginated, search/filter server-side
 - [ ] Tabel index punya sorting kolom via HasTableSorting + SortsQuery + `<x-sortable-header>` (bukan orderBy duplikat)
+- [ ] Halaman list punya toast "Ditemukan N data" saat search/filter berubah (pola `filterChanged`, notify di `render()` setelah paginator)
+- [ ] Scrollbar: `.custom-scrollbar` di semua container scrollable; tanpa CSS scrollbar duplikat di file lain
 - [ ] Test dasar lulus + Pint bersih
 - [ ] Tidak ada dead code / field mati / duplicate logic
 - [ ] URL aman: ID terenkripsi, tidak ada ID mentah di URL/link
@@ -450,4 +479,7 @@ JANGAN bocorkan pesan exception mentah ke user.
 - Membuat halaman list tanpa toast "Ditemukan N data" saat search/filter berubah -- WAJIB pola `filterChanged` + notify di `render()`
 - Memanggil notify di hook `updating*` untuk hasil filter -- hasil belum dihitung; notify HANYA di `render()` setelah query paginator
 - Membuat sorting kolom dengan `orderBy` manual/duplikat di tiap component -- WAJIB `HasTableSorting` + `SortsQuery` + `<x-sortable-header>`
+- Sorting tanpa whitelist `$sortable` di Service (field bebas = celah SQL injection di orderByRaw)
 - Membuat kolom relasi many-to-many (mis. Role) sortable -- urutan ambigu dan rapuh lintas DB
+- Menulis CSS scrollbar baru/inline (`::-webkit-scrollbar`, `scrollbar-width`) -- WAJIB pakai `.custom-scrollbar` dari `app.css`
+- Membuat mekanisme badge menu baru -- WAJIB pakai key `'badge'` di `HasMenuItems` + listener yang sudah ada

@@ -14,8 +14,10 @@ use App\Services\SurveyFolderService;
 use App\Services\SurveyService;
 use App\Traits\HasDynamicLike;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -160,7 +162,7 @@ class SurveyManagement extends Component
                     'unique:survey_folders,name'.($this->editingFolderId ? ','.$this->editingFolderId : ''),
                 ],
             ], [], ['folderName' => 'nama folder']);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
 
             throw $e;
@@ -178,7 +180,7 @@ class SurveyManagement extends Component
                 $this->notifySuccess('Folder berhasil dibuat!');
             }
             $this->dispatch('close-modal', 'survey-folder-modal');
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengelola folder.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -210,7 +212,7 @@ class SurveyManagement extends Component
             $service->delete($folder);
             $this->notifySuccess('Folder berhasil dihapus!');
             $this->showDeleteFolderModal = false;
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat menghapus folder ini.');
         } catch (\RuntimeException $e) {
             $this->notifyError($e->getMessage());
@@ -239,7 +241,7 @@ class SurveyManagement extends Component
         try {
             Survey::whereIn('id', array_map('intval', $this->selected))->get()
                 ->each(fn (Survey $s) => $this->authorize('update', $s));
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Ada survey yang tidak dapat Anda pindahkan (bukan pemilik).');
 
             return;
@@ -283,7 +285,7 @@ class SurveyManagement extends Component
             $this->notifySuccess($folder
                 ? "Survey {$survey->survey_number} dipindahkan ke folder {$folder->name}."
                 : "Survey {$survey->survey_number} dikeluarkan dari folder.");
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat memindahkan survey ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -329,7 +331,7 @@ class SurveyManagement extends Component
             $new = $service->duplicateWithoutValues($source, $folder);
             $this->dispatch('close-modal', 'survey-duplicate-modal');
             $this->notifySuccess("Survey {$source->survey_number} diduplikasi menjadi {$new->survey_number}.");
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat menduplikasi survey ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -403,7 +405,7 @@ class SurveyManagement extends Component
         try {
             $survey = Survey::findOrFail($id);
             $this->authorize('delete', $survey);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat menghapus survey ini.');
 
             return;
@@ -422,7 +424,7 @@ class SurveyManagement extends Component
             $service->delete($survey);
             $this->notifySuccess('Survey berhasil dihapus!');
             $this->showDeleteModal = false;
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat menghapus survey ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');

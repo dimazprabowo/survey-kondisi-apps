@@ -5,6 +5,9 @@ namespace App\Livewire\Traits;
 use App\Models\Chat;
 use App\Models\Company;
 use App\Models\Notification;
+use App\Models\Ship;
+use App\Models\Survey;
+use App\Models\SurveyTemplate;
 use App\Models\SystemConfiguration;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -28,9 +31,9 @@ trait HasMenuItems
         $perms = [
             'dashboard_view' => Gate::allows('viewStats'),
             'companies_view' => Gate::allows('viewAny', Company::class),
-            'ships_view' => Gate::allows('viewAny', \App\Models\Ship::class),
-            'surveys_view' => Gate::allows('viewAny', \App\Models\Survey::class),
-            'survey_templates_view' => Gate::allows('viewAny', \App\Models\SurveyTemplate::class),
+            'ships_view' => Gate::allows('viewAny', Ship::class),
+            'surveys_view' => Gate::allows('viewAny', Survey::class),
+            'survey_templates_view' => Gate::allows('viewAny', SurveyTemplate::class),
             'notifications_view' => Gate::allows('viewAny', Notification::class),
             'notifications_send' => Gate::allows('send', Notification::class),
             'chat_view' => Gate::allows('viewAny', Chat::class),

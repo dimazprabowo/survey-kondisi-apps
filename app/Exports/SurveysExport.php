@@ -4,12 +4,14 @@ namespace App\Exports;
 
 use App\Models\Survey;
 use App\Services\SurveyService;
+use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapping, WithStyles
@@ -35,7 +37,7 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
         $this->folderId = $folderId;
     }
 
-    public function query()
+    public function query(): Builder
     {
         $query = Survey::with(['ship:id,name,call_sign,year_built', 'creator:id,name', 'template:id,name,code', 'folder:id,name']);
 
@@ -101,7 +103,7 @@ class SurveysExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapp
             1 => [
                 'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
                 'fill' => [
-                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'fillType' => Fill::FILL_SOLID,
                     'startColor' => ['rgb' => '2563EB'],
                 ],
             ],

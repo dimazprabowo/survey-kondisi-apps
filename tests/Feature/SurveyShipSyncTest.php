@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\ShipClassStatus;
 use App\Livewire\MasterData\ShipManagement;
+use App\Livewire\Surveys\ReportEditor;
 use App\Livewire\Surveys\SurveyForm;
 use App\Models\Ship;
 use App\Models\Survey;
@@ -561,7 +562,7 @@ class SurveyShipSyncTest extends TestCase
     {
         $survey = $this->createSurvey();
 
-        $component = Livewire::test(\App\Livewire\Surveys\ReportEditor::class, ['survey' => $survey])
+        $component = Livewire::test(ReportEditor::class, ['survey' => $survey])
             ->call('editShip');
 
         // Route key terenkripsi acak per call — assert suffix saja.

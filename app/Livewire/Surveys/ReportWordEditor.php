@@ -9,6 +9,7 @@ use App\Models\SurveyReport;
 use App\Services\FileStorageService;
 use App\Services\OnlyOfficeService;
 use App\Services\SurveyReportService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Component;
 
@@ -84,7 +85,7 @@ class ReportWordEditor extends Component
             }
 
             return $service->download($this->report);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengunduh laporan.');
 
             return null;

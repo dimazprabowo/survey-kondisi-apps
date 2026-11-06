@@ -9,7 +9,9 @@ use App\Models\Company;
 use App\Models\User;
 use App\Services\UserService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Spatie\Permission\Models\Role;
@@ -179,7 +181,7 @@ class UserManagement extends Component
     {
         try {
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }
@@ -215,7 +217,7 @@ class UserManagement extends Component
             $this->notifySuccess($message);
             $this->closeModal();
             $this->resetForm();
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -239,7 +241,7 @@ class UserManagement extends Component
             $service->delete($user);
             $this->notifySuccess('User berhasil dihapus!');
             $this->showDeleteModal = false;
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat menghapus akun ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -256,7 +258,7 @@ class UserManagement extends Component
 
             $status = $user->is_active ? 'diaktifkan' : 'dinonaktifkan';
             $this->notifySuccess("User berhasil {$status}!");
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat mengubah status akun ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -283,7 +285,7 @@ class UserManagement extends Component
                 'newPassword.same' => 'Password tidak cocok',
                 'newPasswordConfirmation.required' => 'Konfirmasi password wajib diisi',
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }
@@ -296,7 +298,7 @@ class UserManagement extends Component
 
             $this->notifySuccess('Password berhasil direset!');
             $this->closeResetPasswordModal();
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mereset password.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');

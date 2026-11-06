@@ -57,11 +57,22 @@ class SystemConfiguration extends Model
     // Static Methods
     public static function get(string $key, $default = null)
     {
-        return Cache::remember("config.{$key}", 3600, function () use ($key, $default) {
+        $raw = Cache::remember(self::cacheKey($key), 3600, function () use ($key) {
             $config = self::where('key', $key)->where('is_active', true)->first();
 
-            return $config ? $config->parsed_value : $default;
+            return $config
+                ? ['value' => $config->value, 'data_type' => $config->getRawOriginal('data_type')]
+                : false;
         });
+
+        return $raw === false
+            ? $default
+            : ConfigDataType::from($raw['data_type'])->cast((string) $raw['value']);
+    }
+
+    private static function cacheKey(string $key): string
+    {
+        return "system_config.{$key}";
     }
 
     public static function set(string $key, $value, string $category = 'general', string $dataType = 'string'): self
@@ -86,7 +97,7 @@ class SystemConfiguration extends Model
             ]
         );
 
-        Cache::forget("config.{$key}");
+        Cache::forget(self::cacheKey($key));
 
         return $config;
     }
@@ -97,11 +108,11 @@ class SystemConfiguration extends Model
         parent::boot();
 
         static::saved(function ($config) {
-            Cache::forget("config.{$config->key}");
+            Cache::forget(self::cacheKey($config->key));
         });
 
         static::deleted(function ($config) {
-            Cache::forget("config.{$config->key}");
+            Cache::forget(self::cacheKey($config->key));
         });
     }
 }

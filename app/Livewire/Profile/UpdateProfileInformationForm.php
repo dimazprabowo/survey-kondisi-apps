@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class UpdateProfileInformationForm extends Component
@@ -41,7 +42,7 @@ class UpdateProfileInformationForm extends Component
                     return $query->whereNull('pending_email')->orWhere('pending_email', '!=', request('email'));
                 })],
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }

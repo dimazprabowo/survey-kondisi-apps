@@ -2,12 +2,14 @@
 
 namespace App\Exports;
 
+use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Spatie\Permission\Models\Role;
 
@@ -15,7 +17,7 @@ class RolesExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMappin
 {
     use Exportable;
 
-    public function query()
+    public function query(): Builder
     {
         return Role::with('permissions');
     }
@@ -51,7 +53,7 @@ class RolesExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMappin
             1 => [
                 'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
                 'fill' => [
-                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'fillType' => Fill::FILL_SOLID,
                     'startColor' => ['rgb' => '2563EB'],
                 ],
             ],

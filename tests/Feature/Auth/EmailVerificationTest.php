@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Livewire\Pages\Auth\VerifyEmail;
 use App\Models\User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -20,7 +21,7 @@ class EmailVerificationTest extends TestCase
         $response = $this->actingAs($user)->get('/verify-email');
 
         $response
-            ->assertSeeLivewire(\App\Livewire\Pages\Auth\VerifyEmail::class)
+            ->assertSeeLivewire(VerifyEmail::class)
             ->assertStatus(200);
     }
 

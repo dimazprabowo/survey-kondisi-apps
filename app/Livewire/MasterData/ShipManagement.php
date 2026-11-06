@@ -11,6 +11,7 @@ use App\Models\Ship;
 use App\Services\ShipService;
 use App\Traits\HasDynamicLike;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -94,7 +95,7 @@ class ShipManagement extends Component
             $service->delete($ship);
             $this->notifySuccess('Kapal berhasil dihapus!');
             $this->showDeleteModal = false;
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat menghapus kapal ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -109,7 +110,7 @@ class ShipManagement extends Component
             $service->toggleStatus($ship);
             $status = $ship->fresh()->status->label();
             $this->notifySuccess("Status kapal berhasil diubah menjadi {$status}!");
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengubah status kapal.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -135,7 +136,7 @@ class ShipManagement extends Component
 
             $service->updateClassStatus($ship, $classStatus);
             $this->notifySuccess("Status kelas {$ship->name} berhasil diubah menjadi {$classStatus->label()}!");
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengubah status kelas kapal.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');

@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Middleware\CheckRegistrationOpen;
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\VerifySsoSecret;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,9 +20,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(SecurityHeaders::class);
 
         $middleware->alias([
-            'active' => \App\Http\Middleware\EnsureUserIsActive::class,
-            'sso.secret' => \App\Http\Middleware\VerifySsoSecret::class,
-            'registration.open' => \App\Http\Middleware\CheckRegistrationOpen::class,
+            'active' => EnsureUserIsActive::class,
+            'sso.secret' => VerifySsoSecret::class,
+            'registration.open' => CheckRegistrationOpen::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

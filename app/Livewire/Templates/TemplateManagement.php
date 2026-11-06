@@ -10,10 +10,13 @@ use App\Models\SurveyTemplate;
 use App\Services\SurveyTemplateService;
 use App\Traits\HasDynamicLike;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
+use Maatwebsite\Excel\Concerns\Import;
 use Maatwebsite\Excel\Facades\Excel;
 
 class TemplateManagement extends Component
@@ -86,7 +89,7 @@ class TemplateManagement extends Component
             $service->delete($template);
             $this->notifySuccess('Template berhasil dihapus!');
             $this->showDeleteModal = false;
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat menghapus template ini.');
         } catch (\RuntimeException $e) {
             $this->notifyError($e->getMessage());
@@ -125,7 +128,7 @@ class TemplateManagement extends Component
             $this->authorize('duplicate', $template);
             $newTemplate = $service->duplicate($template);
             $this->notifySuccess('Template berhasil diduplikasi: '.$newTemplate->name);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk menduplikasi template.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -139,7 +142,7 @@ class TemplateManagement extends Component
             $this->authorize('toggleStatus', $template);
             $service->toggleStatus($template);
             $this->notifySuccess('Status template berhasil diubah!');
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk mengubah status template.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -244,15 +247,15 @@ class TemplateManagement extends Component
                 $templateData = ['name' => trim($this->importName), 'code' => trim($this->importCode)];
             }
 
-            $sheets = Excel::toArray(null, $this->importFile->getRealPath());
+            $sheets = Excel::toArray(new class implements Import {}, $this->importFile->getRealPath());
             $template = $service->importSheets($sheets, $target, $templateData);
 
             $this->dispatch('close-modal', 'template-import-modal');
             $this->resetImportForm();
             $this->notifySuccess("Struktur berhasil diimport ke template {$template->name}.");
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak dapat melakukan import struktur.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         } catch (\Exception $e) {

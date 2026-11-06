@@ -3,6 +3,7 @@
 namespace App\Livewire\Forms;
 
 use Illuminate\Auth\Events\Lockout;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
@@ -32,7 +33,7 @@ class LoginForm extends Form
      * 2. Check rate limiting
      * 3. Attempt authentication with credentials
      *
-     * @throws \Illuminate\Validation\ValidationException
+     * @throws ValidationException
      */
     public function authenticate(): void
     {
@@ -71,7 +72,7 @@ class LoginForm extends Form
     /**
      * Verify reCAPTCHA v2 token.
      *
-     * @throws \Illuminate\Validation\ValidationException
+     * @throws ValidationException
      */
     protected function verifyRecaptcha(): void
     {
@@ -118,7 +119,7 @@ class LoginForm extends Form
                 'hostname' => $result['hostname'] ?? 'unknown',
             ]);
 
-        } catch (\Illuminate\Http\Client\RequestException $e) {
+        } catch (RequestException $e) {
             \Log::error('reCAPTCHA request failed', [
                 'error' => $e->getMessage(),
             ]);

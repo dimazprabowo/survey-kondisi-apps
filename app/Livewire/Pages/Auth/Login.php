@@ -5,6 +5,7 @@ namespace App\Livewire\Pages\Auth;
 use App\Livewire\Forms\LoginForm;
 use App\Livewire\Traits\HasNotification;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class Login extends Component
@@ -48,7 +49,7 @@ class Login extends Component
             // Step 5: Redirect
             $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             // Get first error message
             $errors = $e->validator->errors();
             $firstError = $errors->first();

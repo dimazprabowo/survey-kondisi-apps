@@ -3,10 +3,13 @@
 namespace App\Livewire\Notifications;
 
 use App\Livewire\Traits\HasNotification;
+use App\Models\Notification;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Traits\HasDynamicLike;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -101,7 +104,7 @@ class SendNotification extends Component
 
         try {
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }
@@ -132,7 +135,7 @@ class SendNotification extends Component
 
             $this->resetForm();
             $this->activeTab = 'history';
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');
@@ -169,7 +172,7 @@ class SendNotification extends Component
             ->orderBy('name')
             ->get(['id', 'name', 'email']);
 
-        $history = \App\Models\Notification::with('user:id,name')
+        $history = Notification::with('user:id,name')
             ->when($this->historySearch, fn ($q) => $q->where(function ($q) use ($operator) {
                 $q->where('title', $operator, "%{$this->historySearch}%")
                     ->orWhere('message', $operator, "%{$this->historySearch}%");
@@ -177,7 +180,7 @@ class SendNotification extends Component
             ->latest()
             ->paginate(15, pageName: 'historyPage');
 
-        $historyStats = \App\Models\Notification::selectRaw('type, count(*) as count')
+        $historyStats = Notification::selectRaw('type, count(*) as count')
             ->groupBy('type')
             ->pluck('count', 'type')
             ->toArray();

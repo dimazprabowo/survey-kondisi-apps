@@ -2,12 +2,15 @@
 
 namespace App\Livewire\Templates;
 
+use App\Enums\SurveyItemType;
 use App\Livewire\Traits\HasNotification;
 use App\Models\SurveyTemplate;
 use App\Services\SurveyTemplateService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class TemplateForm extends Component
@@ -173,7 +176,7 @@ class TemplateForm extends Component
             'categories.*.sub_categories.*.item_groups.*.name' => ['required', 'string', 'max:255'],
             'categories.*.sub_categories.*.item_groups.*.items' => ['nullable', 'array'],
             'categories.*.sub_categories.*.item_groups.*.items.*.name' => ['required', 'string', 'max:500'],
-            'categories.*.sub_categories.*.item_groups.*.items.*.item_type' => ['required', 'in:'.implode(',', \App\Enums\SurveyItemType::values())],
+            'categories.*.sub_categories.*.item_groups.*.items.*.item_type' => ['required', 'in:'.implode(',', SurveyItemType::values())],
             'categories.*.sub_categories.*.item_groups.*.items.*.score_labels' => ['nullable', 'array'],
             'categories.*.sub_categories.*.item_groups.*.items.*.has_date_fields' => ['boolean'],
         ];
@@ -512,7 +515,7 @@ class TemplateForm extends Component
 
         try {
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             // Jump to the first category (and sub-category) tab that has validation errors so the user can see them
             foreach ($e->validator->errors()->keys() as $key) {
                 if (preg_match('/^categories\.(\d+)(?:\.sub_categories\.(\d+))?/', $key, $m)) {
@@ -548,7 +551,7 @@ class TemplateForm extends Component
             }
 
             return $this->redirect(route('master-data.survey-templates.index'), navigate: true);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');

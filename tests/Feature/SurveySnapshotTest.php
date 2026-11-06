@@ -3,15 +3,21 @@
 namespace Tests\Feature;
 
 use App\Enums\SurveyItemType;
+use App\Livewire\Surveys\SurveyForm;
 use App\Models\Ship;
 use App\Models\Survey;
 use App\Models\SurveyCategory;
+use App\Models\SurveyGroupNote;
 use App\Models\SurveyItem;
 use App\Models\SurveyItemGroup;
+use App\Models\SurveyResponse;
 use App\Models\SurveySubCategory;
 use App\Models\SurveyTemplate;
+use App\Models\User;
 use App\Services\SurveyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class SurveySnapshotTest extends TestCase
@@ -166,20 +172,20 @@ class SurveySnapshotTest extends TestCase
 
         $service->saveResponses($survey->id, []);
 
-        $this->assertSame(0, \App\Models\SurveyResponse::where('survey_id', $survey->id)->count());
-        $this->assertSame(0, \App\Models\SurveyGroupNote::where('survey_id', $survey->id)->count());
+        $this->assertSame(0, SurveyResponse::where('survey_id', $survey->id)->count());
+        $this->assertSame(0, SurveyGroupNote::where('survey_id', $survey->id)->count());
         $this->assertNull($survey->fresh()->overall_cap_score);
     }
 
     public function test_component_remove_structure_node_requires_edit_mode_toggle(): void
     {
         $survey = $this->createSurvey();
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
         $this->actingAs($user);
-        \Illuminate\Support\Facades\Gate::before(fn () => true);
+        Gate::before(fn () => true);
 
         // Toggle off: penghapusan ditolak
-        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+        $component = Livewire::test(SurveyForm::class, ['survey' => $survey])
             ->call('removeStructureNode', 'item', $this->item->id);
         $items = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'];
         $this->assertCount(1, $items);
@@ -209,11 +215,11 @@ class SurveySnapshotTest extends TestCase
         ]);
 
         $survey = $this->createSurvey();
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
         $this->actingAs($user);
-        \Illuminate\Support\Facades\Gate::before(fn () => true);
+        Gate::before(fn () => true);
 
-        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+        $component = Livewire::test(SurveyForm::class, ['survey' => $survey])
             ->call('toggleEditStructure')
             ->call('removeStructureNode', 'item', $this->item->id)
             ->call('removeStructureNode', 'item_group', $this->itemGroup->id);
@@ -242,11 +248,11 @@ class SurveySnapshotTest extends TestCase
         ]);
 
         $survey = $this->createSurvey();
-        $this->actingAs(\App\Models\User::factory()->create());
-        \Illuminate\Support\Facades\Gate::before(fn () => true);
+        $this->actingAs(User::factory()->create());
+        Gate::before(fn () => true);
 
         // Tanpa edit mode: ditolak
-        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+        $component = Livewire::test(SurveyForm::class, ['survey' => $survey])
             ->call('moveStructureNode', 'item', $item2->id, 'up');
         $items = $component->get('structureTree')['categories'][0]['subCategories'][0]['itemGroups'][0]['items'];
         $this->assertSame($item2->id, $items[1]['id']);
@@ -277,10 +283,10 @@ class SurveySnapshotTest extends TestCase
     public function test_add_structure_node_requires_edit_mode_toggle(): void
     {
         $survey = $this->createSurvey();
-        $this->actingAs(\App\Models\User::factory()->create());
-        \Illuminate\Support\Facades\Gate::before(fn () => true);
+        $this->actingAs(User::factory()->create());
+        Gate::before(fn () => true);
 
-        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+        $component = Livewire::test(SurveyForm::class, ['survey' => $survey])
             ->call('openAddNode', 'item', $this->itemGroup->id)
             ->set('nodeName', 'Item Baru')
             ->call('saveNode');
@@ -292,10 +298,10 @@ class SurveySnapshotTest extends TestCase
     public function test_add_item_to_group_creates_node_and_empty_response(): void
     {
         $survey = $this->createSurvey();
-        $this->actingAs(\App\Models\User::factory()->create());
-        \Illuminate\Support\Facades\Gate::before(fn () => true);
+        $this->actingAs(User::factory()->create());
+        Gate::before(fn () => true);
 
-        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+        $component = Livewire::test(SurveyForm::class, ['survey' => $survey])
             ->call('toggleEditStructure')
             ->call('openAddNode', 'item', $this->itemGroup->id);
 
@@ -320,12 +326,12 @@ class SurveySnapshotTest extends TestCase
     public function test_edit_node_renames_label_and_name(): void
     {
         $survey = $this->createSurvey();
-        $this->actingAs(\App\Models\User::factory()->create());
-        \Illuminate\Support\Facades\Gate::before(fn () => true);
+        $this->actingAs(User::factory()->create());
+        Gate::before(fn () => true);
 
         $catId = $survey->structure['categories'][0]['id'];
 
-        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+        $component = Livewire::test(SurveyForm::class, ['survey' => $survey])
             ->call('toggleEditStructure')
             ->call('openEditNode', 'category', $catId);
 
@@ -345,10 +351,10 @@ class SurveySnapshotTest extends TestCase
     public function test_item_type_change_realigns_response_shape(): void
     {
         $survey = $this->createSurvey();
-        $this->actingAs(\App\Models\User::factory()->create());
-        \Illuminate\Support\Facades\Gate::before(fn () => true);
+        $this->actingAs(User::factory()->create());
+        Gate::before(fn () => true);
 
-        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+        $component = Livewire::test(SurveyForm::class, ['survey' => $survey])
             ->call('toggleEditStructure')
             ->call('openEditNode', 'item', $this->item->id);
 
@@ -368,10 +374,10 @@ class SurveySnapshotTest extends TestCase
     public function test_add_category_and_sub_category_to_empty_structure(): void
     {
         $survey = $this->createSurvey();
-        $this->actingAs(\App\Models\User::factory()->create());
-        \Illuminate\Support\Facades\Gate::before(fn () => true);
+        $this->actingAs(User::factory()->create());
+        Gate::before(fn () => true);
 
-        $component = \Livewire\Livewire::test(\App\Livewire\Surveys\SurveyForm::class, ['survey' => $survey])
+        $component = Livewire::test(SurveyForm::class, ['survey' => $survey])
             ->call('toggleEditStructure')
             ->call('openAddNode', 'category')
             ->set('nodeName', 'Kategori Custom')

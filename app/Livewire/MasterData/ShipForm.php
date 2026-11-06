@@ -7,9 +7,11 @@ use App\Enums\ShipStatus;
 use App\Livewire\Traits\HasNotification;
 use App\Models\Ship;
 use App\Services\ShipService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class ShipForm extends Component
@@ -279,7 +281,7 @@ class ShipForm extends Component
 
         try {
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->notifyValidationError($e);
             throw $e;
         }
@@ -338,7 +340,7 @@ class ShipForm extends Component
             $this->notifySuccess($message);
 
             return $this->redirect(route('master-data.ships'), navigate: true);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+        } catch (AuthorizationException $e) {
             $this->notifyError('Anda tidak memiliki izin untuk melakukan aksi ini.');
         } catch (\Exception $e) {
             $this->notifyError('Terjadi kesalahan sistem. Silakan coba lagi.');

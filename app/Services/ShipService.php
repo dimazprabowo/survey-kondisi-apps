@@ -8,6 +8,7 @@ use App\Models\ShipCertificate;
 use App\Models\Survey;
 use App\Traits\HasDynamicLike;
 use App\Traits\SortsQuery;
+use Carbon\CarbonInterface;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -185,7 +186,7 @@ class ShipService
 
     protected function dateOrNull(mixed $value): ?string
     {
-        if ($value instanceof \Carbon\CarbonInterface) {
+        if ($value instanceof CarbonInterface) {
             return $value->format('Y-m-d');
         }
 

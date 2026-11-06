@@ -1110,7 +1110,6 @@ class SurveyReportDocxBuilder
         ob_start();
         imagepng($img);
         $png = ob_get_clean();
-        imagedestroy($img);
 
         return $png !== false ? $png : null;
     }

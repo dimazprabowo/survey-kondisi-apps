@@ -1,10 +1,10 @@
 # Client App — Boilerplate Application
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Laravel-12.x-red?style=for-the-badge&logo=laravel" alt="Laravel">
+  <img src="https://img.shields.io/badge/Laravel-13.x-red?style=for-the-badge&logo=laravel" alt="Laravel">
   <img src="https://img.shields.io/badge/Livewire-4.x-purple?style=for-the-badge&logo=livewire" alt="Livewire">
   <img src="https://img.shields.io/badge/TailwindCSS-3.x-blue?style=for-the-badge&logo=tailwindcss" alt="Tailwind">
-  <img src="https://img.shields.io/badge/PHP-8.2+-777BB4?style=for-the-badge&logo=php" alt="PHP">
+  <img src="https://img.shields.io/badge/PHP-8.5+-777BB4?style=for-the-badge&logo=php" alt="PHP">
 </p>
 
 <p align="center">
@@ -108,8 +108,8 @@ Aplikasi ini mendukung **dual mode operation**:
 
 | Komponen | Teknologi | Versi |
 |----------|-----------|-------|
-| Framework | Laravel | 12.x |
-| PHP | PHP | 8.2+ |
+| Framework | Laravel | 13.x |
+| PHP | PHP | 8.5+ |
 | UI Framework | Livewire | 4.x |
 | RBAC | Spatie Permission | 6.x |
 | Database | PostgreSQL / MySQL / SQLite | 17 / 8 / - |
@@ -117,7 +117,7 @@ Aplikasi ini mendukung **dual mode operation**:
 | JS | Alpine.js | 3.x |
 | WebSocket | Laravel Reverb | 1.x |
 | PDF | DomPDF | 3.x |
-| Excel | Maatwebsite Excel | 3.x |
+| Excel | Maatwebsite Excel | 4.x |
 | Image | Intervention Image | 3.x |
 | Activity Log | Spatie Activity Log | 4.x |
 | Security | reCAPTCHA v2 | - |
@@ -128,7 +128,7 @@ Aplikasi ini mendukung **dual mode operation**:
 
 ### Prasyarat
 
-- PHP 8.2 atau lebih tinggi
+- PHP 8.5 atau lebih tinggi
 - Composer 2.x
 - Node.js 18+ & npm
 - PostgreSQL 17 atau MySQL 8 atau SQLite

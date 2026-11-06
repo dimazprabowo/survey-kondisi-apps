@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\SurveyItemType;
 use App\Models\SurveyCategory;
 use App\Models\SurveyItem;
 use App\Models\SurveyItemGroup;
@@ -335,7 +336,7 @@ class SurveyTemplateService
                             $sub->name,
                             $ig->name,
                             $item->name,
-                            $item->item_type instanceof \App\Enums\SurveyItemType ? $item->item_type->value : $item->item_type,
+                            $item->item_type instanceof SurveyItemType ? $item->item_type->value : $item->item_type,
                             implode(',', $item->score_labels ?? []),
                             $item->has_date_fields ? 'Ya' : 'Tidak',
                         ];
