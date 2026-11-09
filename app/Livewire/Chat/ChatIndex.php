@@ -322,7 +322,7 @@ class ChatIndex extends Component
 
     public function handleTyping($event): void
     {
-        $this->dispatch('user-typing', userId: $event['user_id'], userName: $event['user_name'], isTyping: $event['is_typing']);
+        $this->dispatch('user-typing', userId: $event['user_id'], userName: $event['user_name'], is_typing: $event['is_typing']);
     }
 
     /**
