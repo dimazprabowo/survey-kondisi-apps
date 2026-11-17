@@ -267,6 +267,50 @@ class SurveyReportTest extends TestCase
         );
     }
 
+    public function test_note_grup_item_hanya_dirender_bila_ada_catatan(): void
+    {
+        $item = (object) [
+            'id' => 4001,
+            'name' => 'Plat Starboard Side',
+            'item_type' => SurveyItemType::Score,
+            'score_labels' => ['C', 'V'],
+            'has_date_fields' => false,
+        ];
+        $groupWithNote = (object) [
+            'id' => 3001,
+            'name' => 'Bottom Top/Side Shell',
+            'items' => collect([$item]),
+        ];
+        $groupWithoutNote = (object) [
+            'id' => 3002,
+            'name' => 'Pump Group',
+            'items' => collect([$item]),
+        ];
+        $subCategory = (object) [
+            'id' => 2001,
+            'name' => 'Hull',
+            'itemGroups' => collect([$groupWithNote, $groupWithoutNote]),
+        ];
+        $category = (object) [
+            'id' => 1001,
+            'label' => 'Hull and Construction',
+            'subCategories' => collect([$subCategory]),
+        ];
+
+        $builder = app(SurveyReportDocxBuilder::class);
+        $method = new \ReflectionMethod($builder, 'buildBab3');
+        $xml = $method->invoke($builder, [
+            'categories' => collect([$category]),
+            'responses' => collect(),
+            'groupNotes' => collect([
+                3001 => collect([(object) ['note' => 'Catatan pertama']]),
+            ]),
+        ]);
+
+        $this->assertSame(1, substr_count($xml, '>Note:</w:t>'));
+        $this->assertStringContainsString('Catatan pertama', $xml);
+    }
+
     public function test_cap_breakdown_menomori_tujuh_kategori_secara_berurutan(): void
     {
         $categories = collect(range(1, 7))->map(fn ($number) => (object) [

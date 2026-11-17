@@ -667,22 +667,21 @@ class SurveyReportDocxBuilder
                         $rows[] = $cells;
                     }
 
-                    $remainingSpan = $columnCount - 2;
-                    $rows[] = [
-                        $this->tc($tp(''), []),
-                        $this->tc($tp('Note:', ['bold' => true]), []),
-                        $this->tc($tp(''), ['span' => $remainingSpan]),
-                    ];
                     $notes = $groupNotes->get($group->id)?->values()->all() ?? [];
-                    while (count($notes) < 2) {
-                        $notes[] = null;
-                    }
-                    foreach ($notes as $note) {
+                    if ($notes !== []) {
+                        $remainingSpan = $columnCount - 2;
                         $rows[] = [
                             $this->tc($tp(''), []),
-                            $this->tc($tp('-', ['jc' => 'right']), ['noWrap' => true]),
-                            $this->tc($tp($note?->note ?? ''), ['span' => $remainingSpan]),
+                            $this->tc($tp('Note:', ['bold' => true]), []),
+                            $this->tc($tp(''), ['span' => $remainingSpan]),
                         ];
+                        foreach ($notes as $note) {
+                            $rows[] = [
+                                $this->tc($tp(''), []),
+                                $this->tc($tp('-', ['jc' => 'right']), ['noWrap' => true]),
+                                $this->tc($tp($note->note ?? ''), ['span' => $remainingSpan]),
+                            ];
+                        }
                     }
                     $rows[] = [
                         $this->tc($tp(''), ['span' => 2]),
